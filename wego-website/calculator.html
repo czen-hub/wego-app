@@ -1,0 +1,959 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earnings Calculator — WeGo Cooperative</title>
+    <meta name="description" content="See exactly how much more you'd earn driving for WeGo vs Uber or Lyft. Adjust your hours, fares, and gas costs — and see a full 20-year lifetime earnings comparison.">
+    <link rel="dns-prefetch" href="//x.com">
+    <link rel="dns-prefetch" href="//www.linkedin.com">
+    <link rel="dns-prefetch" href="//www.instagram.com">
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){var t=localStorage.getItem("wego-theme");if(t)document.documentElement.setAttribute("data-theme",t);}());</script>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1 class="logo"><a href="index.html">WeGo</a></h1>
+        <button class="nav-toggle" aria-label="Toggle navigation" onclick="document.querySelector('header').classList.toggle('nav-open'); this.classList.toggle('open')">
+            <span></span><span></span><span></span>
+        </button>
+        <nav>
+            <ul>
+                <li><a href="about.html">About</a></li>
+                <li><a href="features.html">Features</a></li>
+                <li><a href="services.html">Services</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="calculator.html">Calculator</a></li>
+                <li><a href="contact.html">Contact</a></li>
+            </ul>
+        </nav>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+            <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="contact.html" class="cta">Drive &amp; Own</a>
+    </div>
+</header>
+
+<main>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="container hero-content">
+            <h2>See Exactly What You'd Earn with WeGo</h2>
+            <p>Adjust your driving habits below and watch your real income difference update in real time — including your 20-year pension projection.</p>
+        </div>
+    </section>
+
+    <!-- CALCULATOR -->
+    <section class="calc-body">
+        <div class="container">
+            <div class="calc-shell">
+
+                <!-- ── INPUT PANEL ── -->
+                <div class="calc-inputs">
+                    <h3>⚙️ Your Driving Profile</h3>
+
+                    <div class="mode-tabs">
+                        <button type="button" class="mode-tab active" data-mode="weekly" onclick="switchMode('weekly')">💰 Weekly Amounts</button>
+                        <button type="button" class="mode-tab" data-mode="rides" onclick="switchMode('rides')">🚗 By Daily Rides</button>
+                        <button type="button" class="mode-tab" data-mode="exp" onclick="switchMode('exp')">👤 Experienced Driver</button>
+                    </div>
+
+                    <!-- Mode 1: Weekly dollar amounts (linked sliders) -->
+                    <div id="mode-weekly">
+                        <div class="input-group">
+                            <label>
+                                Your weekly earnings on Uber / Lyft
+                                <span class="val-display" id="val-earn">$540/wk</span>
+                            </label>
+                            <input type="range" id="sl-earn" min="90" max="1800" step="10" value="540"
+                                   title="Your weekly Uber/Lyft take-home"
+                                   oninput="syncEarnToFares(); update()">
+                            <div class="range-labels"><span>$90/wk</span><span>$1,800/wk</span></div>
+                        </div>
+                        <div class="input-group">
+                            <label>
+                                Passengers pay weekly (Uber keeps 55%)
+                                <span class="val-display" id="val-fares">$1,200/wk</span>
+                            </label>
+                            <input type="range" id="sl-fares" min="200" max="5000" step="50" value="1200"
+                                   title="Total weekly fares paid by passengers"
+                                   oninput="update()">
+                            <div class="range-labels"><span>$200/wk</span><span>$5,000/wk</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Mode 2: avg fare × rides per day × days per week -->
+                    <div id="mode-rides" class="mode-panel-hidden">
+                        <div class="input-group">
+                            <label>
+                                Average fare per ride
+                                <span class="val-display" id="val-avgfare">$15</span>
+                            </label>
+                            <input type="range" id="sl-avgfare" min="5" max="120" step="1" value="15"
+                                   title="Average fare received per ride"
+                                   oninput="updateRidesDerived()">
+                            <div class="range-labels"><span>$5</span><span>$120</span></div>
+                        </div>
+                        <div class="input-group">
+                            <label>
+                                Rides per day
+                                <span class="val-display" id="val-rpd">20/day</span>
+                            </label>
+                            <input type="range" id="sl-rpd" min="1" max="40" step="1" value="20"
+                                   title="Number of rides completed per day"
+                                   oninput="updateRidesDerived()">
+                            <div class="range-labels"><span>1/day</span><span>40/day</span></div>
+                        </div>
+                        <div class="input-group">
+                            <label>
+                                Days driving per week
+                                <span class="val-display" id="val-dpw">5 days</span>
+                            </label>
+                            <input type="range" id="sl-dpw" min="1" max="7" step="1" value="5"
+                                   title="Days per week you drive"
+                                   oninput="updateRidesDerived()">
+                            <div class="range-labels"><span>1 day</span><span>7 days</span></div>
+                        </div>
+                        <!-- Derived results -->
+                        <div class="rides-derived">
+                            <div class="rides-derived-stat">
+                                <div class="rd-val" id="rd-rides-week">100</div>
+                                <div class="rd-lbl">Total rides / week</div>
+                            </div>
+                            <div class="rides-derived-stat">
+                                <div class="rd-val" id="rd-fares-week">$1,500</div>
+                                <div class="rd-lbl">Passengers pay / wk</div>
+                            </div>
+                            <div class="rides-derived-stat">
+                                <div class="rd-val" id="rd-uber-earn">$675</div>
+                                <div class="rd-lbl">Your Uber earn / wk</div>
+                            </div>
+                            <div class="rides-derived-stat">
+                                <div class="rd-val" id="rd-wego-earn">$1,303</div>
+                                <div class="rd-lbl">Your WeGo earn / wk</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mode 3: Experienced driver — earnings + experience credit -->
+                    <div id="mode-exp" class="mode-panel-hidden">
+                        <div class="input-group">
+                            <label>
+                                Current weekly earnings on Uber / Lyft
+                                <span class="val-display" id="val-exp-earn">$540/wk</span>
+                            </label>
+                            <input type="range" id="sl-exp-earn" min="90" max="1800" step="10" value="540"
+                                   title="Your current weekly Uber/Lyft take-home earnings"
+                                   oninput="syncExpEarnToFares()">
+                            <div class="range-labels"><span>$90/wk</span><span>$1,800/wk</span></div>
+                        </div>
+                        <div class="input-group">
+                            <label>
+                                Years professional driving (Uber / Lyft / taxi)
+                                <span class="val-display" id="val-exp-years">5 yrs</span>
+                            </label>
+                            <input type="range" id="sl-exp-years" min="0" max="15" step="1" value="5"
+                                   title="Years of prior professional rideshare or taxi driving"
+                                   oninput="updateExpDerived()">
+                            <div class="range-labels"><span>0 yrs</span><span>15 yrs</span></div>
+                        </div>
+                        <div class="exp-credit-box" id="exp-credit-box">
+                            Adjust the sliders above — your prior driving experience reduces the years you need for full pension.
+                        </div>
+                        <div class="exp-pension-highlight">
+                            <div class="eph-val" id="exp-hl-pension">—</div>
+                            <div class="eph-lbl" id="exp-hl-lbl">Projected monthly pension at retirement</div>
+                        </div>
+                        <div class="exp-ambassador-note">
+                            <strong>Founding Ambassador (Age 50+):</strong> Refer 10 drivers in your first 6 months and your $500 founding fee is waived. Every 5 referrals = 5 months of additional vesting credit. <a href="features.html#senior-drivers">See full Ambassador Program →</a>
+                        </div>
+                    </div>
+
+                    <!-- Common inputs (both modes) -->
+                    <div class="input-group">
+                        <label>
+                            Hours online per week
+                            <span class="val-display" id="val-hours">40 hrs</span>
+                        </label>
+                        <input type="range" id="sl-hours" min="10" max="70" step="1" value="40"
+                               title="Hours online per week"
+                               oninput="update()">
+                        <div class="range-labels"><span>10 hrs</span><span>70 hrs</span></div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>
+                            Weekly tips
+                            <span class="val-display" id="val-tips">$80</span>
+                        </label>
+                        <input type="range" id="sl-tips" min="0" max="400" step="10" value="80"
+                               title="Weekly tips received"
+                               oninput="update()">
+                        <div class="range-labels"><span>$0</span><span>$400/wk</span></div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>
+                            Current age
+                            <span class="val-display" id="val-age">35 yrs</span>
+                        </label>
+                        <input type="range" id="sl-age" min="21" max="65" step="1" value="35"
+                               title="Current age"
+                               oninput="update()">
+                        <div class="range-labels"><span>21</span><span>65</span></div>
+                    </div>
+
+                    <hr class="divider-thin">
+
+                    <div class="input-toggle-row">
+                        <div>
+                            <div class="toggle-label">Include FICA tax savings</div>
+                            <div class="toggle-sub">Cooperative pays employer half</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="tog-fica" checked onchange="update()" aria-label="Include FICA tax savings">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="input-toggle-row">
+                        <div>
+                            <div class="toggle-label">Airport corridor driver</div>
+                            <div class="toggle-sub">SFO/LAX — higher avg fare</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="tog-airport" onchange="update()" aria-label="Airport corridor driver">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="input-toggle-row">
+                        <div>
+                            <div class="toggle-label">Include gas station savings</div>
+                            <div class="toggle-sub calc-tip" id="gas-savings-lbl">~$720/yr savings ⓘ</div>
+                            <div class="toggle-sub gas-spend-line" id="gas-spend-lbl">Total gas spend: ~$6,552/yr</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="tog-gas" onchange="update()" aria-label="Include gas station savings">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="gas-inputs" id="gas-inputs">
+                        <div class="input-group">
+                            <label>Miles driven/week <span class="val-display" id="val-gas-miles">750 mi</span></label>
+                            <input type="range" id="sl-gas-miles" min="100" max="2000" step="50" value="750"
+                                   title="Miles driven per week" oninput="update()">
+                            <div class="range-labels"><span>100 mi</span><span>2,000 mi</span></div>
+                        </div>
+                        <div class="input-group">
+                            <label>Gas price (Bay Area) <span class="val-display" id="val-gas-price">$5.20/gal</span></label>
+                            <input type="range" id="sl-gas-price" min="3.00" max="8.00" step="0.10" value="5.20"
+                                   title="Current gas price per gallon" oninput="update()">
+                            <div class="range-labels"><span>$3.00</span><span>$8.00</span></div>
+                        </div>
+                        <div class="input-group">
+                            <label>Car fuel economy <span class="val-display" id="val-gas-mpg">25 MPG</span></label>
+                            <input type="range" id="sl-gas-mpg" min="20" max="60" step="1" value="25"
+                                   title="Car miles per gallon" oninput="update()">
+                            <div class="range-labels"><span>20 MPG</span><span>60 MPG</span></div>
+                        </div>
+                    </div>
+
+                    <hr class="divider-thin">
+
+                    <p style="font-size:12px; color:var(--text-dim); line-height:1.6;">
+                        Based on verified Uber fare data across 11 Bay Area routes (April 2026). Uber platform cut = 55%. WeGo = 12% tech fee + $75/month membership.
+                    </p>
+                </div>
+
+                <!-- ── RESULTS PANEL ── -->
+                <div class="calc-results">
+
+                    <!-- Monthly take-home comparison -->
+                    <div class="compare-row">
+                        <div class="earn-card uber">
+                            <div class="platform-label">✕ Uber / Lyft</div>
+                            <div class="earn-amount" id="res-uber-monthly">$0</div>
+                            <div class="earn-period">Monthly take-home</div>
+                            <div class="earn-breakdown">
+                                <div class="earn-row"><span>Gross fares</span><span class="val" id="res-uber-gross">$0</span></div>
+                                <div class="earn-row"><span>Platform cut (55%)</span><span class="val" id="res-uber-cut" style="color:var(--red)">-$0</span></div>
+                                <div class="earn-row"><span>Tips</span><span class="val" id="res-uber-tips">+$0</span></div>
+                            </div>
+                        </div>
+                        <div class="earn-card wego">
+                            <div class="platform-label">✓ WeGo Cooperative</div>
+                            <div class="earn-amount" id="res-wego-monthly">$0</div>
+                            <div class="earn-period">Monthly take-home</div>
+                            <div class="earn-breakdown">
+                                <div class="earn-row"><span>Gross fares</span><span class="val" id="res-wego-gross">$0</span></div>
+                                <div class="earn-row"><span>Tech fee (12%)</span><span class="val" id="res-wego-techfee" style="color:var(--red)">-$0</span></div>
+                                <div class="earn-row"><span>Monthly dues</span><span class="val" style="color:var(--red)">-$75</span></div>
+                                <div class="earn-row"><span>Tips</span><span class="val" id="res-wego-tips">+$0</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Monthly advantage banner -->
+                    <div class="advantage-banner">
+                        <div>
+                            <div class="adv-label">Monthly advantage with WeGo</div>
+                            <div class="adv-value" id="res-monthly-adv">+$0</div>
+                            <div class="adv-sub" id="res-adv-sub">Per month more in your pocket</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="adv-label">$/hr active (WeGo)</div>
+                            <div class="adv-value" id="res-hourly">$0</div>
+                            <div class="adv-sub">vs <span id="res-hourly-uber">$0</span>/hr Uber</div>
+                        </div>
+                    </div>
+
+                    <!-- Break-even threshold note -->
+                    <div class="breakeven-note" id="breakeven-note">
+                        <span class="breakeven-icon">⚖️</span>
+                        <span id="breakeven-text">WeGo monthly dues ($75) are covered after approximately <strong>5 rides/month</strong> at average Bay Area fares. Below that threshold, Uber is cheaper. Above it, WeGo wins — permanently.</span>
+                    </div>
+
+                    <!-- 12-Month Total Compensation -->
+                    <div class="annual-comp-compare">
+                        <div class="acc-header">12-Month Total Compensation</div>
+                        <div class="acc-cards">
+                            <div class="acc-card acc-uber">
+                                <div class="acc-platform">✕ Uber / Lyft</div>
+                                <div class="acc-amount" id="acc-uber-total">$0</div>
+                                <div class="acc-label">You keep per year</div>
+                            </div>
+                            <div class="acc-vs">VS</div>
+                            <div class="acc-card acc-wego">
+                                <div class="acc-platform">✓ WeGo Cooperative</div>
+                                <div class="acc-amount" id="acc-wego-total">$0</div>
+                                <div class="acc-label">You keep per year</div>
+                            </div>
+                        </div>
+                        <div class="acc-diff">
+                            <span class="acc-diff-amount" id="acc-diff-amount">+$0</span>
+                            <span class="acc-diff-label">more per year with WeGo</span>
+                        </div>
+                    </div>
+
+                    <!-- Full breakdown table -->
+                    <div class="breakdown-card">
+                        <h4>📊 Full Weekly Breakdown</h4>
+                        <table class="breakdown-table">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th class="uber-col">Uber / Lyft</th>
+                                    <th class="wego-col">WeGo</th>
+                                    <th class="diff-col">Your Gain</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Gross fares</td>
+                                    <td class="uber-col" id="wk-gross-uber">$0</td>
+                                    <td class="wego-col" id="wk-gross-wego">$0</td>
+                                    <td class="diff-col">—</td>
+                                </tr>
+                                <tr>
+                                    <td>Platform fee</td>
+                                    <td class="uber-col" id="wk-fee-uber">-$0</td>
+                                    <td class="wego-col" id="wk-fee-wego">-$0</td>
+                                    <td class="diff-col" id="wk-fee-diff">+$0</td>
+                                </tr>
+                                <tr>
+                                    <td>Weekly membership fee</td>
+                                    <td class="uber-col">—</td>
+                                    <td class="wego-col">-$17.31</td>
+                                    <td class="diff-col neg">-$17.31</td>
+                                </tr>
+                                <tr>
+                                    <td>Tips</td>
+                                    <td class="uber-col" id="wk-tips">+$0</td>
+                                    <td class="wego-col" id="wk-tips-w">+$0</td>
+                                    <td class="diff-col">—</td>
+                                </tr>
+                                <tr id="row-fica" style="display:none;">
+                                    <td>FICA tax savings</td>
+                                    <td class="uber-col">—</td>
+                                    <td class="wego-col" id="wk-fica">+$0</td>
+                                    <td class="diff-col" id="wk-fica-diff">+$0</td>
+                                </tr>
+                                <tr id="row-gas" style="display:none;">
+                                    <td>Gas station discount</td>
+                                    <td class="uber-col">—</td>
+                                    <td class="wego-col">+$13.85</td>
+                                    <td class="diff-col">+$13.85</td>
+                                </tr>
+                                <tr id="row-airport" style="display:none;">
+                                    <td>Airport corridor bonus</td>
+                                    <td class="uber-col">—</td>
+                                    <td class="wego-col" id="wk-airport">+$0</td>
+                                    <td class="diff-col" id="wk-airport-diff">+$0</td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td>Weekly take-home</td>
+                                    <td class="uber-col" id="wk-total-uber">$0</td>
+                                    <td class="wego-col" id="wk-total-wego">$0</td>
+                                    <td class="diff-col" id="wk-total-diff">+$0</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <!-- Pension projection -->
+                    <div class="pension-card">
+                        <h4>🏛️ Retirement Trust Projection</h4>
+
+                        <div class="pension-years-group">
+                            <label>
+                                Years driving with WeGo
+                                <span class="val-display" id="val-pen-years">20 yrs</span>
+                            </label>
+                            <input type="range" id="sl-pen-years" min="1" max="40" step="1" value="20"
+                                   title="Years driving with WeGo"
+                                   oninput="syncPenYears(+this.value)">
+                            <div class="range-labels"><span>1 yr</span><span>40 yrs</span></div>
+                        </div>
+
+                        <div class="pension-grid">
+                            <div class="pension-stat">
+                                <div class="ps-val" id="pen-monthly">~$2,500</div>
+                                <div class="ps-lbl">Monthly pension at retirement</div>
+                            </div>
+                            <div class="pension-stat">
+                                <div class="ps-val" id="pen-retire-age">55</div>
+                                <div class="ps-lbl">Estimated retirement age</div>
+                            </div>
+                            <div class="pension-stat">
+                                <div class="ps-val" id="pen-total-invested">$0</div>
+                                <div class="ps-lbl">Total invested in 20 yrs</div>
+                            </div>
+                            <div class="pension-stat">
+                                <div class="ps-val" id="pen-vesting">0%</div>
+                                <div class="ps-lbl">Vesting level for your years</div>
+                            </div>
+                        </div>
+
+                        <div class="progress-bar-wrap" id="pension-bar-wrap">
+                            <div class="progress-bar-track">
+                                <div class="progress-bar-fill" id="pension-bar" style="width:0%"></div>
+                            </div>
+                            <div class="progress-labels">
+                                <span>0 years</span>
+                                <span id="pen-bar-label">0 / 20 years toward full pension</span>
+                                <span>20 years</span>
+                            </div>
+                        </div>
+
+                        <p class="pension-note" id="pension-note">
+                            Enter your years to drive above to see your pension projection.
+                        </p>
+                    </div>
+
+                    <!-- 20-year lifetime value -->
+                    <div class="lifetime-card">
+                        <h4>🌿 Lifetime Value vs Uber (Over <span id="lt-years-label">20</span> Years)*</h4>
+                        <div class="lifetime-stats">
+                            <div class="lt-stat">
+                                <div class="lt-val" id="lt-uber-total">$0</div>
+                                <div class="lt-lbl">Total take-home<br>on Uber</div>
+                            </div>
+                            <div class="lt-stat">
+                                <div class="lt-val" id="lt-wego-total">$0</div>
+                                <div class="lt-lbl">Total take-home<br>on WeGo</div>
+                            </div>
+                            <div class="lt-stat">
+                                <div class="lt-val" id="lt-diff">+$0</div>
+                                <div class="lt-lbl">Extra lifetime<br>earnings</div>
+                            </div>
+                            <div class="lt-stat">
+                                <div class="lt-val" id="lt-pension-total">$0</div>
+                                <div class="lt-lbl">Pension payout<br>(20 yrs post-retire)</div>
+                            </div>
+                            <div class="lt-stat lt-stat-ownership">
+                                <div class="lt-val" id="lt-dividend">$0</div>
+                                <div class="lt-lbl">Ownership dividends<br><span class="lt-lbl-sub">returned from cooperative surplus</span></div>
+                            </div>
+                        </div>
+                        <p class="lifetime-footnote">* Projections based on your inputs and current cooperative models. Actual earnings and pension amounts are not guaranteed and will vary with market conditions, fleet growth, and driver activity. <a href="faq.html">See FAQ for full details →</a></p>
+                    </div>
+
+                    <!-- CTA -->
+                    <div class="calc-cta-row">
+                        <div>
+                            <h4>Ready to make the switch?</h4>
+                            <p>Join the Bay Area founding 1,000 — $500 buy-in, payable over 12 months.</p>
+                        </div>
+                        <a href="contact.html" class="cta-btn">Reserve My Spot →</a>
+                    </div>
+
+                </div>
+                <!-- end results -->
+
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<footer class="mega-footer">
+    <div class="container">
+        <div class="footer-brand">
+            <h2>WeGo</h2>
+            <a href="contact.html" class="help-link">Visit Help Center</a>
+        </div>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h4>The Cooperative</h4>
+                <ul>
+                    <li><a href="about.html">About Us</a></li>
+                    <li><a href="features.html">The 12% Model</a></li>
+                    <li><a href="faq.html">Driver FAQ</a></li>
+                    <li><a href="contact.html">Careers</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Our Services</h4>
+                <ul>
+                    <li><a href="services.html#local">Local Rides</a></li>
+                    <li><a href="services.html#school">Secure School Transport</a></li>
+                    <li><a href="services.html#medical">Medical Logistics</a></li>
+                    <li><a href="services.html#corporate">Corporate Accounts</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Member-Owners</h4>
+                <ul>
+                    <li><a href="faq.html">Driver FAQ</a></li>
+                    <li><a href="calculator.html">Earnings Calculator</a></li>
+                    <li><a href="faq.html#pension">Pension Details</a></li>
+                    <li><a href="contact.html">Join the Waitlist</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-apps">
+            <span style="font-size:14px; color:var(--text-dim); padding:8px 0; display:block;">📱 App launching with the Bay Area rollout — join the waitlist to be notified first.</span>
+        </div>
+        <div class="footer-meta">
+            <div class="meta-left">
+                <div class="social-icons">
+                    <a href="https://x.com/" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>
+                    </a>
+                    <a href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                    <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                    </a>
+                </div>
+                <div class="locale-info">
+                    <span>🌐 English</span>
+                    <span>📍 Santa Clara, CA</span>
+                </div>
+            </div>
+            <div class="meta-right">
+                <a href="#">Terms of Service</a>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Accessibility</a>
+                <p class="legal-disclaimer">WeGo is a pre-launch cooperative. Membership offerings are not securities. Projected financial figures — including pension amounts — are estimates based on current models, not guarantees. All projections subject to actuarial review and cooperative fund performance.</p>
+                <p class="copyright">&copy; 2026 WeGo Cooperative. All Rights Reserved.</p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+// ── CONSTANTS (match your business model exactly) ──────────────
+const UBER_CUT       = 0.55;   // Uber platform take
+const WEGO_TECH      = 0.12;   // WeGo tech fee
+const WEGO_MONTHLY   = 75;     // Monthly dues
+const FICA_SAVING    = 0.0765; // Employer FICA half (co-op covers this)
+const GAS_COOP_DISCOUNT = 0.50; // Co-op partner station saves this much $/gal vs pump
+const AIRPORT_BONUS  = 0.08;   // ~8% higher avg fares on airport corridor
+const PENSION_FULL   = 2500;   // Monthly pension at 20 years
+const DIVIDEND_RATE  = 0.02;   // ~2% of gross fares returned annually as patronage dividends
+const PENSION_TIERS  = [
+    { years: 0,  pct: 0    },
+    { years: 3,  pct: 0.25 },
+    { years: 5,  pct: 0.50 },
+    { years: 10, pct: 0.75 },
+    { years: 15, pct: 0.90 },
+    { years: 20, pct: 1.00 },
+    { years: 25, pct: 1.10 }, // Enhanced + family transfer tier
+    { years: 30, pct: 1.20 }, // Legacy tier — lifetime family coverage
+];
+
+// ── HELPERS ────────────────────────────────────────────────────
+function fmt(n, prefix = '$') {
+    if (n >= 1_000_000) return prefix + (n / 1_000_000).toFixed(2) + 'M';
+    if (n >= 10_000)    return prefix + Math.round(n).toLocaleString();
+    return prefix + Math.round(n).toLocaleString();
+}
+
+function fmtK(n) {
+    if (Math.abs(n) >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+    if (Math.abs(n) >= 1_000)     return '$' + (n / 1_000).toFixed(0) + 'K';
+    return '$' + Math.round(Math.abs(n));
+}
+
+function sign(n) { return n >= 0 ? '+' : ''; }
+
+function vestingPct(years) {
+    let pct = 0;
+    for (const t of PENSION_TIERS) {
+        if (years >= t.years) pct = t.pct;
+    }
+    return pct;
+}
+
+function vestingLabel(years) {
+    if (years < 3)  return '0% (Not yet vested — 3 yr minimum)';
+    if (years < 5)  return '25% vested';
+    if (years < 10) return '50% vested';
+    if (years < 15) return '75% vested';
+    if (years < 20) return '90% vested';
+    if (years < 25) return '100% — Full pension 🎉';
+    if (years < 30) return '110% — Enhanced pension + family transfer';
+    return '120% — Legacy tier · lifetime family coverage 🏆';
+}
+
+// ── CALCULATOR MODE ────────────────────────────────────────────
+let calcMode = 'weekly';
+
+function switchMode(mode) {
+    calcMode = mode;
+    document.querySelectorAll('.mode-tab').forEach(t =>
+        t.classList.toggle('active', t.dataset.mode === mode));
+
+    const weeklyPanel = document.getElementById('mode-weekly');
+    const ridesPanel  = document.getElementById('mode-rides');
+    const expPanel    = document.getElementById('mode-exp');
+
+    weeklyPanel.style.display = mode === 'weekly' ? '' : 'none';
+
+    ridesPanel.classList.toggle('mode-panel-hidden', mode !== 'rides');
+    ridesPanel.style.display  = mode === 'rides' ? '' : 'none';
+
+    expPanel.classList.toggle('mode-panel-hidden', mode !== 'exp');
+    expPanel.style.display    = mode === 'exp' ? '' : 'none';
+
+    if (mode === 'rides') updateRidesDerived();
+    else if (mode === 'exp') updateExpDerived();
+    else update();
+}
+
+function updateRidesDerived() {
+    // Formula: avg fare × rides per day × days per week
+    const fare = +document.getElementById('sl-avgfare').value;
+    const rpd  = +document.getElementById('sl-rpd').value;
+    const dpw  = +document.getElementById('sl-dpw').value;
+
+    const ridesPerWeek = rpd * dpw;
+    const gross        = ridesPerWeek * fare;
+    const uberEarn     = Math.round(gross * (1 - UBER_CUT));
+    const wegoEarn     = Math.max(Math.round(gross * (1 - WEGO_TECH) - WEGO_MONTHLY / 4.33), 0);
+
+    document.getElementById('val-avgfare').textContent   = '$' + fare;
+    document.getElementById('val-rpd').textContent       = rpd + '/day';
+    document.getElementById('val-dpw').textContent       = dpw + ' days';
+    document.getElementById('rd-rides-week').textContent = ridesPerWeek;
+    document.getElementById('rd-fares-week').textContent = '$' + Math.round(gross).toLocaleString();
+    document.getElementById('rd-uber-earn').textContent  = '$' + uberEarn.toLocaleString();
+    document.getElementById('rd-wego-earn').textContent  = '$' + wegoEarn.toLocaleString();
+
+    // Feed derived gross into master fares slider so update() stays consistent
+    const sl = document.getElementById('sl-fares');
+    sl.value = Math.min(Math.max(Math.round(gross), +sl.min), +sl.max);
+    update();
+}
+
+// ── MAIN CALCULATE ─────────────────────────────────────────────
+function update() {
+    // Read sliders
+    const weeklyGross = +document.getElementById('sl-fares').value;
+    const hours       = +document.getElementById('sl-hours').value;
+    const avgFare     = +document.getElementById('sl-avgfare').value;
+    const weeklyTips  = +document.getElementById('sl-tips').value;
+    const driveYears  = +document.getElementById('sl-pen-years').value;
+    const age         = +document.getElementById('sl-age').value;
+    const doFica      = document.getElementById('tog-fica').checked;
+    const doAirport   = document.getElementById('tog-airport').checked;
+    const doGas       = document.getElementById('tog-gas').checked;
+    const gasMilesWk   = +document.getElementById('sl-gas-miles').value;
+    const gasPriceBay  = +document.getElementById('sl-gas-price').value;
+    const gasMpg       = +document.getElementById('sl-gas-mpg').value;
+    const gasGallonsYr = (gasMilesWk / gasMpg) * 52;
+    const gasAnnual    = Math.round(GAS_COOP_DISCOUNT * gasGallonsYr);
+
+    document.getElementById('val-gas-miles').textContent = gasMilesWk.toLocaleString() + ' mi';
+    document.getElementById('val-gas-price').textContent = '$' + gasPriceBay.toFixed(2) + '/gal';
+    document.getElementById('val-gas-mpg').textContent   = gasMpg + ' MPG';
+    const gasCoopPrice  = gasPriceBay - GAS_COOP_DISCOUNT;
+    const gasTotalSpend = Math.round(gasCoopPrice * gasGallonsYr);
+    const gasLbl = document.getElementById('gas-savings-lbl');
+    gasLbl.textContent = '~$' + gasAnnual.toLocaleString() + '/yr savings ⓘ';
+    gasLbl.dataset.tip = `$${gasPriceBay.toFixed(2)} pump − $${gasCoopPrice.toFixed(2)} co-op = $${GAS_COOP_DISCOUNT.toFixed(2)}/gal × ${Math.round(gasGallonsYr).toLocaleString()} gal/yr`;
+    document.getElementById('gas-spend-lbl').textContent = 'Total gas spend: ~$' + gasTotalSpend.toLocaleString() + '/yr';
+
+    // Sync earn↔fares only in weekly mode (rides mode derives gross differently)
+    if (calcMode === 'weekly') syncFaresToEarn(weeklyGross);
+
+    // Update display values
+    document.getElementById('val-fares').textContent   = '$' + weeklyGross.toLocaleString() + '/wk';
+    document.getElementById('val-hours').textContent   = hours + ' hrs';
+    document.getElementById('val-avgfare').textContent = '$' + avgFare;
+    document.getElementById('val-tips').textContent     = '$' + weeklyTips;
+    document.getElementById('val-pen-years').textContent = driveYears + ' yrs';
+    document.getElementById('val-age').textContent      = age + ' yrs';
+
+    // ── WEEKLY CALCULATIONS ──
+    const airportBonus = doAirport ? weeklyGross * AIRPORT_BONUS : 0;
+    const adjustedGross = weeklyGross + airportBonus;
+
+    const uberCut     = adjustedGross * UBER_CUT;
+    const wegoCut     = adjustedGross * WEGO_TECH;
+    const wegoWeeklyDues = WEGO_MONTHLY / 4.33;
+
+    const ficaWeekly  = doFica ? adjustedGross * DRIVER_SHARE_ANNUAL() * FICA_SAVING / 52 : 0;
+    // Simpler: FICA saving is % of driver's annual earnings
+    const ficaSavingWeekly = doFica ? (adjustedGross * (1 - UBER_CUT)) * FICA_SAVING : 0;
+
+    const gasWeekly   = doGas ? gasAnnual / 52 : 0;
+
+    const uberWeekly  = adjustedGross - uberCut + weeklyTips;
+    const wegoWeekly  = adjustedGross - wegoCut - wegoWeeklyDues + weeklyTips
+                        + ficaSavingWeekly + gasWeekly;
+
+    const weeklyDiff  = wegoWeekly - uberWeekly;
+
+    // Monthly
+    const uberMonthly = uberWeekly * 4.33;
+    const wegoMonthly = wegoWeekly * 4.33;
+    const monthlyAdv  = wegoMonthly - uberMonthly;
+    const annualAdv   = monthlyAdv * 12;
+
+    const uberHourly  = uberWeekly / hours;
+    const wegoHourly  = wegoWeekly / hours;
+
+    // ── UPDATE UI: Earn cards ──
+    document.getElementById('res-uber-monthly').textContent = fmt(uberMonthly);
+    document.getElementById('res-wego-monthly').textContent = fmt(wegoMonthly);
+
+    document.getElementById('res-uber-gross').textContent  = fmt(adjustedGross * 4.33);
+    document.getElementById('res-uber-cut').textContent    = '-' + fmt(uberCut * 4.33);
+    document.getElementById('res-uber-tips').textContent   = '+' + fmt(weeklyTips * 4.33);
+
+    document.getElementById('res-wego-gross').textContent  = fmt(adjustedGross * 4.33);
+    document.getElementById('res-wego-techfee').textContent = '-' + fmt(wegoCut * 4.33);
+    document.getElementById('res-wego-tips').textContent   = '+' + fmt(weeklyTips * 4.33);
+
+    // Advantage banner
+    document.getElementById('res-monthly-adv').textContent = sign(monthlyAdv) + fmt(monthlyAdv);
+    document.getElementById('res-adv-sub').textContent     = 'Per month more in your pocket';
+    document.getElementById('res-hourly').textContent      = '$' + wegoHourly.toFixed(2);
+    document.getElementById('res-hourly-uber').textContent = '$' + uberHourly.toFixed(2);
+
+    // ── Weekly breakdown table ──
+    document.getElementById('wk-gross-uber').textContent = fmt(adjustedGross);
+    document.getElementById('wk-gross-wego').textContent = fmt(adjustedGross);
+    document.getElementById('wk-fee-uber').textContent   = '-' + fmt(uberCut);
+    document.getElementById('wk-fee-wego').textContent   = '-' + fmt(wegoCut);
+    document.getElementById('wk-fee-diff').textContent   = sign(uberCut - wegoCut) + fmt(uberCut - wegoCut);
+    document.getElementById('wk-tips').textContent       = '+' + fmt(weeklyTips);
+    document.getElementById('wk-tips-w').textContent     = '+' + fmt(weeklyTips);
+
+    // Toggle rows
+    const ficaRow    = document.getElementById('row-fica');
+    const gasRow     = document.getElementById('row-gas');
+    const airportRow = document.getElementById('row-airport');
+
+    ficaRow.style.display    = doFica    ? '' : 'none';
+    gasRow.style.display     = doGas     ? '' : 'none';
+    airportRow.style.display = doAirport ? '' : 'none';
+
+    if (doFica) {
+        document.getElementById('wk-fica').textContent      = '+' + fmt(ficaSavingWeekly);
+        document.getElementById('wk-fica-diff').textContent = '+' + fmt(ficaSavingWeekly);
+    }
+
+    if (doAirport) {
+        document.getElementById('wk-airport').textContent      = '+' + fmt(airportBonus);
+        document.getElementById('wk-airport-diff').textContent = '+' + fmt(airportBonus);
+    }
+
+    document.getElementById('wk-total-uber').textContent = fmt(uberWeekly);
+    document.getElementById('wk-total-wego').textContent = fmt(wegoWeekly);
+    document.getElementById('wk-total-diff').textContent = sign(weeklyDiff) + fmt(weeklyDiff);
+
+    // ── PENSION PROJECTION ──
+    // In experienced-driver mode apply prior-experience vesting credit
+    let expCreditYears = 0;
+    if (calcMode === 'exp') {
+        const expEl = document.getElementById('sl-exp-years');
+        if (expEl) expCreditYears = Math.min(+expEl.value * 0.5, 5);
+    }
+    const effectiveDriveYears = driveYears + expCreditYears;
+
+    const retireAge    = age + driveYears;
+    const vPct         = vestingPct(effectiveDriveYears);
+    const pensionAmt   = PENSION_FULL * vPct;
+    const totalInvested = (500) + (WEGO_MONTHLY * 12 * Math.min(driveYears, 20));
+    const barWidth     = Math.min((effectiveDriveYears / 20) * 100, 100);
+
+    document.getElementById('pen-monthly').textContent        = '~$' + Math.round(pensionAmt).toLocaleString();
+    document.getElementById('pen-retire-age').textContent     = retireAge + ' yrs';
+    document.getElementById('pen-total-invested').textContent = fmt(totalInvested);
+    document.getElementById('pen-vesting').textContent        = Math.round(vPct * 100) + '%';
+    document.getElementById('pension-bar').style.width        = barWidth + '%';
+    const effectiveLabel = expCreditYears > 0
+        ? effectiveDriveYears.toFixed(1) + ' effective / 20 years (incl. experience credit)'
+        : Math.min(driveYears, 20) + ' / 20 years toward full pension';
+    document.getElementById('pen-bar-label').textContent = effectiveLabel;
+
+    const creditNote = expCreditYears > 0 ? ` + ${expCreditYears.toFixed(1)} yrs experience credit` : '';
+    let noteText = '';
+    if (driveYears < 3) {
+        noteText = '⚠️ Under 3 years of WeGo service = 0% vesting. Commit to at least 3 years to begin building your pension.';
+    } else if (effectiveDriveYears < 20) {
+        const yearsLeft = (20 - effectiveDriveYears).toFixed(1);
+        noteText = `At ${driveYears} WeGo years${creditNote} = ${effectiveDriveYears.toFixed(1)} effective vesting years — ${Math.round(vPct*100)}% vested. Pension starts at ~$${Math.round(pensionAmt).toLocaleString()}/month at age ${retireAge}. ${yearsLeft} more effective years to full pension.`;
+    } else {
+        noteText = `🎉 Full pension unlocked! At ${driveYears} WeGo years${creditNote} you retire at ${retireAge} with ~$${Math.round(pensionAmt).toLocaleString()}/month for life. You've invested ~$${totalInvested.toLocaleString()} total — pension pays that back in under 6 months.`;
+    }
+    document.getElementById('pension-note').textContent = noteText;
+
+    // ── 12-MONTH COMP COMPARISON ──
+    document.getElementById('acc-uber-total').textContent = fmt(uberWeekly * 52);
+    document.getElementById('acc-wego-total').textContent = fmt(wegoWeekly * 52);
+    const annualCompDiff = (wegoWeekly - uberWeekly) * 52;
+    document.getElementById('acc-diff-amount').textContent = sign(annualCompDiff) + fmt(Math.abs(annualCompDiff));
+
+    // ── LIFETIME COMPARISON ──
+    const ltYears = driveYears;
+    document.getElementById('lt-years-label').textContent = ltYears;
+
+    const ltUberTotal  = uberWeekly * 52 * ltYears;
+    const ltWegoTotal  = wegoWeekly * 52 * ltYears;
+    const ltDiff       = ltWegoTotal - ltUberTotal;
+    const ltPension    = pensionAmt * 12 * 20; // 20 years of pension payout
+    const grossAnnual  = adjustedGross * 52;
+    const ltDividend   = grossAnnual * DIVIDEND_RATE * ltYears; // patronage dividends over career
+
+    const uberEl   = document.getElementById('lt-uber-total');
+    const wegoEl   = document.getElementById('lt-wego-total');
+    const diffEl   = document.getElementById('lt-diff');
+    const penEl    = document.getElementById('lt-pension-total');
+
+    uberEl.textContent  = fmtK(ltUberTotal);
+    uberEl.dataset.tip  = `$${Math.round(uberWeekly).toLocaleString()}/wk × 52 wks × ${ltYears} yrs`;
+
+    wegoEl.textContent  = fmtK(ltWegoTotal);
+    wegoEl.dataset.tip  = `$${Math.round(wegoWeekly).toLocaleString()}/wk × 52 wks × ${ltYears} yrs`;
+
+    diffEl.textContent  = sign(ltDiff) + fmtK(ltDiff);
+    diffEl.dataset.tip  = `WeGo ${fmtK(ltWegoTotal)} − Uber ${fmtK(ltUberTotal)}`;
+
+    penEl.textContent   = fmtK(ltPension);
+    penEl.dataset.tip   = `~$${Math.round(pensionAmt).toLocaleString()}/mo × 12 mo × 20 post-retire yrs`;
+
+    const divEl = document.getElementById('lt-dividend');
+    divEl.textContent  = fmtK(ltDividend);
+    divEl.dataset.tip  = `$${Math.round(grossAnnual).toLocaleString()} gross/yr × 2% dividend × ${ltYears} yrs`;
+}
+
+function DRIVER_SHARE_ANNUAL() { return 1 - UBER_CUT; }
+
+// ── PENSION CARD YEARS SLIDER ─────────────────────────────────
+function syncPenYears(years) {
+    document.getElementById('val-pen-years').textContent = years + ' yrs';
+    if (calcMode === 'exp') updateExpDerived();
+    else update();
+}
+
+// ── EXPERIENCED DRIVER MODE ────────────────────────────────────
+function syncExpEarnToFares() {
+    const uberEarn = +document.getElementById('sl-exp-earn').value;
+    document.getElementById('val-exp-earn').textContent = '$' + uberEarn.toLocaleString() + '/wk';
+    const gross = uberEarn / (1 - UBER_CUT);
+    const slFares = document.getElementById('sl-fares');
+    slFares.value = Math.min(Math.max(gross, +slFares.min), +slFares.max);
+    document.getElementById('val-fares').textContent = '$' + Math.round(+slFares.value).toLocaleString() + '/wk';
+    const slEarn = document.getElementById('sl-earn');
+    slEarn.value = Math.min(Math.max(uberEarn, +slEarn.min), +slEarn.max);
+    document.getElementById('val-earn').textContent = '$' + uberEarn.toLocaleString() + '/wk';
+    updateExpDerived();
+}
+
+function updateExpDerived() {
+    const expYears  = +document.getElementById('sl-exp-years').value;
+    const wegoYears = +document.getElementById('sl-pen-years').value;
+    const age       = +document.getElementById('sl-age').value;
+
+    const expCredit       = Math.min(expYears * 0.5, 5);
+    const effectiveVest   = wegoYears + expCredit;
+    const pension         = PENSION_FULL * vestingPct(effectiveVest);
+    const retireAge       = age + wegoYears;
+    const yearsToFull     = Math.max(0, 20 - expCredit);
+    const fullPensionAge  = Math.ceil(age + yearsToFull);
+
+    document.getElementById('val-exp-years').textContent = expYears + ' yrs';
+
+    let creditMsg;
+    if (expCredit > 0) {
+        creditMsg =
+            '<strong>' + expYears + ' yrs prior driving → ' + expCredit.toFixed(1) + ' yrs vesting credit</strong>' +
+            ' (0.5× verified experience, max 5 yrs). Combined with <strong>' + wegoYears + ' WeGo years</strong>' +
+            ' = <strong style="color:var(--primary)">' + effectiveVest.toFixed(1) + ' effective vesting years</strong>.' +
+            '<br>Full pension needs just <strong>' + yearsToFull.toFixed(1) + ' more WeGo years</strong>' +
+            ' — full pension eligible at age <strong>' + fullPensionAge + '</strong>.' +
+            '<br><small style="color:var(--fg-dim)">Experience credit requires verification of prior professional driving. ' +
+            '<a href="contact.html">Contact us to apply →</a></small>';
+    } else {
+        creditMsg = 'No prior experience credit applied. Adjust the "years professional driving" slider to see how your history shortens your path to full pension.';
+    }
+    document.getElementById('exp-credit-box').innerHTML = creditMsg;
+
+    document.getElementById('exp-hl-pension').textContent = '~$' + Math.round(pension).toLocaleString() + '/mo';
+    document.getElementById('exp-hl-lbl').textContent =
+        'Projected pension at age ' + retireAge + ' · ' + Math.round(vestingPct(effectiveVest) * 100) + '% vested';
+
+    update();
+}
+
+// ── BIDIRECTIONAL EARN ↔ FARES SYNC ───────────────────────────
+// Slider 1 = Uber/Lyft driver earnings (45% of passenger fares)
+// Slider 2 = passenger total fares (≈ 2.2× driver's Uber earnings)
+function syncFaresToEarn(gross) {
+    const uberEarn = Math.round(gross * (1 - UBER_CUT));
+    const sl = document.getElementById('sl-earn');
+    sl.value = Math.min(Math.max(uberEarn, +sl.min), +sl.max);
+    document.getElementById('val-earn').textContent = '$' + uberEarn.toLocaleString() + '/wk';
+}
+
+function syncEarnToFares() {
+    const uberEarn = +document.getElementById('sl-earn').value;
+    const gross    = uberEarn / (1 - UBER_CUT);
+    const sl       = document.getElementById('sl-fares');
+    sl.value       = Math.min(Math.max(gross, +sl.min), +sl.max);
+    document.getElementById('val-fares').textContent = '$' + Math.round(+sl.value).toLocaleString() + '/wk';
+}
+
+// Run on load — check URL param, prime all modes
+const _urlMode = new URLSearchParams(window.location.search).get('mode');
+if (_urlMode === 'exp' || _urlMode === 'rides') switchMode(_urlMode);
+else { update(); updateRidesDerived(); }
+</script>
+
+    <script>(function(){var btn=document.getElementById("theme-toggle");if(!btn)return;btn.addEventListener("click",function(){var h=document.documentElement;var c=h.getAttribute("data-theme")||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var n=c==="dark"?"light":"dark";h.setAttribute("data-theme",n);localStorage.setItem("wego-theme",n);});})();</script>
+</body>
+</html>

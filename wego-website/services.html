@@ -1,0 +1,420 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Services — WeGo Cooperative</title>
+    <meta name="description" content="Local rides, medical logistics, secure school transport, and corporate accounts — all with no surge pricing and full insurance coverage across all three ride periods.">
+    <link rel="dns-prefetch" href="//x.com">
+    <link rel="dns-prefetch" href="//www.linkedin.com">
+    <link rel="dns-prefetch" href="//www.instagram.com">
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){var t=localStorage.getItem("wego-theme");if(t)document.documentElement.setAttribute("data-theme",t);}());</script>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1 class="logo"><a href="index.html">WeGo</a></h1>
+        <button class="nav-toggle" aria-label="Toggle navigation" onclick="document.querySelector('header').classList.toggle('nav-open'); this.classList.toggle('open')">
+            <span></span><span></span><span></span>
+        </button>
+        <nav>
+            <ul>
+                <li><a href="about.html">About</a></li>
+                <li><a href="features.html">Features</a></li>
+                <li><a href="services.html" class="active">Services</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="calculator.html">Calculator</a></li>
+                <li><a href="contact.html">Contact</a></li>
+            </ul>
+        </nav>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+            <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="contact.html" class="cta">Drive &amp; Own</a>
+    </div>
+</header>
+
+<main>
+
+    <!-- ── HERO ── -->
+    <section class="hero">
+        <div class="container hero-content">
+            <h2>Every Ride, Every Need.<br>Human First. Always.</h2>
+            <p>WeGo provides services that go beyond the basic A-to-B trip. From airport corridors to assisted mobility, school runs to corporate accounts — all delivered by driver-owners who take pride in the work because they own the company.</p>
+            <div class="hero-ctas">
+                <a href="contact.html">Book a Ride</a>
+                <a href="contact.html" style="background:var(--white); color:var(--primary);">Corporate Inquiry</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION 1: PRIMARY SERVICES ── -->
+    <section class="sect-white">
+        <div class="container">
+            <div class="section-eyebrow">Core Services</div>
+            <h2 class="page-section-title">Three Services.<br>One Standard of Care.</h2>
+            <p class="page-section-sub">Every WeGo ride is delivered by a member-owner — a driver who has a stake in the cooperative's reputation, not just their rating score.</p>
+
+            <div class="service-primary-grid">
+
+                <!-- Standard Rides -->
+                <div class="service-primary-card" id="local">
+                    <div class="spc-banner standard">
+                        <div class="spc-icon">🚗</div>
+                        <h3>WeGo Standard</h3>
+                        <p>Professional, vetted driver-owners for everyday rides across the Bay Area. No surge pricing — ever. Flat fares, 24/7 availability.</p>
+                        <span class="spc-tag">Available Now · Bay Area</span>
+                    </div>
+                    <div class="spc-details">
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Zero surge pricing — same flat rate at 8 AM and 11 PM on New Year's Eve. Driver availability during peak hours is maintained through a cooperative-funded Cooperative Reliability Bonus paid to drivers, not charged to riders.</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Driver-owners with skin in the game — your experience matters to their cooperative</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>15–20% lower fares than Uber on equivalent routes — verified April 2026</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Full commercial insurance — all three ride periods covered</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>SFO, OAK, and SJC airport pickups — staging lot certified</span></div>
+                    </div>
+                    <a href="contact.html" class="spc-book-btn">Book Standard Ride</a>
+                </div>
+
+                <!-- Medical Logistics -->
+                <div class="service-primary-card" id="medical">
+                    <div class="spc-banner medical">
+                        <div class="spc-icon">🏥</div>
+                        <h3>Medical Logistics</h3>
+                        <p>Non-Emergency Medical Transport (NEMT) and healthcare facility runs — delivered by specially trained driver-owners with compassion and reliability.</p>
+                        <span class="spc-tag">NEMT Certified · Pre-Scheduled</span>
+                        <span class="spc-tag spc-tag-phase2">Phase 2 · Launching 2028</span>
+                    </div>
+                    <div class="spc-details">
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Trained in NEMT protocols — patient dignity and comfort are the priority</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Door-to-door assistance — from inside the home to inside the clinic</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Wheelchair accessible vehicles available on request</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Chemotherapy, dialysis, and recurring appointment scheduling</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Insurance billing support for Medi-Cal and Medicare eligible trips</span></div>
+                    </div>
+                    <div class="spc-eligibility-note">This service requires specialized NEMT licensing, HIPAA compliance, and dedicated commercial insurance coverage. It is in active development and will launch as a distinct fleet in 2028. Standard WeGo drivers are not eligible to perform medical transport until certified under Phase 2 requirements.</div>
+                    <a href="contact.html" class="spc-book-btn">Inquire About Medical Transport</a>
+                </div>
+
+                <!-- School Transport -->
+                <div class="service-primary-card" id="school">
+                    <div class="spc-banner school">
+                        <div class="spc-icon">🎒</div>
+                        <h3>Secure School Transport</h3>
+                        <p>Safe, verified rides for children — to and from school, after-school programs, and activities. Because parents need a driver they actually trust.</p>
+                        <span class="spc-tag">Background Verified · Family Plan</span>
+                        <span class="spc-tag spc-tag-phase2">Phase 2 · Launching 2028</span>
+                    </div>
+                    <div class="spc-details">
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Enhanced background checks beyond standard TNC requirements</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Live GPS tracking shared with parent throughout every trip</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Same driver assignment — your child knows their driver by name</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Booster seats and child seat installation available</span></div>
+                        <div class="spc-detail-row"><span class="check">✓</span><span>Automated confirmation text to parent on pickup and dropoff</span></div>
+                    </div>
+                    <div class="spc-eligibility-note">School transport requires Live Scan fingerprinting, enhanced DOJ background checks, and specialized child-safety insurance. This fleet operates under separate licensing from the standard WeGo TNC permit. Launching as a dedicated Phase 2 service in 2028 — standard drivers are not eligible until certified.</div>
+                    <a href="contact.html" class="spc-book-btn">Set Up School Rides</a>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION 2: CONCIERGE / ASSISTED ── -->
+    <section class="sect-grey">
+        <div class="container">
+            <div class="section-eyebrow">Premium Human Service</div>
+            <h2 class="page-section-title">The "Human Premium" —<br>What Robots Can't Do.</h2>
+            <p class="page-section-sub">Autonomous vehicles are good at point-to-point loops. They are not good at carrying groceries, steadying an elderly passenger on an icy sidewalk, or loading a wheelchair into the boot. That's where WeGo's driver-owners shine.</p>
+
+            <div class="concierge-split">
+                <div class="concierge-text">
+                    <h3>Assisted Mobility &amp; Concierge</h3>
+                    <p>Our assisted mobility service is designed for passengers who need more than just a car — they need a capable, patient person. Our driver-owners in this tier receive additional training and earn a premium fare for the additional care they provide.</p>
+                    <p>As Waymo and Tesla flood the market with AVs, WeGo deliberately positions its human drivers in the high-value, high-trust lanes that automation structurally cannot serve. This is where your income is protected against the robot transition.</p>
+                    <div class="concierge-chips">
+                        <span class="c-chip">Elderly Assistance</span>
+                        <span class="c-chip">Post-Surgery Transport</span>
+                        <span class="c-chip">Grocery &amp; Errand Runs</span>
+                        <span class="c-chip">Airport Assistance</span>
+                        <span class="c-chip">Pet Transport</span>
+                        <span class="c-chip">Event Escort</span>
+                        <span class="c-chip">Moving Day Assist</span>
+                        <span class="c-chip">Late Night Safe Ride</span>
+                    </div>
+                </div>
+                <div class="concierge-visual">
+                    <div class="cv-row">
+                        <div class="cv-icon">👴</div>
+                        <div class="cv-text">
+                            <h4>Elderly Door-to-Door</h4>
+                            <p>Driver walks with passenger from door to destination. Not curbside — door.</p>
+                        </div>
+                    </div>
+                    <div class="cv-row">
+                        <div class="cv-icon">🏥</div>
+                        <div class="cv-text">
+                            <h4>Post-Procedure Transport</h4>
+                            <p>Patient transport after procedures requiring adult accompaniment and care.</p>
+                        </div>
+                    </div>
+                    <div class="cv-row">
+                        <div class="cv-icon">♿</div>
+                        <div class="cv-text">
+                            <h4>Wheelchair &amp; Mobility Aid</h4>
+                            <p>WAV vehicles available. Driver certified in mobility aid loading and securing.</p>
+                        </div>
+                    </div>
+                    <div class="cv-row">
+                        <div class="cv-icon">🐾</div>
+                        <div class="cv-text">
+                            <h4>Pet Transport</h4>
+                            <p>Vet runs, grooming appointments, and shelter trips — driver-owners who love animals.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION 3: CORPORATE ── -->
+    <section class="sect-dark" id="corporate">
+        <div class="container">
+            <div class="section-eyebrow">For Businesses</div>
+            <h2 class="page-section-title">Corporate Accounts &amp;<br>Fleet Programs.</h2>
+            <p class="page-section-sub">Silicon Valley companies spend millions on business travel and employee commutes. WeGo offers corporate accounts with transparent billing, no surge pricing, and the ethical appeal of a worker-owned cooperative.</p>
+
+            <div class="corporate-grid">
+                <div class="corp-card">
+                    <span class="corp-icon">🏢</span>
+                    <h3>Corporate Commute Program</h3>
+                    <p>Monthly billing, priority dispatch, and designated driver assignment for recurring business routes. Flat rates guaranteed — no surprise invoices on surge days.</p>
+                </div>
+                <div class="corp-card">
+                    <span class="corp-icon">✈️</span>
+                    <h3>Executive Airport Service</h3>
+                    <p>SFO, OAK, and SJC airport runs for business travelers. Scheduled pickup, meet &amp; greet at arrivals, and flight-tracking to adjust for delays.</p>
+                </div>
+                <div class="corp-card">
+                    <span class="corp-icon">🎪</span>
+                    <h3>Event Transportation</h3>
+                    <p>Conference shuttles, corporate event transport, and team offsites. Coordinate large groups with a dedicated WeGo fleet coordinator.</p>
+                </div>
+                <div class="corp-card">
+                    <span class="corp-icon">🧾</span>
+                    <h3>Transparent Billing</h3>
+                    <p>Monthly invoices with full trip-by-trip breakdown. No surge markups buried in totals. Quarterly business reviews on cost per mile and utilization.</p>
+                </div>
+                <div class="corp-card">
+                    <span class="corp-icon">🌱</span>
+                    <h3>ESG / Impact Reporting</h3>
+                    <p>For companies with ESG commitments — we provide full impact reports showing the driver income uplift and community economic contribution from your business.</p>
+                </div>
+                <div class="corp-card">
+                    <span class="corp-icon">🤝</span>
+                    <h3>Cooperative Discount</h3>
+                    <p>Businesses that sign cooperative partnership agreements receive a 5% rate discount and are listed as "Community Partners" on the WeGo platform.</p>
+                </div>
+            </div>
+
+            <div style="text-align:center; margin-top:40px;">
+                <a href="contact.html" style="display:inline-flex; align-items:center; background:var(--primary); color:var(--white); padding:16px 40px; border-radius:100px; font-size:16px; font-weight:700; text-decoration:none; transition:all 0.2s;">
+                    Request Corporate Account Info
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION 4: AV FLEET FUTURE ── -->
+    <section class="sect-white">
+        <div class="container">
+            <div class="section-eyebrow">The AV Fleet — Years 6–10</div>
+            <h2 class="page-section-title">We Don't Fear the Robots.<br>We Own Them.</h2>
+            <p class="page-section-sub">Every rideshare company is terrified of autonomous vehicles replacing their drivers. WeGo is the only platform where the drivers own the AV fleet — so when the robots work, the pension fund grows.</p>
+
+            <div class="av-intro">
+                <div class="av-intro-text">
+                    <h3>How the AV Fleet Works for You</h3>
+                    <p>By Year 6–8, WeGo uses its accumulated cooperative capital to purchase autonomous vehicles in bulk and assign them to the Retirement Trust. These vehicles operate 20 hours per day, projected to net $4,000–$6,000/month each after operational costs.</p>
+                    <p>That $4,000 goes into the Retirement Trust — not to Uber's shareholders. When a founding driver retires after 20 years, one AV in the fleet is permanently assigned to their pension. The robot works so they don't have to.</p>
+                    <p>Human drivers continue to handle the high-value, high-trust routes: assisted mobility, school transport, medical logistics, and premium corporate services. The AVs handle the 3 AM downtown loops and the routine commutes — the rides that human drivers don't want to take anyway.</p>
+                    <p>Fleet procurement is planned across <strong>multiple EV manufacturers</strong> — including emerging OEM partners — so no single supplier can block or embargo the cooperative's hardware acquisition. By Year 6, WeGo's Hardware Reserve Fund positions the cooperative as a bulk fleet buyer with negotiating power, not a dependent customer.</p>
+                </div>
+                <div class="av-stat-box">
+                    <div class="av-stat">
+                        <div class="av-num">50K</div>
+                        <div class="av-lbl"><strong>AV units owned by Year 10</strong>All held in the Retirement Trust, not by management.</div>
+                    </div>
+                    <div class="av-stat">
+                        <div class="av-num">$4K–6K</div>
+                        <div class="av-lbl"><strong>Projected net monthly income per AV</strong>After insurance, charging, and maintenance.</div>
+                    </div>
+                    <div class="av-stat">
+                        <div class="av-num">1:1</div>
+                        <div class="av-lbl"><strong>Robot-to-retiree ratio</strong>One AV assigned per retired driver. The robot works forever so the driver doesn't.</div>
+                    </div>
+                    <div class="av-stat">
+                        <div class="av-num">$0</div>
+                        <div class="av-lbl"><strong>AV profit to outside investors</strong>100% of fleet revenue stays inside the cooperative.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="av-timeline">
+                <div class="av-phase">
+                    <div class="av-phase-year"><div class="year-text">Years 1–3<br>2026–28</div></div>
+                    <div class="av-phase-content">
+                        <h4>Build the Foundation</h4>
+                        <p>Human-only rides. Accumulate cooperative capital through dues and tech fees. Negotiate group insurance. Secure CPUC license. Build the app. Open first Service Hubs in Bay Area.</p>
+                    </div>
+                </div>
+                <div class="av-phase">
+                    <div class="av-phase-year"><div class="year-text">Years 4–6<br>2029–31</div></div>
+                    <div class="av-phase-content">
+                        <h4>National Expansion</h4>
+                        <p>Enter Texas, Arizona, Pacific Northwest. Reach 200,000 drivers. Build out Service Hub network. Negotiate first AV fleet purchase contracts. Hybrid app launches — human + AV on same platform.</p>
+                    </div>
+                </div>
+                <div class="av-phase">
+                    <div class="av-phase-year"><div class="year-text">Years 7–10<br>2032–36</div></div>
+                    <div class="av-phase-content">
+                        <h4>The Robot Dividend</h4>
+                        <p>50,000 AVs operating in 15+ cities. Founding drivers begin hitting 20-year milestone. Retirement Trust begins paying pensions funded by AV net profits. Human drivers shift to premium and assisted service lanes.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION 5: SERVICE HUBS ── -->
+    <section class="sect-grey">
+        <div class="container">
+            <div class="section-eyebrow">Physical Infrastructure</div>
+            <h2 class="page-section-title">200 Service Hubs.<br>The Pit Crew for Every Car on the Road.</h2>
+            <p class="page-section-sub">By Year 6, WeGo will own 200 Service Hubs in major cities — open to the public for gas, EV charging, and vehicle maintenance, with exclusive member pricing for driver-owners.</p>
+
+            <div class="hub-grid">
+                <div class="hub-card">
+                    <span class="hub-icon">⛽</span>
+                    <h3>Fuel &amp; Gas</h3>
+                    <p>Full-service gas stations open to the public. Members pay at-cost pricing — saving an estimated $720/year compared to commercial pump rates.</p>
+                    <span class="hub-member-note">✓ Member Discount Active</span>
+                </div>
+                <div class="hub-card">
+                    <span class="hub-icon">⚡</span>
+                    <h3>EV Fast Charging</h3>
+                    <p>Level 2 and DC Fast Charge stations. Members get priority lanes and 40% off public charging rates. NEVI grant-funded in participating states.</p>
+                    <span class="hub-member-note">✓ Priority Lane Access</span>
+                </div>
+                <div class="hub-card">
+                    <span class="hub-icon">🔧</span>
+                    <h3>Vehicle Maintenance</h3>
+                    <p>Oil changes, tire rotations, brake inspections, and safety checks — performed by co-op certified technicians. Member pricing, publicly available services.</p>
+                    <span class="hub-member-note">✓ Member Pricing</span>
+                </div>
+                <div class="hub-card">
+                    <span class="hub-icon">🤖</span>
+                    <h3>AV Fleet Operations</h3>
+                    <p>Cleaning bays, sensor recalibration, and high-voltage charging for the cooperative's autonomous fleet. Also available to external fleet operators at commercial rates.</p>
+                    <span class="hub-member-note">✓ Fleet Revenue</span>
+                </div>
+                <div class="hub-card">
+                    <span class="hub-icon">☕</span>
+                    <h3>Driver Lounge</h3>
+                    <p>Rest, eat, and recharge between rides. Free WiFi, phone charging, and a comfortable break space — because a rested driver is a safer driver.</p>
+                    <span class="hub-member-note">✓ Members Only</span>
+                </div>
+                <div class="hub-card">
+                    <span class="hub-icon">📋</span>
+                    <h3>Licensing &amp; Compliance Support</h3>
+                    <p>Renew your TNC permit, submit vehicle inspections, and get DMV paperwork support on-site. No appointments needed for member-owners.</p>
+                    <span class="hub-member-note">✓ Members Only</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── FINAL CTA ── -->
+    <section class="sect-blue">
+        <div class="container final-cta">
+            <h2>Need a Ride? Want to Drive?<br>Both Doors Are Open.</h2>
+            <p>Book a ride as a passenger or join the founding 1,000 as a driver-owner. Either way, you're choosing a cooperative over a corporation.</p>
+            <div>
+                <a href="contact.html" class="btn-wego-primary">Book a Ride</a>
+                <a href="contact.html" class="btn-wego-ghost">Become a Driver-Owner</a>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<!-- SHARED FOOTER -->
+<footer class="mega-footer">
+    <div class="container">
+        <div class="footer-brand">
+            <h2>WeGo</h2>
+            <a href="contact.html" class="help-link">Visit Help Center</a>
+        </div>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h4>The Cooperative</h4>
+                <ul>
+                    <li><a href="about.html">About Us</a></li>
+                    <li><a href="features.html">The 12% Model</a></li>
+                    <li><a href="faq.html">Driver FAQ</a></li>
+                    <li><a href="contact.html">Careers</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Our Services</h4>
+                <ul>
+                    <li><a href="services.html#local">Local Rides</a></li>
+                    <li><a href="services.html#school">Secure School Transport</a></li>
+                    <li><a href="services.html#medical">Medical Logistics</a></li>
+                    <li><a href="services.html#corporate">Corporate Accounts</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Member-Owners</h4>
+                <ul>
+                    <li><a href="faq.html">Driver FAQ</a></li>
+                    <li><a href="calculator.html">Earnings Calculator</a></li>
+                    <li><a href="faq.html#pension">Pension Details</a></li>
+                    <li><a href="faq.html#governance">Board Elections</a></li>
+                    <li><a href="features.html#senior-drivers">Drivers Age 50+</a></li>
+                    <li><a href="contact.html">Join the Waitlist</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-apps">
+            <span class="footer-app-note">📱 App launching with the Bay Area rollout — join the waitlist to be notified first.</span>
+        </div>
+        <div class="footer-meta">
+            <div class="meta-left">
+                <div class="social-icons">
+                    <a href="https://x.com/" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
+                    <a href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+                    <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
+                </div>
+                <div class="locale-info">
+                    <span>🌐 English</span>
+                    <span>📍 Santa Clara, CA</span>
+                </div>
+            </div>
+            <div class="meta-right">
+                <a href="#">Terms of Service</a>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Accessibility</a>
+                <p class="legal-disclaimer">WeGo is a pre-launch cooperative. Membership offerings are not securities. Projected financial figures — including pension amounts — are estimates based on current models, not guarantees. All projections subject to actuarial review and cooperative fund performance.</p>
+                <p class="copyright">&copy; 2026 WeGo Cooperative. All Rights Reserved.</p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script>(function(){var btn=document.getElementById("theme-toggle");if(!btn)return;btn.addEventListener("click",function(){var h=document.documentElement;var c=h.getAttribute("data-theme")||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var n=c==="dark"?"light":"dark";h.setAttribute("data-theme",n);localStorage.setItem("wego-theme",n);});})();</script>
+</body>
+</html>

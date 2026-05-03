@@ -1,0 +1,764 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact &amp; Join — WeGo Cooperative</title>
+    <meta name="description" content="Reserve your founding membership spot. The first 1,000 Bay Area drivers own WeGo forever — lower fees, more shares, and the highest pension tier. $500 over 12 months.">
+    <link rel="dns-prefetch" href="//x.com">
+    <link rel="dns-prefetch" href="//www.linkedin.com">
+    <link rel="dns-prefetch" href="//www.instagram.com">
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){var t=localStorage.getItem("wego-theme");if(t)document.documentElement.setAttribute("data-theme",t);}());</script>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1 class="logo"><a href="index.html">WeGo</a></h1>
+        <button class="nav-toggle" aria-label="Toggle navigation" onclick="document.querySelector('header').classList.toggle('nav-open'); this.classList.toggle('open')">
+            <span></span><span></span><span></span>
+        </button>
+        <nav>
+            <ul>
+                <li><a href="about.html">About</a></li>
+                <li><a href="features.html">Features</a></li>
+                <li><a href="services.html">Services</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="calculator.html">Calculator</a></li>
+                <li><a href="contact.html" class="active">Contact</a></li>
+            </ul>
+        </nav>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+            <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="contact.html" class="cta">Drive &amp; Own</a>
+    </div>
+</header>
+
+<main>
+
+    <!-- ── HERO ── -->
+    <section class="hero">
+        <div class="container hero-content">
+            <h2>Let's Build This Together.</h2>
+            <p>Whether you want to join as a founding driver, book a ride, partner with us corporately, or just ask a question — this is where it starts. A real person on our team will respond, not a bot.</p>
+        </div>
+    </section>
+
+    <!-- ── MAIN CONTACT SECTION ── -->
+    <section class="sect-white">
+        <div class="container">
+            <div class="contact-hero-grid">
+
+                <!-- ── LEFT: FORMS ── -->
+                <div>
+                    <!-- Tab switcher -->
+                    <div class="tab-bar" role="tablist">
+                        <button class="tab-btn active" role="tab" aria-selected="true"
+                                onclick="switchTab('driver', this)">🚗 Become a Driver</button>
+                        <button class="tab-btn" role="tab" aria-selected="false"
+                                onclick="switchTab('rider', this)">📍 Book a Ride</button>
+                        <button class="tab-btn" role="tab" aria-selected="false"
+                                onclick="switchTab('corporate', this)">🏢 Corporate</button>
+                        <button class="tab-btn" role="tab" aria-selected="false"
+                                onclick="switchTab('general', this)">✉️ General</button>
+                    </div>
+
+                    <!-- ── DRIVER FORM ── -->
+                    <div class="tab-panel active" id="panel-driver">
+                        <div class="section-eyebrow">Join the Founding 1,000</div>
+                        <h2 class="section-title" style="font-size:26px; margin-bottom:8px;">Reserve Your Founding Spot</h2>
+                        <p style="font-size:15px; color:var(--text-soft); margin-bottom:28px; line-height:1.65;">
+                            The first 1,000 Bay Area drivers get the lowest loyalty fee tier, the most shares, and the highest pension multiplier. Fill out this form and we'll confirm your spot and next steps within 48 hours.
+                        </p>
+
+                        <div id="form-driver" class="contact-form">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>First Name <span class="req">*</span></label>
+                                    <input type="text" placeholder="Tenzin" autocomplete="given-name">
+                                </div>
+                                <div class="form-field">
+                                    <label>Last Name <span class="req">*</span></label>
+                                    <input type="text" placeholder="Chhetri" autocomplete="family-name">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Email Address <span class="req">*</span></label>
+                                    <input type="email" placeholder="you@email.com" autocomplete="email">
+                                </div>
+                                <div class="form-field">
+                                    <label>Phone Number <span class="req">*</span></label>
+                                    <input type="tel" placeholder="(408) 555-0000" autocomplete="tel">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>City you drive in <span class="req">*</span></label>
+                                    <select>
+                                        <option value="" disabled selected>Select city</option>
+                                        <option>San Francisco, CA</option>
+                                        <option>San Jose, CA</option>
+                                        <option>Oakland, CA</option>
+                                        <option>Santa Clara, CA</option>
+                                        <option>Palo Alto, CA</option>
+                                        <option>Fremont, CA</option>
+                                        <option>Other Bay Area</option>
+                                        <option>Outside Bay Area</option>
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Current platform</label>
+                                    <select>
+                                        <option value="" disabled selected>Select platform</option>
+                                        <option>Uber only</option>
+                                        <option>Lyft only</option>
+                                        <option>Both Uber &amp; Lyft</option>
+                                        <option>Other / Not yet driving</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>How long have you been driving?</label>
+                                    <select>
+                                        <option value="" disabled selected>Select range</option>
+                                        <option>Less than 1 year</option>
+                                        <option>1–3 years</option>
+                                        <option>3–5 years</option>
+                                        <option>5–10 years</option>
+                                        <option>10+ years</option>
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Weekly driving hours (approx)</label>
+                                    <select>
+                                        <option value="" disabled selected>Select range</option>
+                                        <option>Under 10 hrs (casual)</option>
+                                        <option>10–25 hrs (part-time)</option>
+                                        <option>25–40 hrs (near full-time)</option>
+                                        <option>40+ hrs (full-time)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Vehicle (year, make, model)</label>
+                                <input type="text" placeholder="e.g. 2022 Toyota RAV4 Hybrid">
+                            </div>
+                            <div class="form-field">
+                                <label>Why are you interested in WeGo? (optional)</label>
+                                <textarea placeholder="Tell us what brings you here — whether it's the pension, the 88% fare share, the insurance, or something else entirely."></textarea>
+                            </div>
+                            <div class="form-field">
+                                <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-weight:400;">
+                                    <input type="checkbox" style="width:auto; margin-top:3px; flex-shrink:0; cursor:pointer;">
+                                    <span style="font-size:13px; color:var(--text-soft); line-height:1.5;">
+                                        I understand the $500 founding fee is payable over 12 months ($41.67/mo) and that joining the waitlist does not obligate me to pay until I formally sign the member agreement.
+                                    </span>
+                                </label>
+                            </div>
+                            <button type="button" class="submit-btn" onclick="submitForm('driver')">
+                                <span>Reserve My Founding Spot</span>
+                                <span>→</span>
+                            </button>
+                            <p class="form-hint" style="text-align:center;">
+                                We'll confirm your spot within 48 hours. No payment required today.
+                            </p>
+                        </div>
+
+                        <div class="form-success" id="success-driver">
+                            <span class="success-icon">🎉</span>
+                            <h3>You're on the list!</h3>
+                            <p>We'll be in touch within 48 hours with your member number and next steps. Welcome to the cooperative.</p>
+                        </div>
+                    </div>
+
+                    <!-- ── RIDER FORM ── -->
+                    <div class="tab-panel" id="panel-rider">
+                        <div class="section-eyebrow">Book a Ride</div>
+                        <h2 class="section-title" style="font-size:26px; margin-bottom:8px;">Request a WeGo Ride</h2>
+                        <p style="font-size:15px; color:var(--text-soft); margin-bottom:28px; line-height:1.65;">
+                            The WeGo app is launching with the Bay Area rollout. In the meantime, submit your ride request here and a dispatcher will confirm availability and pricing — no surge, guaranteed.
+                        </p>
+
+                        <div id="form-rider" class="contact-form">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Your Name <span class="req">*</span></label>
+                                    <input type="text" placeholder="Full name" autocomplete="name">
+                                </div>
+                                <div class="form-field">
+                                    <label>Phone or Email <span class="req">*</span></label>
+                                    <input type="text" placeholder="Best way to reach you">
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Pickup Location <span class="req">*</span></label>
+                                <input type="text" placeholder="Address, terminal, or landmark">
+                            </div>
+                            <div class="form-field">
+                                <label>Dropoff Location <span class="req">*</span></label>
+                                <input type="text" placeholder="Address, terminal, or landmark">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Date &amp; Time <span class="req">*</span></label>
+                                    <input type="datetime-local">
+                                </div>
+                                <div class="form-field">
+                                    <label>Service Type <span class="req">*</span></label>
+                                    <select>
+                                        <option value="" disabled selected>Select service</option>
+                                        <option>WeGo Standard</option>
+                                        <option>Medical / NEMT</option>
+                                        <option>Secure School Transport</option>
+                                        <option>Assisted Mobility</option>
+                                        <option>Airport Transfer</option>
+                                        <option>Pet Transport</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Number of passengers</label>
+                                    <select>
+                                        <option>1</option>
+                                        <option>2</option>
+                                        <option>3</option>
+                                        <option>4</option>
+                                        <option>5+</option>
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Accessibility needs?</label>
+                                    <select>
+                                        <option>None</option>
+                                        <option>Wheelchair accessible vehicle</option>
+                                        <option>Mobility assistance</option>
+                                        <option>Child seat required</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Any additional notes?</label>
+                                <textarea placeholder="Flight number, special instructions, etc." style="min-height:80px;"></textarea>
+                            </div>
+                            <button type="button" class="submit-btn" onclick="submitForm('rider')">
+                                <span>Request This Ride</span>
+                                <span>→</span>
+                            </button>
+                            <p class="form-hint" style="text-align:center;">
+                                A dispatcher will confirm availability and flat-rate pricing within 2 hours.
+                            </p>
+                        </div>
+
+                        <div class="form-success" id="success-rider">
+                            <span class="success-icon">🚗</span>
+                            <h3>Ride Request Received</h3>
+                            <p>We'll confirm availability and your flat-rate fare within 2 hours. No surge pricing — ever.</p>
+                        </div>
+                    </div>
+
+                    <!-- ── CORPORATE FORM ── -->
+                    <div class="tab-panel" id="panel-corporate">
+                        <div class="section-eyebrow">For Businesses</div>
+                        <h2 class="section-title" style="font-size:26px; margin-bottom:8px;">Corporate &amp; Partner Inquiry</h2>
+                        <p style="font-size:15px; color:var(--text-soft); margin-bottom:28px; line-height:1.65;">
+                            For corporate commute programs, executive airport accounts, event transportation, and cooperative partnership agreements. Our business team responds within one business day.
+                        </p>
+
+                        <div id="form-corporate" class="contact-form">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Contact Name <span class="req">*</span></label>
+                                    <input type="text" placeholder="Your name" autocomplete="name">
+                                </div>
+                                <div class="form-field">
+                                    <label>Job Title</label>
+                                    <input type="text" placeholder="e.g. Office Manager, EA, CFO">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Company Name <span class="req">*</span></label>
+                                    <input type="text" placeholder="Company name">
+                                </div>
+                                <div class="form-field">
+                                    <label>Company Size</label>
+                                    <select>
+                                        <option value="" disabled selected>Select size</option>
+                                        <option>1–10 employees</option>
+                                        <option>11–50 employees</option>
+                                        <option>51–200 employees</option>
+                                        <option>201–500 employees</option>
+                                        <option>500+ employees</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Business Email <span class="req">*</span></label>
+                                    <input type="email" placeholder="you@company.com" autocomplete="email">
+                                </div>
+                                <div class="form-field">
+                                    <label>Phone</label>
+                                    <input type="tel" placeholder="(408) 555-0000">
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>What are you looking for? <span class="req">*</span></label>
+                                <select>
+                                    <option value="" disabled selected>Select inquiry type</option>
+                                    <option>Corporate commute program</option>
+                                    <option>Executive airport service</option>
+                                    <option>Event / conference transport</option>
+                                    <option>Cooperative partnership</option>
+                                    <option>ESG / impact partnership</option>
+                                    <option>Fleet management inquiry</option>
+                                    <option>Other</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>Estimated monthly ride volume</label>
+                                <select>
+                                    <option value="" disabled selected>Select range</option>
+                                    <option>Under 20 rides/month</option>
+                                    <option>20–100 rides/month</option>
+                                    <option>100–500 rides/month</option>
+                                    <option>500+ rides/month</option>
+                                    <option>Not sure yet</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>Tell us more about your needs</label>
+                                <textarea placeholder="Routes, frequency, timing, special requirements — any context helps."></textarea>
+                            </div>
+                            <button type="button" class="submit-btn" onclick="submitForm('corporate')">
+                                <span>Send Corporate Inquiry</span>
+                                <span>→</span>
+                            </button>
+                            <p class="form-hint" style="text-align:center;">
+                                Our business team will respond within one business day with a custom quote.
+                            </p>
+                        </div>
+
+                        <div class="form-success" id="success-corporate">
+                            <span class="success-icon">🏢</span>
+                            <h3>Inquiry Received</h3>
+                            <p>Our business team will be in touch within one business day with a custom proposal tailored to your needs.</p>
+                        </div>
+                    </div>
+
+                    <!-- ── GENERAL FORM ── -->
+                    <div class="tab-panel" id="panel-general">
+                        <div class="section-eyebrow">General Inquiry</div>
+                        <h2 class="section-title" style="font-size:26px; margin-bottom:8px;">Send Us a Message</h2>
+                        <p style="font-size:15px; color:var(--text-soft); margin-bottom:28px; line-height:1.65;">
+                            Press, partnerships, investor inquiries, research requests, or just a question. We read every message and respond personally.
+                        </p>
+
+                        <div id="form-general" class="contact-form">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Your Name <span class="req">*</span></label>
+                                    <input type="text" placeholder="Full name" autocomplete="name">
+                                </div>
+                                <div class="form-field">
+                                    <label>Email <span class="req">*</span></label>
+                                    <input type="email" placeholder="you@email.com" autocomplete="email">
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Subject</label>
+                                <select>
+                                    <option value="" disabled selected>What's this about?</option>
+                                    <option>Press / Media Inquiry</option>
+                                    <option>Research / Academic</option>
+                                    <option>Cooperative Partnership</option>
+                                    <option>AV Technology Inquiry</option>
+                                    <option>Legal / Regulatory</option>
+                                    <option>General Question</option>
+                                    <option>Feedback</option>
+                                    <option>Other</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>Message <span class="req">*</span></label>
+                                <textarea placeholder="Tell us what's on your mind." style="min-height:140px;"></textarea>
+                            </div>
+                            <button type="button" class="submit-btn" onclick="submitForm('general')">
+                                <span>Send Message</span>
+                                <span>→</span>
+                            </button>
+                            <p class="form-hint" style="text-align:center;">
+                                We respond to every message personally, usually within 1–2 business days.
+                            </p>
+                        </div>
+
+                        <div class="form-success" id="success-general">
+                            <span class="success-icon">✉️</span>
+                            <h3>Message Sent</h3>
+                            <p>We read every message personally and will get back to you within 1–2 business days.</p>
+                        </div>
+                    </div>
+
+                </div>
+                <!-- end left column -->
+
+                <!-- ── RIGHT: INFO PANEL ── -->
+                <div class="info-panel">
+
+                    <!-- Founding counter -->
+                    <div class="founding-counter">
+                        <div class="fc-eyebrow">🔴 Live Founding Round</div>
+                        <div class="fc-count">42</div>
+                        <div class="fc-label">of 1,000 founding spots claimed</div>
+                        <div class="fc-bar-track">
+                            <div class="fc-bar-fill"></div>
+                        </div>
+                        <div class="fc-sub">958 spots remaining · Bay Area launch · $500 buy-in over 12 months</div>
+                    </div>
+
+                    <!-- Contact details -->
+                    <div class="info-card">
+                        <h4>📬 Direct Contact</h4>
+                        <div class="info-row">
+                            <div class="info-icon">📧</div>
+                            <div class="info-row-text">
+                                <h5>General Email</h5>
+                                <p><a href="mailto:hello@wegocoop.com">hello@wegocoop.com</a></p>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-icon">🚗</div>
+                            <div class="info-row-text">
+                                <h5>Driver Support</h5>
+                                <p><a href="mailto:drivers@wegocoop.com">drivers@wegocoop.com</a></p>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-icon">🏢</div>
+                            <div class="info-row-text">
+                                <h5>Corporate Accounts</h5>
+                                <p><a href="mailto:business@wegocoop.com">business@wegocoop.com</a></p>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-icon">📍</div>
+                            <div class="info-row-text">
+                                <h5>Headquarters</h5>
+                                <p>Santa Clara, CA 95050<br>Bay Area, California</p>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-icon">🕐</div>
+                            <div class="info-row-text">
+                                <h5>Response Hours</h5>
+                                <p>Mon–Fri 8 AM – 6 PM PT<br>Dispatch inquiries: 24/7</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- What happens next -->
+                    <div class="info-card">
+                        <h4>🗺️ What Happens After You Apply</h4>
+                        <div class="next-steps">
+                            <div class="next-step">
+                                <div class="step-num">1</div>
+                                <div>
+                                    <h5>Confirmation within 48 hrs</h5>
+                                    <p>You'll receive an email with your member number and a welcome packet explaining the cooperative structure.</p>
+                                </div>
+                            </div>
+                            <div class="next-step">
+                                <div class="step-num">2</div>
+                                <div>
+                                    <h5>Member Agreement</h5>
+                                    <p>Review and sign the cooperative member agreement — the legal document that makes you an owner. No payment yet.</p>
+                                </div>
+                            </div>
+                            <div class="next-step">
+                                <div class="step-num">3</div>
+                                <div>
+                                    <h5>First payment setup</h5>
+                                    <p>Set up your $41.67/month founding fee payment schedule. This is when your ownership officially begins and your vesting clock starts.</p>
+                                </div>
+                            </div>
+                            <div class="next-step">
+                                <div class="step-num">4</div>
+                                <div>
+                                    <h5>Benefits activate</h5>
+                                    <p><strong>Immediate (from first payment):</strong> Your retirement trust contributions begin and your vesting clock starts. You are a cooperative member-owner from this day forward.<br><strong>At app launch</strong> (once CPUC license is issued): Group commercial insurance coverage and fuel discounts activate for all active members.</p>
+                                </div>
+                            </div>
+                            <div class="next-step">
+                                <div class="step-num">5</div>
+                                <div>
+                                    <h5>App launch notification</h5>
+                                    <p>When the CPUC license is issued and the app goes live in your area, you'll be first notified — and first on the app.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <!-- end right column -->
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION 2: DRIVER REQUIREMENTS ── -->
+    <section class="sect-grey">
+        <div class="container">
+            <div class="section-eyebrow">Driver Eligibility</div>
+            <h2 class="section-title">What You'll Need to Join as a Driver.</h2>
+            <p class="section-sub">WeGo follows California CPUC TNC requirements plus our own cooperative standards. If you're already driving for Uber or Lyft, you likely meet most of these already.</p>
+
+            <div class="requirements-grid">
+                <div class="req-card">
+                    <span class="req-icon">🪪</span>
+                    <h3>Identity &amp; License</h3>
+                    <ul>
+                        <li>Valid California driver's license (or state license in your market)</li>
+                        <li>Must be 21 years or older</li>
+                        <li>At least 1 year of licensed driving experience</li>
+                        <li>Social Security number for background check</li>
+                    </ul>
+                </div>
+                <div class="req-card">
+                    <span class="req-icon">🚗</span>
+                    <h3>Vehicle</h3>
+                    <ul>
+                        <li>2010 or newer (4-door vehicle)</li>
+                        <li>Valid California vehicle registration</li>
+                        <li>Pass WeGo vehicle inspection (free at any Service Hub)</li>
+                        <li>No commercial livery license required for standard tier</li>
+                    </ul>
+                </div>
+                <div class="req-card">
+                    <span class="req-icon">📋</span>
+                    <h3>Background Check</h3>
+                    <ul>
+                        <li>No major violations in past 7 years (DUI, reckless driving)</li>
+                        <li>No felony convictions in past 7 years</li>
+                        <li>Clean sex offender registry check</li>
+                        <li>DMV driving record check (CPUC required)</li>
+                    </ul>
+                </div>
+                <div class="req-card">
+                    <span class="req-icon">💳</span>
+                    <h3>Membership Commitment</h3>
+                    <ul>
+                        <li>$500 founding fee payable over 12 months ($41.67/mo)</li>
+                        <li>$75/month membership dues beginning with first payment</li>
+                        <li>Agreement to cooperative bylaws and member code of conduct</li>
+                        <li>Willingness to participate in at least one annual cooperative vote</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="driver-tip-box">
+                <span class="driver-tip-icon">💡</span>
+                <div>
+                    <strong class="driver-tip-title">Already driving on Uber or Lyft?</strong>
+                    <p class="driver-tip-body">You don't need to quit your current platform to join. We encourage dual-app driving during the pre-launch phase — your vesting clock starts from your first membership payment, not from your first WeGo ride.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION 3: OTHER WAYS TO REACH US ── -->
+    <section class="sect-dark">
+        <div class="container">
+            <div class="section-eyebrow">Other Channels</div>
+            <h2 class="section-title">More Ways to Connect.</h2>
+            <p class="section-sub">We're a cooperative, not a corporation. You won't get a support bot — you'll get a driver who works for the same company you do.</p>
+
+            <div class="alt-contact-grid">
+                <div class="alt-card">
+                    <span class="alt-icon">✖️</span>
+                    <h3>X (Twitter)</h3>
+                    <p>Follow for cooperative news, AV industry updates, and driver advocacy. DMs open for quick questions.</p>
+                    <a href="https://x.com/" target="_blank" class="alt-link">@WeGoCoop →</a>
+                </div>
+                <div class="alt-card">
+                    <span class="alt-icon">💼</span>
+                    <h3>LinkedIn</h3>
+                    <p>For press, research, investor relations, and professional partnership inquiries. Full company page with cooperative mission statement.</p>
+                    <a href="https://www.linkedin.com/" target="_blank" class="alt-link">WeGo Cooperative →</a>
+                </div>
+                <div class="alt-card">
+                    <span class="alt-icon">📸</span>
+                    <h3>Instagram</h3>
+                    <p>Behind-the-scenes of building the cooperative, driver stories, and updates from the SFO staging lot community.</p>
+                    <a href="https://www.instagram.com/" target="_blank" class="alt-link">@wegocoop →</a>
+                </div>
+                <div class="alt-card">
+                    <span class="alt-icon">📰</span>
+                    <h3>Press &amp; Media</h3>
+                    <p>For interview requests, press kits, data inquiries, and story pitches. We are available to comment on driver advocacy, cooperative models, and AV transition economics.</p>
+                    <a href="mailto:press@wegocoop.com" class="alt-link">press@wegocoop.com →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION 4: FAQ TEASER ── -->
+    <section class="sect-white">
+        <div class="container">
+            <div class="faq-teaser">
+                <div class="section-eyebrow" style="text-align:center;">Before You Ask</div>
+                <h2>Common Questions, Already Answered.</h2>
+                <p>Our FAQ covers everything from the $75 monthly fee breakdown to how the AV fleet funds your pension. Check it before you write in — you'll likely find your answer immediately.</p>
+
+                <div class="faq-quick-links">
+                    <a href="faq.html" class="faq-quick-link">How much does it cost to join?</a>
+                    <a href="faq.html" class="faq-quick-link">Can I still drive Uber while a member?</a>
+                    <a href="faq.html" class="faq-quick-link">How does the pension work?</a>
+                    <a href="faq.html" class="faq-quick-link">What if the app isn't in my city yet?</a>
+                    <a href="faq.html" class="faq-quick-link">Is the pension fund protected?</a>
+                    <a href="faq.html" class="faq-quick-link">What about surge pricing?</a>
+                </div>
+
+                <a href="faq.html" class="faq-read-btn">Read the Full FAQ</a>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<footer class="mega-footer">
+    <div class="container">
+        <div class="footer-brand">
+            <h2>WeGo</h2>
+            <a href="contact.html" class="help-link">Visit Help Center</a>
+        </div>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h4>The Cooperative</h4>
+                <ul>
+                    <li><a href="about.html">About Us</a></li>
+                    <li><a href="features.html">The 12% Model</a></li>
+                    <li><a href="faq.html">Driver FAQ</a></li>
+                    <li><a href="contact.html">Careers</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Our Services</h4>
+                <ul>
+                    <li><a href="services.html#local">Local Rides</a></li>
+                    <li><a href="services.html#school">Secure School Transport</a></li>
+                    <li><a href="services.html#medical">Medical Logistics</a></li>
+                    <li><a href="services.html#corporate">Corporate Accounts</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Member-Owners</h4>
+                <ul>
+                    <li><a href="faq.html">Driver FAQ</a></li>
+                    <li><a href="calculator.html">Earnings Calculator</a></li>
+                    <li><a href="faq.html#pension">Pension Details</a></li>
+                    <li><a href="faq.html#governance">Board Elections</a></li>
+                    <li><a href="features.html#senior-drivers">Drivers Age 50+</a></li>
+                    <li><a href="contact.html">Join the Waitlist</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-apps">
+            <span class="footer-app-note">📱 App launching with the Bay Area rollout — join the waitlist to be notified first.</span>
+        </div>
+        <div class="footer-meta">
+            <div class="meta-left">
+                <div class="social-icons">
+                    <a href="https://x.com/" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
+                    <a href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+                    <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
+                </div>
+                <div class="locale-info">
+                    <span>🌐 English</span>
+                    <span>📍 Santa Clara, CA</span>
+                </div>
+            </div>
+            <div class="meta-right">
+                <a href="#">Terms of Service</a>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Accessibility</a>
+                <p class="legal-disclaimer">WeGo is a pre-launch cooperative. Membership offerings are not securities. Projected financial figures — including pension amounts — are estimates based on current models, not guarantees. All projections subject to actuarial review and cooperative fund performance.</p>
+                <p class="copyright">&copy; 2026 WeGo Cooperative. All Rights Reserved.</p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+// ── TAB SWITCHER ──────────────────────────────────────────────
+function switchTab(tab, btn) {
+    // Deactivate all tabs and panels
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+    // Activate selected
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+    document.getElementById('panel-' + tab).classList.add('active');
+}
+
+// ── FORM SUBMISSION (simulated — replace with real backend) ───
+function submitForm(type) {
+    const form = document.getElementById('form-' + type);
+    const success = document.getElementById('success-' + type);
+    const btn = form.querySelector('.submit-btn');
+
+    // Basic validation — check required inputs
+    const required = form.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], select');
+    let valid = true;
+
+    // Just check first required field has a value as basic check
+    const firstRequired = form.querySelector('input[placeholder]:not([type="checkbox"])');
+    if (firstRequired && !firstRequired.value.trim()) {
+        firstRequired.style.borderColor = '#dc2626';
+        firstRequired.focus();
+        firstRequired.addEventListener('input', () => {
+            firstRequired.style.borderColor = '';
+        }, { once: true });
+        valid = false;
+    }
+
+    if (!valid) return;
+
+    // Simulate submission
+    btn.disabled = true;
+    btn.innerHTML = '<span>Sending...</span>';
+
+    setTimeout(() => {
+        form.style.opacity = '0';
+        form.style.transition = 'opacity 0.3s';
+        setTimeout(() => {
+            form.style.display = 'none';
+            success.classList.add('show');
+        }, 300);
+    }, 900);
+}
+
+// ── ANIMATE FOUNDING COUNTER ──────────────────────────────────
+window.addEventListener('load', () => {
+    const fill = document.querySelector('.fc-bar-fill');
+    if (fill) {
+        setTimeout(() => {
+            fill.style.width = '4.2%';
+        }, 400);
+    }
+});
+</script>
+
+    <script>(function(){var btn=document.getElementById("theme-toggle");if(!btn)return;btn.addEventListener("click",function(){var h=document.documentElement;var c=h.getAttribute("data-theme")||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var n=c==="dark"?"light":"dark";h.setAttribute("data-theme",n);localStorage.setItem("wego-theme",n);});})();</script>
+</body>
+</html>

@@ -1,0 +1,275 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeGo — The Last App You'll Ever Drive For</title>
+    <meta name="description" content="WeGo is the Bay Area's first driver-owned rideshare cooperative. Keep 88% of every fare, own the platform from day one, and retire with ~$2,500/month after 20 years of service.">
+    <link rel="dns-prefetch" href="//x.com">
+    <link rel="dns-prefetch" href="//www.linkedin.com">
+    <link rel="dns-prefetch" href="//www.instagram.com">
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){var t=localStorage.getItem("wego-theme");if(t)document.documentElement.setAttribute("data-theme",t);}());</script>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1 class="logo"><a href="index.html">WeGo</a></h1>
+        <button class="nav-toggle" aria-label="Toggle navigation" onclick="document.querySelector('header').classList.toggle('nav-open'); this.classList.toggle('open')">
+            <span></span><span></span><span></span>
+        </button>
+        <nav>
+            <ul>
+                <li><a href="about.html">About</a></li>
+                <li><a href="features.html">Features</a></li>
+                <li><a href="services.html">Services</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="calculator.html">Calculator</a></li>
+                <li><a href="contact.html">Contact</a></li>
+            </ul>            
+        </nav>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+            <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="contact.html" class="cta">Drive &amp; Own</a>
+    </div>
+</header>
+
+<main>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="container hero-content">
+            <h2>The Last App You'll Ever Drive For.</h2>
+            <p>We aren't just a platform — we are a legacy. Join the Bay Area's first driver-owned cooperative where 20 years of service builds a lifetime of real wealth.</p>
+            <div class="hero-ctas">
+                <a href="features.html">See The Math</a>
+                <a href="contact.html" style="background:var(--white); color:var(--primary);">Become a Founding Member</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="sect-white">
+        <div class="container">
+            <h2 class="section-title section-center">The Cooperative at a Glance</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>100% Owned</h3>
+                    <p>Driver-owned from day one. Zero equity venture capital — no outside shareholders, no dilution, no loss of control. AV fleet acquisition in Year 6 uses asset-backed hardware financing, not equity investment.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>100% to You</h3>
+                    <p>88% hits your pocket immediately. The remaining 12% funds platform operations — and a fixed portion accumulates in a dedicated <strong>Hardware Reserve Fund</strong> so the cooperative can prove to lenders in Year 6 that the AV down payment is ready. Every dollar stays in the cooperative and comes back to you as pension and equity.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>~$2,500 / Mo*</h3>
+                    <p>Projected lifetime pension after 20 years — funded by the AV fleet the cooperative owns on your behalf. Drivers reaching 25+ years can transfer benefits to family. As the fleet grows, this number goes up.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>$500 Buy-In</h3>
+                    <p>One founding membership fee — payable over 12 months. That's your permanent seat at the table.</p>
+                </div>
+            </div>
+            <p class="section-footnote">* Projected pension based on current AV fleet growth models — the $2,500/mo is the current floor target in today's dollars. As the AV fleet scales, distributions are expected to grow. Drivers with 25+ years earn transferable family benefits. <a href="features.html#senior-drivers">Experienced drivers 50+ →</a> · <a href="faq.html#pension">Full pension details →</a></p>
+        </div>
+    </section>
+
+    <!-- UBER COMPARISON -->
+    <section class="uber-compare">
+        <div class="container">
+            <h2>The Math Uber Doesn't Want You to See</h2>
+            <p class="sub">On a verified $47 SFO → San Francisco fare, here's what each platform pays its driver.</p>
+            <div class="compare-wrapper">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>What You're Comparing</th>
+                            <th>Uber / Lyft</th>
+                            <th>WeGo Cooperative</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="hl">
+                            <td>Platform cut on a $47 ride</td>
+                            <td>~$25.85 (55%)</td>
+                            <td>$5.64 (12%)</td>
+                        </tr>
+                        <tr>
+                            <td>Driver take-home on a $47 ride</td>
+                            <td>$21.15</td>
+                            <td>$41.36</td>
+                        </tr>
+                        <tr class="hl">
+                            <td>Driver owns the platform</td>
+                            <td>✕ Never</td>
+                            <td>✓ From Day 1</td>
+                        </tr>
+                        <tr>
+                            <td>Surge pricing</td>
+                            <td>Algorithmic. Unpredictable.</td>
+                            <td>None. Ever.†</td>
+                        </tr>
+                        <tr class="hl">
+                            <td>Retirement after 20 years</td>
+                            <td>$0</td>
+                            <td>proj. ~$2,500 / month for life*</td>
+                        </tr>
+                        <tr>
+                            <td>Insurance — all ride periods</td>
+                            <td>Gap in Period 1 (app on, waiting)</td>
+                            <td>All 3 periods fully covered</td>
+                        </tr>
+                        <tr class="hl">
+                            <td>Annual driver income advantage</td>
+                            <td>Baseline</td>
+                            <td>+$17,000 – $25,000 / yr (projected)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p style="text-align:center; margin-top:20px; font-size:13px; color:var(--text-dim);">Fare data based on verified Uber price checks on 11 Bay Area routes, April 2026. WeGo's 12% is the per-ride platform fee; $75/month membership dues cover the group insurance pool and cooperative costs separately. <a href="calculator.html">See full effective rate by volume →</a></p>
+            <p style="text-align:center; font-size:13px; color:var(--text-dim);">† No surge means no higher fares for riders during peak hours. Driver availability at peak times is maintained through a <strong>Cooperative Reliability Bonus</strong> — a premium paid to drivers from the cooperative's operating reserve, not from rider fares. <a href="faq.html#riders">How it works →</a></p>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="how-it-works">
+        <div class="container">
+            <h2>How the Cooperative Works</h2>
+            <p class="sub">Four steps. One lifetime of security.</p>
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">01</div>
+                    <h3>Pay the $500 Buy-In</h3>
+                    <p>Your founding membership contribution. Payable over 12 months. This is your cooperative share — you become an owner, not a contractor.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">02</div>
+                    <h3>Pay $75 / Month</h3>
+                    <p>Monthly dues fund your share of the group commercial insurance pool, app infrastructure, and seed your retirement trust. WeGo's pooled group policy provides coverage that would cost $300+/month as an individual policy — your $75 is a contribution to the collective, not the full premium.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">03</div>
+                    <h3>Drive &amp; Keep 88%</h3>
+                    <p>Every ride you keep 88% of the fare. No surge games. No deactivation surprises. No black-box algorithm deciding what you earn today.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">04</div>
+                    <h3>Retire After 20 Years</h3>
+                    <p>After 20 years of service, collect a projected ~$2,500/month for the rest of your life — funded by the autonomous vehicle fleet the cooperative owns on your behalf. Reach 25 years and those benefits transfer to your family.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- DRIVER VOICE -->
+    <section class="driver-story">
+        <div class="container">
+            <div class="story-inner">
+                <span class="quote-mark">"</span>
+                <blockquote>I pulled up Uber's own breakdown. On a $142 ride from SFO to Napa, Uber kept $79 and paid me $63. That means the platform took more than the driver who did the actual work. WeGo is the answer I've been waiting for.</blockquote>
+                <p class="story-attr"><strong>Tenzin C.</strong> — Gold Pro Driver, SFO Corridor · Founding Member #0042</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOUNDING MEMBER CTA -->
+    <section class="founding-cta">
+        <div class="container">
+            <div class="member-badge">🔴 Founding 1,000 — Bay Area Launch</div>
+            <h2>Your $500 Buys More Than a Seat.<br>It Buys a Future.</h2>
+            <p>The first 1,000 founding drivers in the Bay Area will own this cooperative forever. Lowest loyalty fees. Maximum founding benefits. The highest pension tier. Once the founding round closes, it closes.</p>
+            <div class="spot-counter-strip">
+                <div class="scs-top">
+                    <span class="scs-num">42</span>
+                    <span class="scs-label">of 1,000 founding spots claimed</span>
+                </div>
+                <div class="scs-bar-track"><div class="scs-bar-fill"></div></div>
+                <div class="scs-sub">958 spots remaining · Bay Area only · closes when full</div>
+            </div>
+            <div class="founding-cta-buttons">
+                <a href="contact.html" class="btn-white">Reserve My Founding Spot</a>
+                <a href="faq.html" class="btn-ghost">Read the FAQ</a>
+            </div>
+            <p class="fee-note">$500 founding fee · payable over 12 months · $75/month membership · No app required to join today</p>
+        </div>
+    </section>
+
+</main>
+
+<footer class="mega-footer">
+    <div class="container">
+        <div class="footer-brand">
+            <h2>WeGo</h2>
+            <a href="contact.html" class="help-link">Visit Help Center</a>
+        </div>
+        <div class="footer-grid">
+            <div class="footer-col">
+                <h4>The Cooperative</h4>
+                <ul>
+                    <li><a href="about.html">About Us</a></li>
+                    <li><a href="features.html">The 12% Model</a></li>
+                    <li><a href="faq.html">Driver FAQ</a></li>
+                    <li><a href="contact.html">Careers</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Our Services</h4>
+                <ul>
+                    <li><a href="services.html#local">Local Rides</a></li>
+                    <li><a href="services.html#school">Secure School Transport</a></li>
+                    <li><a href="services.html#medical">Medical Logistics</a></li>
+                    <li><a href="services.html#corporate">Corporate Accounts</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Member-Owners</h4>
+                <ul>
+                    <li><a href="faq.html">Driver FAQ</a></li>
+                    <li><a href="features.html#loyalty">The Loyalty Ladder</a></li>
+                    <li><a href="faq.html#pension">Pension Details</a></li>
+                    <li><a href="faq.html#governance">Board Elections</a></li>
+                    <li><a href="features.html#senior-drivers">Drivers Age 50+</a></li>
+                    <li><a href="contact.html">Join the Waitlist</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-apps">
+            <span class="footer-app-note">📱 App launching with the Bay Area rollout — join the waitlist to be notified first.</span>
+        </div>
+        <div class="footer-meta">
+            <div class="meta-left">
+                <div class="social-icons">
+                    <a href="https://x.com/" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>
+                    </a>
+                    <a href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                    <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                    </a>
+                </div>
+                <div class="locale-info">
+                    <span>🌐 English</span>
+                    <span>📍 Santa Clara, CA</span>
+                </div>
+            </div>
+            <div class="meta-right">
+                <a href="#">Terms of Service</a>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Accessibility</a>
+                <p class="legal-disclaimer">WeGo is a pre-launch cooperative. Membership offerings are not securities. Projected financial figures — including pension amounts — are estimates based on current models, not guarantees. All projections subject to actuarial review and cooperative fund performance.</p>
+                <p class="copyright">&copy; 2026 WeGo Cooperative. All Rights Reserved.</p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script>(function(){var btn=document.getElementById("theme-toggle");if(!btn)return;btn.addEventListener("click",function(){var h=document.documentElement;var c=h.getAttribute("data-theme")||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var n=c==="dark"?"light":"dark";h.setAttribute("data-theme",n);localStorage.setItem("wego-theme",n);});})();</script>
+</body>
+</html>
