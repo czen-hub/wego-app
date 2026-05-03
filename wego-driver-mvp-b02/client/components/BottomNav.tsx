@@ -5,12 +5,11 @@ import { MapPin, BarChart3, Wallet, Users, Inbox } from "lucide-react";
 const BottomNav = () => {
   const location = useLocation();
   const [inboxBadge, setInboxBadge] = useState(true);
+  const [govBadge, setGovBadge] = useState(true);
 
-  // Clear badge once the user visits inbox
   useEffect(() => {
-    if (location.pathname === "/inbox") {
-      setInboxBadge(false);
-    }
+    if (location.pathname === "/inbox") setInboxBadge(false);
+    if (location.pathname === "/governance") setGovBadge(false);
   }, [location.pathname]);
 
   const isActive = (path: string) => location.pathname === path;
@@ -20,7 +19,7 @@ const BottomNav = () => {
     { path: "/earnings",   icon: BarChart3, label: "Earnings" },
     { path: "/inbox",      icon: Inbox,     label: "Inbox",   badge: inboxBadge },
     { path: "/legacy",     icon: Wallet,    label: "Legacy" },
-    { path: "/governance", icon: Users,     label: "Coop" },
+    { path: "/governance", icon: Users,     label: "Coop",    badge: govBadge },
   ];
 
   return (

@@ -159,8 +159,8 @@ export default function Settings() {
 
   // ── Profile ──
   const [profilePic, setProfilePic] = useState<string | null>(null);
-  const [profileName, setProfileName] = useState("Marcus T.");
-  const [profileDraft, setProfileDraft] = useState("Marcus T.");
+  const [profileName, setProfileName] = useState("Tenzin C.");
+  const [profileDraft, setProfileDraft] = useState("Tenzin C.");
 
   // ── Vehicle ──
   const [vehicle, setVehicle] = useState({ nickname: "", make: "Toyota", model: "Camry", year: "2021", plate: "ABC-1234", color: "White" });
@@ -179,7 +179,7 @@ export default function Settings() {
   // ── Account ──
   const [phone, setPhone] = useState("+1 (415) 555-0182");
   const [phoneDraft, setPhoneDraft] = useState(phone);
-  const [email, setEmail] = useState("marcus.t@email.com");
+  const [email, setEmail] = useState("tenzin.c@email.com");
   const [emailDraft, setEmailDraft] = useState(email);
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
@@ -192,6 +192,7 @@ export default function Settings() {
 
   // ── Modal ──
   const [modal, setModal] = useState<ModalId>(null);
+  const [signOutConfirm, setSignOutConfirm] = useState(false);
   const close = () => setModal(null);
   const [codeCopied, setCodeCopied] = useState(false);
   const handleCopyCode = () => {
@@ -406,14 +407,24 @@ export default function Settings() {
 
           {/* Support */}
           <Section title="Support">
-            <Row icon={<HelpCircle size={18} />} label="Help Center" onClick={() => {}} />
-            <Row icon={<FileText size={18} />} label="Member Agreement" onClick={() => {}} />
-            <Row icon={<FileText size={18} />} label="Privacy Policy" onClick={() => {}} />
+            <Row icon={<HelpCircle size={18} />} label="Help Center" sublabel="FAQs, guides, and driver support" onClick={() => alert("Help Center coming soon.")} />
+            <Row icon={<FileText size={18} />} label="Member Agreement" sublabel="View your cooperative membership terms" onClick={() => alert("Member Agreement coming soon.")} />
+            <Row icon={<FileText size={18} />} label="Privacy Policy" sublabel="How WeGo handles your data" onClick={() => alert("Privacy Policy coming soon.")} />
           </Section>
 
           {/* Sign Out */}
           <Section title="Session">
-            <Row icon={<LogOut size={18} className="text-destructive" />} label="Sign Out" danger onClick={() => {}} right={null} />
+            {signOutConfirm ? (
+              <div className="px-4 py-4 space-y-3">
+                <p className="text-sm text-foreground font-medium">Sign out of your account?</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setSignOutConfirm(false)} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-muted-foreground active:scale-95 transition-transform">Cancel</button>
+                  <button type="button" onClick={() => setSignOutConfirm(false)} className="flex-1 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30 text-sm font-semibold text-destructive active:scale-95 transition-transform">Sign Out</button>
+                </div>
+              </div>
+            ) : (
+              <Row icon={<LogOut size={18} className="text-destructive" />} label="Sign Out" danger onClick={() => setSignOutConfirm(true)} right={null} />
+            )}
           </Section>
 
           <p className="text-center text-xs text-muted-foreground pb-2">WeGo Driver v2.4.1 · Member since 2023</p>

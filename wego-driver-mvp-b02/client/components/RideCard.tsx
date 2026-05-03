@@ -1,7 +1,8 @@
-import { MapPin, Clock, User, CheckCircle, X } from "lucide-react";
+import { MapPin, Clock, Star, CheckCircle, X } from "lucide-react";
 
 interface RideCardProps {
   riderName?: string;
+  riderRating?: number;
   pickupLocation?: string;
   dropoffLocation?: string;
   riderPayment?: number;
@@ -14,6 +15,7 @@ interface RideCardProps {
 
 const RideCard = ({
   riderName = "Sarah M.",
+  riderRating = 4.87,
   pickupLocation = "123 Market St, SF",
   dropoffLocation = "456 Valencia St, SF",
   riderPayment = 40,
@@ -34,12 +36,15 @@ const RideCard = ({
           <div>
             <p className="font-semibold text-foreground">{riderName}</p>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Clock size={14} />
+              <Clock size={12} />
               {estimatedTime} min away
             </p>
           </div>
         </div>
-        <User size={20} className="text-muted-foreground" />
+        <div className="flex items-center gap-1 bg-card border border-border rounded-full px-2.5 py-1">
+          <Star size={12} className="text-yellow-400 fill-yellow-400" />
+          <span className="text-xs font-semibold text-foreground">{riderRating.toFixed(2)}</span>
+        </div>
       </div>
 
       {/* Route */}

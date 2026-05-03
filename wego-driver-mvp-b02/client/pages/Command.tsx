@@ -188,15 +188,35 @@ export default function Command() {
   };
 
   const handleAccept = () => {
+    setActiveRequest(null);
     if (activeRequest === "ride") {
-      setActiveRequest(null);
-      navigate("/trip", { state: MOCK_RIDE });
-    } else {
-      setActiveRequest(null);
-      declineTimerRef.current = setTimeout(() => {
-        setActiveRequest(pickNextRequest(acceptRides, acceptCourier, acceptFood));
-        declineTimerRef.current = null;
-      }, 3000);
+      navigate("/trip", { state: { ...MOCK_RIDE, type: "ride" } });
+    } else if (activeRequest === "courier") {
+      navigate("/trip", {
+        state: {
+          riderName: "Package Delivery",
+          pickupLocation: MOCK_COURIER.pickupLocation,
+          dropoffLocation: MOCK_COURIER.dropoffLocation,
+          riderPayment: MOCK_COURIER.riderPayment,
+          coopFee: MOCK_COURIER.coopFee,
+          driverTake: MOCK_COURIER.driverTake,
+          estimatedTime: MOCK_COURIER.estimatedTime,
+          type: "courier",
+        },
+      });
+    } else if (activeRequest === "food") {
+      navigate("/trip", {
+        state: {
+          riderName: `${MOCK_FOOD.restaurant} → ${MOCK_FOOD.customerName}`,
+          pickupLocation: MOCK_FOOD.pickupLocation,
+          dropoffLocation: MOCK_FOOD.dropoffLocation,
+          riderPayment: MOCK_FOOD.riderPayment,
+          coopFee: MOCK_FOOD.coopFee,
+          driverTake: MOCK_FOOD.driverTake,
+          estimatedTime: MOCK_FOOD.estimatedTime,
+          type: "food",
+        },
+      });
     }
   };
 

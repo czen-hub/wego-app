@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, CheckCircle, Clock, Navigation, User, ChevronLeft } from "lucide-react";
+import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle } from "lucide-react";
 
 type TripPhase = "to-pickup" | "in-progress" | "complete";
 
@@ -12,6 +12,7 @@ interface TripData {
   coopFee: number;
   driverTake: number;
   estimatedTime: number;
+  type?: "ride" | "courier" | "food";
 }
 
 const DEFAULT_TRIP: TripData = {
@@ -45,6 +46,12 @@ export default function TripInProgress() {
     return `${m}:${s}`;
   };
 
+  const isDelivery = trip.type === "courier" || trip.type === "food";
+  const typeLabel = trip.type === "food" ? "Food Delivery" : trip.type === "courier" ? "Courier" : "Ride";
+  const pickupLabel = trip.type === "food" ? "Restaurant" : "Pickup";
+  const arrivedLabel = trip.type === "food" ? "Arrived at Restaurant" : "Arrived at Pickup";
+  const completeLabel = isDelivery ? "Delivery Complete" : "Complete Trip";
+
   if (phase === "complete") {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-12">
@@ -54,8 +61,10 @@ export default function TripInProgress() {
             <div className="w-20 h-20 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
               <CheckCircle size={40} className="text-primary" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground">Trip Complete</h1>
-            <p className="text-muted-foreground text-center">Great ride, {trip.riderName.split(" ")[0]} has been dropped off.</p>
+            <h1 className="text-3xl font-bold text-foreground">{isDelivery ? "Delivery Complete" : "Trip Complete"}</h1>
+            <p className="text-muted-foreground text-center">
+              {isDelivery ? `${typeLabel} delivered successfully.` : `Great ride, ${trip.riderName.split(" ")[0]} has been dropped off.`}
+            </p>
           </div>
 
           {/* Earnings Card */}
@@ -63,7 +72,7 @@ export default function TripInProgress() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Your Earnings</p>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Rider Paid</span>
+                <span className="text-muted-foreground">{isDelivery ? "Customer Paid" : "Rider Paid"}</span>
                 <span className="text-foreground font-medium">${trip.riderPayment.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
@@ -80,7 +89,7 @@ export default function TripInProgress() {
 
           {/* Trip Summary */}
           <div className="glass-card p-4 border border-border rounded-xl space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Trip Summary</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{isDelivery ? "Delivery Summary" : "Trip Summary"}</p>
             <div className="space-y-2">
               <div className="flex gap-3 items-start">
                 <MapPin size={16} className="text-primary flex-shrink-0 mt-0.5" />
@@ -123,16 +132,7 @@ export default function TripInProgress() {
       {/* Map Placeholder */}
       <div className="relative flex-1 bg-gradient-to-br from-blue-950 via-slate-900 to-slate-950 min-h-64">
         {/* Grid pattern */}
-        <div className="absolute inset-0 opacity-20">
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "linear-gradient(0deg, transparent 24%, rgba(0,71,255,0.05) 25%, rgba(0,71,255,0.05) 26%, transparent 27%), linear-gradient(90deg, transparent 24%, rgba(0,71,255,0.05) 25%, rgba(0,71,255,0.05) 26%, transparent 27%)",
-              backgroundSize: "50px 50px",
-            }}
-          />
-        </div>
+        <div className="absolute inset-0 opacity-15 map-grid" />
 
         {/* Back button */}
         <button
@@ -141,6 +141,18 @@ export default function TripInProgress() {
           className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center"
         >
           <ChevronLeft size={20} className="text-foreground" />
+        </button>
+
+        {/* SOS button */}
+        <button
+          type="button"
+          onClick={() => alert("Emergency services notified. Stay calm.")}
+          aria-label="Emergency SOS"
+          title="Emergency SOS"
+          className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-2 bg-destructive/90 backdrop-blur-sm border border-destructive rounded-full shadow-lg active:scale-95 transition-transform"
+        >
+          <AlertTriangle size={14} className="text-white" />
+          <span className="text-xs font-bold text-white">SOS</span>
         </button>
 
         {/* Phase badge */}
@@ -152,7 +164,7 @@ export default function TripInProgress() {
                 : "bg-primary/20 border-primary/40 text-primary"
             }`}
           >
-            {phase === "to-pickup" ? "Heading to Pickup" : "Trip in Progress"}
+            {phase === "to-pickup" ? `Heading to ${pickupLabel}` : `${typeLabel} in Progress`}
           </div>
         </div>
 
@@ -177,16 +189,25 @@ export default function TripInProgress() {
 
       {/* Bottom Panel */}
       <div className="px-4 pt-2 space-y-4">
-        {/* Rider Info */}
+        {/* Rider / Delivery Info */}
         <div className="glass-card p-4 border border-border rounded-xl flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
             {trip.riderName.charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-foreground">{trip.riderName}</p>
+            <p className="font-semibold text-foreground truncate">{trip.riderName}</p>
             <p className="text-xs text-muted-foreground">Your Take: <span className="text-primary font-semibold">${trip.driverTake.toFixed(2)}</span></p>
           </div>
-          <User size={18} className="text-muted-foreground flex-shrink-0" />
+          {!isDelivery && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button type="button" aria-label="Message rider" title="Message rider" className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center active:scale-95 transition-transform">
+                <MessageCircle size={16} className="text-muted-foreground" />
+              </button>
+              <button type="button" aria-label="Call rider" title="Call rider" className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center active:scale-95 transition-transform">
+                <Phone size={16} className="text-primary" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Destination Card */}
@@ -197,7 +218,7 @@ export default function TripInProgress() {
                 <Navigation size={14} className="text-primary" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Pickup Location</p>
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">{pickupLabel} Location</p>
                 <p className="text-base font-semibold text-foreground mt-0.5">{trip.pickupLocation}</p>
                 <p className="text-xs text-muted-foreground mt-1">{trip.estimatedTime} min away</p>
               </div>
@@ -223,7 +244,7 @@ export default function TripInProgress() {
             className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30"
           >
             <CheckCircle size={22} />
-            Arrived at Pickup
+            {arrivedLabel}
           </button>
         ) : (
           <button
@@ -232,7 +253,7 @@ export default function TripInProgress() {
             className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30"
           >
             <CheckCircle size={22} />
-            Complete Trip
+            {completeLabel}
           </button>
         )}
       </div>
