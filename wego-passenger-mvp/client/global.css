@@ -1,0 +1,159 @@
+/** @import must precede all other statements */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /**
+   * Tailwind CSS theme - WeGo Cooperative Dark Institutional Theme
+   * tailwind.config.ts expects the following color variables to be expressed as HSL values.
+   * A different format will require also updating the theme in tailwind.config.ts.
+  */
+  :root {
+    /* WeGo Dark Theme (default) */
+    --background: 213 37% 6%;
+    --foreground: 0 0% 100%;
+
+    --card: 213 37% 10%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 213 37% 10%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 224 100% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 90% 65%;
+    --secondary-foreground: 213 37% 6%;
+
+    --accent: 224 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --cyan: 214 90% 65%;
+
+    --muted: 213 20% 35%;
+    --muted-foreground: 213 20% 70%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 213 20% 20%;
+    --input: 213 37% 10%;
+    --ring: 224 100% 50%;
+
+    --radius: 0.5rem;
+  }
+
+  /* WeGo Slate Theme — readable in bright light */
+  [data-theme="light"] {
+    --background: 213 22% 76%;     /* slate blue-gray, not near-white */
+    --foreground: 213 55% 7%;      /* deep navy — strong contrast */
+
+    --card: 213 18% 84%;           /* lighter cards on slate bg */
+    --card-foreground: 213 55% 7%;
+
+    --popover: 213 18% 84%;
+    --popover-foreground: 213 55% 7%;
+
+    --primary: 224 88% 40%;        /* darker royal blue, WCAG AA */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 224 88% 40%;      /* same as primary — no teal */
+    --secondary-foreground: 0 0% 100%;
+
+    --accent: 224 88% 40%;
+    --accent-foreground: 0 0% 100%;
+
+    --cyan: 224 88% 40%;
+
+    --muted: 213 18% 70%;          /* visible muted areas */
+    --muted-foreground: 213 30% 26%; /* dark enough to read on any card */
+
+    --destructive: 0 78% 40%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 213 18% 64%;         /* clearly visible borders */
+    --input: 213 15% 80%;
+    --ring: 224 88% 40%;
+  }
+}
+
+/* ── Light-mode overrides for the map background gradient ───────────────────── */
+[data-theme="light"] .from-blue-950 { --tw-gradient-from: hsl(213 30% 62%) !important; }
+[data-theme="light"] .via-slate-900 { --tw-gradient-via:  hsl(213 25% 66%) !important; }
+[data-theme="light"] .to-slate-950  { --tw-gradient-to:   hsl(213 28% 60%) !important; }
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", sans-serif;
+  }
+
+  :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  pre,
+  code {
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  h1 {
+    @apply text-3xl font-bold;
+  }
+
+  h2 {
+    @apply text-2xl font-bold;
+  }
+
+  h3 {
+    @apply text-xl font-semibold;
+  }
+}
+
+@layer components {
+  .bottom-nav-safe {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold transition-all duration-200 hover:opacity-90 active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-secondary text-secondary-foreground rounded-lg font-semibold transition-all duration-200 hover:opacity-90 active:scale-95;
+  }
+
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-md border border-border rounded-xl;
+  }
+
+  .map-grid {
+    background-image:
+      linear-gradient(0deg, transparent 24%, rgba(0,71,255,0.07) 25%, rgba(0,71,255,0.07) 26%, transparent 27%),
+      linear-gradient(90deg, transparent 24%, rgba(0,71,255,0.07) 25%, rgba(0,71,255,0.07) 26%, transparent 27%);
+    background-size: 50px 50px;
+  }
+
+  .leaflet-fill {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .map-placeholder {
+    background: #0f172a;
+  }
+}
