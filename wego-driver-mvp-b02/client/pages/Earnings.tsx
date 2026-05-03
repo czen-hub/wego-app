@@ -69,12 +69,6 @@ export default function Earnings() {
             </div>
           </div>
 
-          <div className="bg-card/50 p-3 rounded-lg border border-border/50">
-            <p className="text-xs text-muted-foreground mb-2">That's {((wegoAdvantage / grossEarnings) * 100).toFixed(1)}% more per fare than corporate apps</p>
-            <div className="w-full h-2 bg-card rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min((wegoAdvantage / grossEarnings) * 100, 100).toFixed(0)}%` }} />
-            </div>
-          </div>
         </div>
 
         {/* Where Your 12% Goes */}
