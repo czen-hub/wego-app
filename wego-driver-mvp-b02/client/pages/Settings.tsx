@@ -1,10 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Moon, Sun, Bell, BellOff, Car, Map, Shield, ChevronRight,
   LogOut, User, Phone, Mail, Star, HelpCircle, FileText,
   Camera, Upload, CheckCircle, Eye, EyeOff, Lock, Pencil, Users, Copy
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
+import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import BottomSheet from "@/components/BottomSheet";
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -93,6 +97,24 @@ function SaveButton({ onClick, label = "Save Changes" }: { onClick: () => void; 
   );
 }
 
+function HelpFaqItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-background border border-border rounded-xl overflow-hidden">
+      <button type="button" onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left">
+        <p className="text-sm font-medium text-foreground leading-snug">{q}</p>
+        <ChevronRight size={14} className={`text-muted-foreground flex-shrink-0 mt-0.5 transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open && (
+        <div className="px-4 pb-4 border-t border-border/50">
+          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line pt-3">{a}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UploadBox({
   label, preview, accept, onFile,
 }: {
@@ -150,20 +172,34 @@ function UploadBox({
 
 type ModalId =
   | "editProfile" | "vehicleInfo" | "insurance" | "inspection"
-  | "phone" | "email" | "password" | null;
+  | "phone" | "email" | "password" | "help" | null;
+
+const DRIVER_FAQS = [
+  { q: "What are the cancellation fees if a passenger cancels?", a: "You are protected by distance-based cancellation fees that go 100% to you — WeGo keeps none of it.\n\n• Free: passenger cancels within 5 min of booking (driver not yet dispatched)\n• $5.00: passenger cancels while you are nearby (< 5 miles en route)\n• $9.00: passenger cancels while you are 5–10 miles en route\n• $14.00: passenger cancels after you drove 10+ miles including highway\n• Distance fee + $3.00: passenger cancels after you have already arrived (e.g. drove 10+ miles = $14 + $3 = $17)\n\nFees are credited to your account within 24 hours." },
+  { q: "What is my take-home per ride?", a: "You keep 88% of every fare. WeGo takes 12% — this covers the app, dispatch infrastructure, and cooperative operations (pension fund, insurance pool, AV fleet).\n\nExample: $65 fare → you earn $57.20. Compare to Uber/Lyft where drivers typically keep ~52–55% effective pay after all deductions." },
+  { q: "Do I earn extra for advance/scheduled rides?", a: "Yes — every Reserve (advance booking) ride includes a flat $8.00 scheduling bonus that goes 100% to you. WeGo keeps none of it.\n\nExample: $38 base fare → you earn $33.44 (88%) + $8.00 advance fee = $41.44 total.\n\nThis makes WeGo Reserve earnings competitive with Uber Reserve — and passengers still pay $15–25 less than they would on Uber, so drivers get more bookings too.\n\nThe advance fee is your compensation for committing your schedule to a specific pickup time." },
+  { q: "Do I get paid for mid-trip stops or extra wait time?", a: "Yes — both are compensated 100% and go directly to you.\n\n• Stop fee: $2.00 per stop when a passenger requests a mid-route stop (e.g. coffee, ATM). Tap 'Log Passenger Stop' in the app each time.\n\n• Wait meter: If a passenger takes longer than the free wait window at pickup, a $0.50/min meter runs (after 5 min for standard rides, after 8 min for advance bookings). This is added to the final fare and goes 100% to you.\n\nBoth fees appear as separate line items on the passenger's receipt so everything is transparent." },
+  { q: "How does the $75/month membership due work?", a: "The $75/month breaks down as:\n• $20 — group commercial insurance contribution\n• $15 — app infrastructure & technology\n• $10 — operations reserve\n• $25 — directly into your Retirement Trust\n• $5 — cooperative dividend reserve\n\nThe operations portion (~$45/month) is tax-deductible as a business expense." },
+  { q: "When do I get paid?", a: "Earnings are deposited every Monday for the prior week's completed rides. You can view your real-time running total in the Earnings tab at any time. Cancellation fees appear as a separate line item within 24 hours of the event." },
+  { q: "What happens if I stop driving for a period?", a: "Your cooperative seat is preserved for up to 6 months on approved leave. After 6 months of inactivity, your seat goes into a suspended state — you retain your pension credits but lose active voting rights until you return. Contact the member services committee to formally request a leave." },
+  { q: "Can I be deactivated by an algorithm?", a: "No. Unlike Uber or Lyft, WeGo cannot deactivate you algorithmically. Every deactivation requires:\n• Documented human review of the specific incident\n• Written notice with the stated reason\n• 30-day appeal right to the member-elected board committee\n• Management cannot override a board appeal decision" },
+  { q: "How do I dispute a rating or complaint?", a: "Go to Settings → Support or contact the member services committee directly. All complaints are reviewed by a human within 48 hours. Ratings from cancelled rides or unverified complaints are not counted against your score." },
+  { q: "What insurance covers me while driving?", a: "WeGo's group commercial policy covers all active driving periods (app on through trip completion). Coverage includes:\n• $1M+ liability per incident while app is on\n• Comprehensive & collision (with deductible) for at-fault accidents during trips\n• Your personal insurance handles off-app periods\n\nYou do not need a separate rideshare endorsement — the group policy covers the gap." },
+];
 
 export default function Settings() {
   const { theme, toggleTheme } = useTheme();
+  const { logOut, profile, user } = useAuth();
   const isDark = theme === "dark";
   const profilePicRef = useRef<HTMLInputElement>(null);
 
   // ── Profile ──
   const [profilePic, setProfilePic] = useState<string | null>(null);
-  const [profileName, setProfileName] = useState("Tenzin C.");
-  const [profileDraft, setProfileDraft] = useState("Tenzin C.");
+  const [profileName, setProfileName] = useState("");
+  const [profileDraft, setProfileDraft] = useState("");
 
   // ── Vehicle ──
-  const [vehicle, setVehicle] = useState({ nickname: "", make: "Toyota", model: "Camry", year: "2021", plate: "ABC-1234", color: "White" });
+  const [vehicle, setVehicle] = useState({ nickname: "", make: "", model: "", year: "", plate: "", color: "" });
   const [vehicleDraft, setVehicleDraft] = useState(vehicle);
 
   // ── Insurance ──
@@ -177,14 +213,30 @@ export default function Settings() {
   const [inspectionDoc, setInspectionDoc] = useState<string | null>(null);
 
   // ── Account ──
-  const [phone, setPhone] = useState("+1 (415) 555-0182");
-  const [phoneDraft, setPhoneDraft] = useState(phone);
-  const [email, setEmail] = useState("tenzin.c@email.com");
-  const [emailDraft, setEmailDraft] = useState(email);
+  const [phone, setPhone] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
   const [pwError, setPwError] = useState("");
   const [pwSaved, setPwSaved] = useState(false);
+
+  // Sync Firebase profile into local state when it loads
+  useEffect(() => {
+    if (!profile) return;
+    setProfileName(profile.name);
+    setProfileDraft(profile.name);
+    setPhone(profile.phone);
+    setPhoneDraft(profile.phone);
+    setEmail(profile.email);
+    setEmailDraft(profile.email);
+    if (profile.vehicleMake) {
+      const v = { nickname: "", make: profile.vehicleMake, model: profile.vehicleModel, year: profile.vehicleYear, plate: profile.licensePlate, color: "" };
+      setVehicle(v);
+      setVehicleDraft(v);
+    }
+  }, [profile]);
 
   // ── Notifications / Nav ──
   const [notifications, setNotifications] = useState({ rideRequests: true, earnings: true, governance: false, promotions: false });
@@ -208,20 +260,60 @@ export default function Settings() {
   const insuranceDisplay = insurance.company ? `${insurance.company} · ${insurance.policy || "No policy #"}` : "Tap to add insurance";
   const inspectionDisplay = inspection.date ? `Last: ${inspection.date}` : "No inspection on record";
 
+  // Helpers for Firestore updates (silent fail when Firebase not configured)
+  const updateProfile = async (fields: Record<string, unknown>) => {
+    if (!user?.uid) return;
+    await updateDoc(doc(db, "drivers", user.uid), fields).catch(() => {});
+  };
+
   // Handlers
-  const saveProfile = () => { setProfileName(profileDraft); close(); };
-  const saveVehicle = () => { setVehicle(vehicleDraft); close(); };
+  const saveProfile = async () => {
+    setProfileName(profileDraft);
+    await updateProfile({ name: profileDraft });
+    close();
+  };
+  const saveVehicle = async () => {
+    setVehicle(vehicleDraft);
+    await updateProfile({
+      vehicleMake: vehicleDraft.make,
+      vehicleModel: vehicleDraft.model,
+      vehicleYear: vehicleDraft.year,
+      licensePlate: vehicleDraft.plate,
+    });
+    close();
+  };
   const saveInsurance = () => { setInsurance(insuranceDraft); close(); };
   const saveInspection = () => { setInspection(inspectionDraft); close(); };
-  const savePhone = () => { setPhone(phoneDraft); close(); };
-  const saveEmail = () => { setEmail(emailDraft); close(); };
-  const savePassword = () => {
+  const savePhone = async () => {
+    setPhone(phoneDraft);
+    await updateProfile({ phone: phoneDraft });
+    close();
+  };
+  const saveEmail = async () => {
+    setEmail(emailDraft);
+    await updateProfile({ email: emailDraft });
+    close();
+  };
+  const savePassword = async () => {
     if (!pwForm.current) { setPwError("Enter your current password."); return; }
     if (pwForm.next.length < 8) { setPwError("New password must be at least 8 characters."); return; }
     if (pwForm.next !== pwForm.confirm) { setPwError("Passwords do not match."); return; }
+    if (!user || !user.email) { setPwError("Not signed in."); return; }
     setPwError("");
-    setPwSaved(true);
-    setTimeout(() => { setPwSaved(false); close(); setPwForm({ current: "", next: "", confirm: "" }); }, 1200);
+    try {
+      const credential = EmailAuthProvider.credential(user.email, pwForm.current);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, pwForm.next);
+      setPwSaved(true);
+      setTimeout(() => { setPwSaved(false); close(); setPwForm({ current: "", next: "", confirm: "" }); }, 1200);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("wrong-password") || msg.includes("invalid-credential")) {
+        setPwError("Current password is incorrect.");
+      } else {
+        setPwError("Failed to update password. Please try again.");
+      }
+    }
   };
 
   const handleProfilePic = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -272,7 +364,7 @@ export default function Settings() {
               <p className="text-base font-semibold text-foreground">{profileName}</p>
               <div className="flex items-center gap-1 mt-0.5">
                 <Star size={12} className="text-yellow-500 fill-yellow-500" />
-                <span className="text-xs text-muted-foreground">4.94 · Seat #4821 · 3 yrs</span>
+                <span className="text-xs text-muted-foreground">{profile?.rating?.toFixed(2) ?? "5.00"} · {profile?.totalRides ?? 0} rides</span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">{email}</p>
             </div>
@@ -304,7 +396,7 @@ export default function Settings() {
                 rideRequests: ["Ride Requests", "Alerts for incoming ride requests"],
                 earnings: ["Earnings & Payouts", "Weekly summaries and payout alerts"],
                 governance: ["Governance Votes", "Reminders for open member votes"],
-                promotions: ["Promotions & Bonuses", "Zone surge alerts and bonus offers"],
+                promotions: ["Promotions & Bonuses", "Zone event bonuses and special offers"],
               };
               return (
                 <Row
@@ -407,7 +499,7 @@ export default function Settings() {
 
           {/* Support */}
           <Section title="Support">
-            <Row icon={<HelpCircle size={18} />} label="Help Center" sublabel="FAQs, guides, and driver support" onClick={() => alert("Help Center coming soon.")} />
+            <Row icon={<HelpCircle size={18} />} label="Help Center" sublabel="FAQs, guides, and driver support" onClick={() => setModal("help")} />
             <Row icon={<FileText size={18} />} label="Member Agreement" sublabel="View your cooperative membership terms" onClick={() => alert("Member Agreement coming soon.")} />
             <Row icon={<FileText size={18} />} label="Privacy Policy" sublabel="How WeGo handles your data" onClick={() => alert("Privacy Policy coming soon.")} />
           </Section>
@@ -419,7 +511,7 @@ export default function Settings() {
                 <p className="text-sm text-foreground font-medium">Sign out of your account?</p>
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setSignOutConfirm(false)} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-muted-foreground active:scale-95 transition-transform">Cancel</button>
-                  <button type="button" onClick={() => setSignOutConfirm(false)} className="flex-1 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30 text-sm font-semibold text-destructive active:scale-95 transition-transform">Sign Out</button>
+                  <button type="button" onClick={async () => { try { await logOut(); } catch {} }} className="flex-1 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30 text-sm font-semibold text-destructive active:scale-95 transition-transform">Sign Out</button>
                 </div>
               </div>
             ) : (
@@ -594,6 +686,23 @@ export default function Settings() {
           ) : (
             <SaveButton onClick={savePassword} label="Update Password" />
           )}
+        </div>
+      </BottomSheet>
+
+      {/* Help Center */}
+      <BottomSheet open={modal === "help"} onClose={close} title="Help Center">
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Tap a question to expand the answer.</p>
+          {DRIVER_FAQS.map((faq, i) => (
+            <HelpFaqItem key={i} q={faq.q} a={faq.a} />
+          ))}
+          <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 text-center space-y-2 mt-2">
+            <p className="text-sm font-semibold text-foreground">Still need help?</p>
+            <p className="text-xs text-muted-foreground">Contact the member services committee — we respond within 24 hours.</p>
+            <button type="button" className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold active:scale-95 transition-transform">
+              Contact Support
+            </button>
+          </div>
         </div>
       </BottomSheet>
     </>

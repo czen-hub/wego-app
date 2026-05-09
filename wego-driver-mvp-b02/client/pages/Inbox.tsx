@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell, Star, AlertCircle, Info, ChevronRight, Check, Tag } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { listenToMessages, markMessageRead as markMsgRead, type Message as DbMessage } from "@/lib/db";
 
 type MessageType = "wego" | "rider" | "alert" | "system" | "promo";
 type Tab = "all" | "messages" | "alerts" | "promotions";
@@ -21,8 +23,8 @@ const MOCK_MESSAGES: Message[] = [
     type: "alert",
     from: "WeGo Operations",
     subject: "High demand zone: SoMa district",
-    preview: "Surge activity detected in SoMa. Head there now to maximize earnings.",
-    body: "High ride demand has been detected in the SoMa district (Mission St / 3rd St area). Drivers heading there now are seeing significantly more ride requests. This typically lasts 30–60 minutes during this time of day.",
+    preview: "High ride activity in SoMa. Head there now to get more requests.",
+    body: "High ride demand has been detected in the SoMa district (Mission St / 3rd St area). Drivers heading there now are seeing more ride requests. This typically lasts 30–60 minutes. Note: WeGo does not apply surge pricing — your rate stays the same, but you will get more rides.",
     time: "2m ago",
     read: false,
   },
@@ -98,6 +100,44 @@ const MOCK_MESSAGES: Message[] = [
   },
 ];
 
+const DB_TYPE_MAP: Record<DbMessage["type"], MessageType> = {
+  notification: "alert",
+  system: "system",
+  coop: "wego",
+  earnings: "promo",
+};
+
+const DB_FROM_MAP: Record<DbMessage["type"], string> = {
+  notification: "WeGo Operations",
+  system: "WeGo Platform",
+  coop: "WeGo Cooperative",
+  earnings: "WeGo Earnings",
+};
+
+function timeAgo(date: Date | null): string {
+  if (!date) return "Recently";
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(diff / 86400000);
+  return days === 1 ? "Yesterday" : `${days} days ago`;
+}
+
+function fromDb(m: DbMessage): Message {
+  return {
+    id: m.id,
+    type: DB_TYPE_MAP[m.type] ?? "wego",
+    from: DB_FROM_MAP[m.type] ?? "WeGo",
+    subject: m.title,
+    preview: m.body.length > 80 ? m.body.slice(0, 80) + "…" : m.body,
+    body: m.body,
+    time: timeAgo(m.createdAt),
+    read: m.read,
+  };
+}
+
 const TAB_FILTERS: Record<Tab, (m: Message) => boolean> = {
   all: () => true,
   messages: (m) => m.type === "rider" || m.type === "wego" || m.type === "system",
@@ -127,9 +167,19 @@ const typeBg = (type: MessageType, read: boolean) => {
 };
 
 export default function Inbox() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
   const [selected, setSelected] = useState<Message | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("all");
+
+  // Replace mock messages with real Firebase messages when available
+  useEffect(() => {
+    if (!user) return;
+    const unsub = listenToMessages(user.uid, (dbMsgs) => {
+      if (dbMsgs.length > 0) setMessages(dbMsgs.map(fromDb));
+    });
+    return unsub;
+  }, [user]);
 
   const unreadCount = messages.filter((m) => !m.read).length;
 
@@ -144,6 +194,7 @@ export default function Inbox() {
 
   const openMessage = (msg: Message) => {
     setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, read: true } : m)));
+    if (!msg.read) markMsgRead(msg.id).catch(() => {});
     setSelected({ ...msg, read: true });
   };
 

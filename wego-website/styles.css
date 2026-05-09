@@ -989,6 +989,7 @@ section { padding: 80px 0; }
   margin: 16px 0; font-size: 15px; color: var(--fg-default); line-height: 1.7;
 }
 .faq-why strong { color: var(--status-ok-fg); }
+.faq-note { font-size: 0.85rem; color: var(--text-soft); margin-top: 0.5rem; }
 
 .faq-answer .data-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-ui); font-size: 15px; }
 .faq-answer .data-row:last-child { border-bottom: none; }

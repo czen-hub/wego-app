@@ -3,47 +3,15 @@ import { useNavigate } from "react-router-dom";
 import {
   Plane, Music, Target, Clock, ChevronUp, ChevronDown,
   Package, UtensilsCrossed, MapPin, CheckCircle, X,
-  SlidersHorizontal, Car, PawPrint, Eye, EyeOff,
+  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Wifi,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
-
-type RequestType = "ride" | "courier" | "food";
-
-const MOCK_RIDE = {
-  riderName: "Sarah M.",
-  pickupLocation: "San Jose Airport (SJC)",
-  dropoffLocation: "SFO Airport",
-  riderPayment: 50,
-  coopFee: 6.00,
-  driverTake: 44.00,
-  estimatedTime: 8,
-};
-
-const MOCK_COURIER = {
-  packageType: "Small Box",
-  pickupLocation: "UPS Store — El Camino Real, Santa Clara",
-  dropoffLocation: "456 University Ave, Palo Alto",
-  riderPayment: 14.00,
-  coopFee: 1.68,
-  driverTake: 12.32,
-  estimatedTime: 5,
-};
-
-const MOCK_FOOD = {
-  restaurant: "Pho Garden",
-  pickupLocation: "380 S Winchester Blvd, San Jose",
-  dropoffLocation: "1200 Blossom Hill Rd, San Jose",
-  customerName: "Priya S.",
-  items: ["Pho Bo (Large)", "Spring Rolls ×2"],
-  riderPayment: 2.99,
-  coopFee: 0.36,
-  driverTake: 2.63,
-  estimatedTime: 4,
-};
+import { useDispatch } from "@/hooks/useDispatch";
+import { type Ride } from "@/lib/db";
 
 const OPPORTUNITIES = [
   { id: "airport", icon: Plane,  iconColor: "text-primary", iconBg: "bg-primary/10", title: "Airport Bonus",  detail: "SFO Terminal 2",      bonus: "+$8/trip",    bonusColor: "text-primary", tag: "Active now", tagColor: "bg-primary/15 text-primary" },
-  { id: "event",   icon: Music,  iconColor: "text-primary", iconBg: "bg-primary/10", title: "Warriors Game", detail: "Chase Center · 7 PM", bonus: "Surge ×1.8",  bonusColor: "text-primary", tag: "Tonight",    tagColor: "bg-primary/15 text-primary" },
+  { id: "event",   icon: Music,  iconColor: "text-primary", iconBg: "bg-primary/10", title: "Warriors Game", detail: "Chase Center · 7 PM", bonus: "+$6/trip",  bonusColor: "text-primary", tag: "Tonight",    tagColor: "bg-primary/15 text-primary" },
 ];
 
 function Toggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
@@ -59,7 +27,7 @@ function Toggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; la
   );
 }
 
-function CourierCard({ onAccept, onDecline }: { onAccept: () => void; onDecline: () => void }) {
+function CourierCard({ ride, onAccept, onDecline }: { ride: Ride; onAccept: () => void; onDecline: () => void }) {
   return (
     <div className="glass-card p-5 space-y-4 border border-primary/20">
       <div className="flex items-center justify-between pb-4 border-b border-border">
@@ -68,8 +36,8 @@ function CourierCard({ onAccept, onDecline }: { onAccept: () => void; onDecline:
             <Package size={18} className="text-primary" />
           </div>
           <div>
-            <p className="font-semibold text-foreground">{MOCK_COURIER.packageType}</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock size={12} /> {MOCK_COURIER.estimatedTime} min to pickup</p>
+            <p className="font-semibold text-foreground">Package Delivery</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock size={12} /> {ride.estimatedMinutes} min to pickup</p>
           </div>
         </div>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary uppercase tracking-wide">Courier</span>
@@ -77,17 +45,17 @@ function CourierCard({ onAccept, onDecline }: { onAccept: () => void; onDecline:
       <div className="space-y-3">
         <div className="flex gap-3">
           <MapPin size={16} className="text-primary flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Pickup</p><p className="text-sm font-medium text-foreground truncate">{MOCK_COURIER.pickupLocation}</p></div>
+          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Pickup</p><p className="text-sm font-medium text-foreground truncate">{ride.pickupAddress}</p></div>
         </div>
         <div className="flex gap-3">
           <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Dropoff</p><p className="text-sm font-medium text-foreground truncate">{MOCK_COURIER.dropoffLocation}</p></div>
+          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Dropoff</p><p className="text-sm font-medium text-foreground truncate">{ride.dropoffAddress}</p></div>
         </div>
       </div>
       <div className="bg-card/50 p-3 rounded-lg space-y-2 border border-border/50">
-        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Customer Pays:</span><span className="font-semibold text-foreground">${MOCK_COURIER.riderPayment.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-muted-foreground">WeGo Fee (12%):</span><span className="font-semibold text-destructive">-${MOCK_COURIER.coopFee.toFixed(2)}</span></div>
-        <div className="border-t border-border/50 pt-2 flex justify-between text-sm"><span className="text-primary font-semibold">Your Take:</span><span className="text-lg font-bold text-primary">${MOCK_COURIER.driverTake.toFixed(2)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Customer Pays:</span><span className="font-semibold text-foreground">${ride.fare.toFixed(2)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-muted-foreground">WeGo Fee (12%):</span><span className="font-semibold text-destructive">-${ride.coopFee.toFixed(2)}</span></div>
+        <div className="border-t border-border/50 pt-2 flex justify-between text-sm"><span className="text-primary font-semibold">Your Take:</span><span className="text-lg font-bold text-primary">${ride.driverTake.toFixed(2)}</span></div>
       </div>
       <div className="grid grid-cols-2 gap-3 pt-2">
         <button type="button" onClick={onDecline} className="py-3 px-4 rounded-lg border border-border text-muted-foreground hover:border-destructive transition-all flex items-center justify-center gap-2"><X size={18} /><span className="font-semibold">Decline</span></button>
@@ -97,7 +65,7 @@ function CourierCard({ onAccept, onDecline }: { onAccept: () => void; onDecline:
   );
 }
 
-function FoodCard({ onAccept, onDecline }: { onAccept: () => void; onDecline: () => void }) {
+function FoodCard({ ride, onAccept, onDecline }: { ride: Ride; onAccept: () => void; onDecline: () => void }) {
   return (
     <div className="glass-card p-5 space-y-4 border border-primary/20">
       <div className="flex items-center justify-between pb-4 border-b border-border">
@@ -106,30 +74,26 @@ function FoodCard({ onAccept, onDecline }: { onAccept: () => void; onDecline: ()
             <UtensilsCrossed size={18} className="text-primary" />
           </div>
           <div>
-            <p className="font-semibold text-foreground">{MOCK_FOOD.restaurant}</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock size={12} /> {MOCK_FOOD.estimatedTime} min to restaurant</p>
+            <p className="font-semibold text-foreground">Food Delivery</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock size={12} /> {ride.estimatedMinutes} min to restaurant</p>
           </div>
         </div>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary uppercase tracking-wide">Food</span>
       </div>
-      <div className="bg-card/50 px-3 py-2 rounded-lg border border-border/50 space-y-0.5">
-        <p className="text-xs text-muted-foreground mb-1">Order for {MOCK_FOOD.customerName}</p>
-        {MOCK_FOOD.items.map((item) => <p key={item} className="text-xs text-foreground">• {item}</p>)}
-      </div>
       <div className="space-y-3">
         <div className="flex gap-3">
           <MapPin size={16} className="text-primary flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Pickup</p><p className="text-sm font-medium text-foreground truncate">{MOCK_FOOD.pickupLocation}</p></div>
+          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Pickup</p><p className="text-sm font-medium text-foreground truncate">{ride.pickupAddress}</p></div>
         </div>
         <div className="flex gap-3">
           <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Dropoff — {MOCK_FOOD.customerName}</p><p className="text-sm font-medium text-foreground truncate">{MOCK_FOOD.dropoffLocation}</p></div>
+          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Dropoff — {ride.passengerName}</p><p className="text-sm font-medium text-foreground truncate">{ride.dropoffAddress}</p></div>
         </div>
       </div>
       <div className="bg-card/50 p-3 rounded-lg space-y-2 border border-border/50">
-        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Delivery Fee:</span><span className="font-semibold text-foreground">${MOCK_FOOD.riderPayment.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-muted-foreground">WeGo Fee (12%):</span><span className="font-semibold text-destructive">-${MOCK_FOOD.coopFee.toFixed(2)}</span></div>
-        <div className="border-t border-border/50 pt-2 flex justify-between text-sm"><span className="text-primary font-semibold">Your Take:</span><span className="text-lg font-bold text-primary">${MOCK_FOOD.driverTake.toFixed(2)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Delivery Fee:</span><span className="font-semibold text-foreground">${ride.fare.toFixed(2)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-muted-foreground">WeGo Fee (12%):</span><span className="font-semibold text-destructive">-${ride.coopFee.toFixed(2)}</span></div>
+        <div className="border-t border-border/50 pt-2 flex justify-between text-sm"><span className="text-primary font-semibold">Your Take:</span><span className="text-lg font-bold text-primary">${ride.driverTake.toFixed(2)}</span></div>
       </div>
       <div className="grid grid-cols-2 gap-3 pt-2">
         <button type="button" onClick={onDecline} className="py-3 px-4 rounded-lg border border-border text-muted-foreground hover:border-destructive transition-all flex items-center justify-center gap-2"><X size={18} /><span className="font-semibold">Decline</span></button>
@@ -141,8 +105,13 @@ function FoodCard({ onAccept, onDecline }: { onAccept: () => void; onDecline: ()
 
 export default function Command() {
   const navigate = useNavigate();
-  const [isOnline, setIsOnline] = useState(true);
-  const [activeRequest, setActiveRequest] = useState<RequestType | null>("ride");
+  const dispatch = useDispatch();
+  const { isOnline, setOnline, incomingRides, accept, activeRide, locationError } = dispatch;
+
+  const [declinedRideId, setDeclinedRideId] = useState<string | null>(null);
+  const pendingRide = incomingRides.find((r) => r.id !== declinedRideId) ?? null;
+  const hasRequest = pendingRide !== null;
+
   const [acceptRides, setAcceptRides] = useState(true);
   const [acceptCourier, setAcceptCourier] = useState(false);
   const [acceptFood, setAcceptFood] = useState(false);
@@ -154,22 +123,34 @@ export default function Command() {
   const [prefsOpen, setPrefsOpen] = useState(false);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartY = useRef(0);
+  const navigatedRef = useRef(false);
 
-  const hasRequest = activeRequest !== null;
-
-  const pickNextRequest = (rides: boolean, courier: boolean, food: boolean): RequestType | null => {
-    const pool: RequestType[] = [];
-    if (rides) pool.push("ride");
-    if (courier) pool.push("courier");
-    if (food) pool.push("food");
-    if (pool.length === 0) return null;
-    return pool[Math.floor(Math.random() * pool.length)];
-  };
+  // If driver already has an active ride (e.g., app reopened mid-trip), redirect
+  useEffect(() => {
+    if (activeRide && !navigatedRef.current) {
+      navigatedRef.current = true;
+      navigate("/trip", {
+        replace: true,
+        state: {
+          riderName: activeRide.passengerName,
+          pickupLocation: activeRide.pickupAddress,
+          dropoffLocation: activeRide.dropoffAddress,
+          riderPayment: activeRide.fare,
+          coopFee: activeRide.coopFee,
+          driverTake: activeRide.driverTake,
+          estimatedTime: activeRide.estimatedMinutes,
+          type: activeRide.type,
+          rideId: activeRide.id,
+        },
+      });
+    }
+  }, [activeRide, navigate]);
 
   useEffect(() => {
     if (!isOnline && declineTimerRef.current) {
       clearTimeout(declineTimerRef.current);
       declineTimerRef.current = null;
+      setDeclinedRideId(null);
     }
   }, [isOnline]);
 
@@ -177,53 +158,37 @@ export default function Command() {
     if (hasRequest) setDrawerOpen(false);
   }, [hasRequest]);
 
-  const handleToggleOnline = () => {
-    const next = !isOnline;
-    setIsOnline(next);
-    if (!next) {
-      setActiveRequest(null);
-    } else {
-      setTimeout(() => setActiveRequest(pickNextRequest(acceptRides, acceptCourier, acceptFood)), 1000);
-    }
+  const handleToggleOnline = async () => {
+    await setOnline(!isOnline);
+    if (isOnline) setDeclinedRideId(null);
   };
 
-  const handleAccept = () => {
-    setActiveRequest(null);
-    if (activeRequest === "ride") {
-      navigate("/trip", { state: { ...MOCK_RIDE, type: "ride" } });
-    } else if (activeRequest === "courier") {
-      navigate("/trip", {
-        state: {
-          riderName: "Package Delivery",
-          pickupLocation: MOCK_COURIER.pickupLocation,
-          dropoffLocation: MOCK_COURIER.dropoffLocation,
-          riderPayment: MOCK_COURIER.riderPayment,
-          coopFee: MOCK_COURIER.coopFee,
-          driverTake: MOCK_COURIER.driverTake,
-          estimatedTime: MOCK_COURIER.estimatedTime,
-          type: "courier",
-        },
-      });
-    } else if (activeRequest === "food") {
-      navigate("/trip", {
-        state: {
-          riderName: `${MOCK_FOOD.restaurant} → ${MOCK_FOOD.customerName}`,
-          pickupLocation: MOCK_FOOD.pickupLocation,
-          dropoffLocation: MOCK_FOOD.dropoffLocation,
-          riderPayment: MOCK_FOOD.riderPayment,
-          coopFee: MOCK_FOOD.coopFee,
-          driverTake: MOCK_FOOD.driverTake,
-          estimatedTime: MOCK_FOOD.estimatedTime,
-          type: "food",
-        },
-      });
-    }
+  const handleAccept = async () => {
+    if (!pendingRide) return;
+    navigatedRef.current = true;
+    await accept(pendingRide.id);
+    navigate("/trip", {
+      state: {
+        riderName: pendingRide.passengerName,
+        pickupLocation: pendingRide.pickupAddress,
+        dropoffLocation: pendingRide.dropoffAddress,
+        riderPayment: pendingRide.fare,
+        coopFee: pendingRide.coopFee,
+        driverTake: pendingRide.driverTake,
+        estimatedTime: pendingRide.estimatedMinutes,
+        type: pendingRide.type,
+        rideId: pendingRide.id,
+      },
+    });
   };
 
   const handleDecline = () => {
-    setActiveRequest(null);
+    if (!pendingRide) return;
+    const rideId = pendingRide.id;
+    setDeclinedRideId(rideId);
+    if (declineTimerRef.current) clearTimeout(declineTimerRef.current);
     declineTimerRef.current = setTimeout(() => {
-      setActiveRequest(pickNextRequest(acceptRides, acceptCourier, acceptFood));
+      setDeclinedRideId(null);
       declineTimerRef.current = null;
     }, 5000);
   };
@@ -270,14 +235,42 @@ export default function Command() {
       </div>
 
       {/* ── INCOMING REQUEST CARD ── */}
-      {isOnline && hasRequest && (
+      {isOnline && hasRequest && pendingRide && (
         <div className="absolute z-30 left-4 right-4 bottom-[88px] transition-all duration-300">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 drop-shadow">
             Incoming Request
           </p>
-          {activeRequest === "ride"    && <RideCard {...MOCK_RIDE} onAccept={handleAccept} onDecline={handleDecline} />}
-          {activeRequest === "courier" && <CourierCard onAccept={handleAccept} onDecline={handleDecline} />}
-          {activeRequest === "food"    && <FoodCard onAccept={handleAccept} onDecline={handleDecline} />}
+          {pendingRide.type === "ride" && (
+            <RideCard
+              riderName={pendingRide.passengerName}
+              pickupLocation={pendingRide.pickupAddress}
+              dropoffLocation={pendingRide.dropoffAddress}
+              riderPayment={pendingRide.fare}
+              coopFee={pendingRide.coopFee}
+              driverTake={pendingRide.driverTake}
+              estimatedTime={pendingRide.estimatedMinutes}
+              onAccept={handleAccept}
+              onDecline={handleDecline}
+            />
+          )}
+          {pendingRide.type === "courier" && <CourierCard ride={pendingRide} onAccept={handleAccept} onDecline={handleDecline} />}
+          {pendingRide.type === "food"    && <FoodCard ride={pendingRide} onAccept={handleAccept} onDecline={handleDecline} />}
+        </div>
+      )}
+
+      {/* ── WAITING FOR RIDES indicator ── */}
+      {isOnline && !hasRequest && (
+        <div className="absolute top-16 left-0 right-0 z-10 flex justify-center">
+          {locationError ? (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-full px-4 py-2 flex items-center gap-2">
+              <span className="text-xs font-medium text-destructive">{locationError}</span>
+            </div>
+          ) : (
+            <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-4 py-2 flex items-center gap-2">
+              <Wifi size={13} className="text-primary animate-pulse" />
+              <span className="text-xs font-medium text-muted-foreground">Waiting for rides nearby…</span>
+            </div>
+          )}
         </div>
       )}
 

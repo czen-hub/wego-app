@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRef } from "react";
+import { useAuth } from "@/context/AuthContext";
 import {
   User, CreditCard, Shield, Building2, ChevronRight,
   Sun, Moon, LogOut, Star, HelpCircle, X, Plus, Trash2, Phone,
@@ -128,10 +129,13 @@ const DRIVER_FACTS = [
 ];
 
 const HELP_FAQS = [
-  { q: "How do I cancel a ride?", a: "Tap the back arrow from the ride screen within 2 minutes of booking. No cancellation fee applies in that window. After 2 minutes, a $3 fee may apply if the driver is already en route." },
-  { q: "What if my driver doesn't show?", a: "If your driver hasn't arrived within 10 minutes of the expected time, you'll see a 'Contact Driver' button. You can also cancel penalty-free if the driver is significantly late." },
-  { q: "How are fares calculated?", a: "Fares are based on distance, estimated time, and a base rate. There is never surge pricing on WeGo. The fare shown at booking is the fare you pay — always." },
-  { q: "Can I schedule a ride in advance?", a: "Scheduled rides are coming in a future update. For now, all rides are on-demand." },
+  { q: "How do I cancel a ride?", a: "Open the ride screen and tap 'Cancel Ride'. You'll see the exact fee before confirming — no surprises. Cancelling within 5 minutes of booking is always free." },
+  { q: "What are the cancellation fees?", a: "Free: within 5 minutes of booking.\n\n$5.00: driver nearby (< 5 miles) — +$3 if already arrived = $8.00.\n\n$9.00: driver 5–10 miles en route — +$3 if already arrived = $12.00.\n\n$14.00: driver drove 10+ miles — +$3 if already arrived = $17.00.\n\nThe $3.00 arrived fee covers up to 5 minutes of free wait time at your pickup (8 minutes for advance bookings). After that, a $0.50/min meter runs for up to 2 more minutes before the driver is eligible to leave.\n\n100% goes directly to your driver — WeGo keeps none of it." },
+  { q: "What if my driver doesn't show?", a: "If your driver hasn't arrived within 10 minutes of the expected time, you can contact them via the chat or call button in the ride screen. You can also cancel penalty-free if the driver is significantly late — the app will waive the fee automatically." },
+  { q: "How are fares calculated?", a: "Fares are based on distance, estimated trip time, a base rate, and a booking fee. There is never surge pricing on WeGo — the fare shown at booking is the fare you pay, always.\n\nCompared to Uber X on-demand, WeGo fares are typically 10–20% lower. On advance bookings, the gap is larger — WeGo Reserve runs $15–25 cheaper than Uber Reserve on the same route, because Uber adds a hidden variable reservation fee that can reach $15–35+ depending on demand." },
+  { q: "Can I schedule a ride in advance?", a: "Yes — tap 'Reserve' on the home screen to book up to 7 days ahead. A flat $8.00 advance booking fee applies — 100% of it goes directly to your driver as a scheduling commitment bonus, not to WeGo. This guarantees the driver is fairly compensated for planning their schedule around your trip.\n\nFree cancellation up to 1 hour before your pickup. Even with the advance fee, WeGo Reserve is typically $15–25 cheaper than Uber Reserve on the same route." },
+  { q: "Can I ask my driver to make a stop?", a: "Yes — tap 'Request a Stop' during your ride. A flat $2.00 stop fee is added to your fare. 100% of it goes directly to your driver for the extra wait time. You can make multiple stops; each adds $2.00.\n\nThe stop fee and any wait meter charges (if your driver waited beyond the free window at pickup) are shown as separate line items on your final receipt." },
+  { q: "How do I message or call my driver?", a: "Once a driver is matched, tap the phone or chat icon on the ride screen. You can send quick messages or type your own. All communication is in-app — your personal number is never shared." },
   { q: "How do I get a refund?", a: "If you were overcharged or had a serious issue with your ride, contact support through this Help Center. Most refund requests are resolved within 24 hours." },
   { q: "Is WeGo available in my city?", a: "WeGo is currently operating in the San Francisco Bay Area and expanding to new cities through cooperative partnerships. Check the app for the latest coverage map." },
 ];
@@ -144,15 +148,25 @@ interface Contact { id: string; name: string; phone: string }
 export default function Account() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const { logOut, profile } = useAuth();
 
   // Profile
-  const [name, setName] = useState("Sarah M.");
-  const [email, setEmail] = useState("sarah.m@email.com");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [draftEmail, setDraftEmail] = useState(email);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync Firebase profile into local state when it loads
+  useEffect(() => {
+    if (!profile) return;
+    setName(profile.name || "");
+    setEmail(profile.email || "");
+    setDraftName(profile.name || "");
+    setDraftEmail(profile.email || "");
+  }, [profile]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -842,7 +856,7 @@ export default function Account() {
                 className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
                 Cancel
               </button>
-              <button type="button" onClick={() => navigate("/")}
+              <button type="button" onClick={async () => { try { await logOut(); } catch {} }}
                 className="py-3 rounded-xl bg-red-500 text-white font-semibold text-sm active:scale-95 transition-transform">
                 Sign Out
               </button>

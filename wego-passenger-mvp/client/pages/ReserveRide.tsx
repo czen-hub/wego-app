@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, MapPin, Clock, Check, Calendar, ChevronRight } from "lucide-react";
 
 const WEGO_FEE_PCT = 0.12;
-const FARE = 38.00;
-const DRIVER_TAKE = FARE * (1 - WEGO_FEE_PCT);
-const COOP_FEE = FARE * WEGO_FEE_PCT;
+const BASE_FARE = 38.00;
+const ADVANCE_FEE = 8.00; // 100% to driver
+const TOTAL_FARE = BASE_FARE + ADVANCE_FEE;
+const DRIVER_TAKE = BASE_FARE * (1 - WEGO_FEE_PCT) + ADVANCE_FEE;
+const COOP_FEE = BASE_FARE * WEGO_FEE_PCT;
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -49,9 +51,11 @@ export default function ReserveRide() {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(DATES[0].value);
   const [selectedTime, setSelectedTime] = useState("8:00 AM");
+  const [pickup, setPickup] = useState("Current Location");
   const [destination, setDestination] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [bookingRef] = useState(() => `WG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`);
+  const [cancelInfoOpen, setCancelInfoOpen] = useState(false);
 
   const selectedDateObj = DATES.find((d) => d.value === selectedDate)!;
 
@@ -87,12 +91,24 @@ export default function ReserveRide() {
               <span className="font-semibold text-foreground">{selectedTime}</span>
             </div>
             <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Pickup</span>
+              <span className="font-semibold text-foreground text-right max-w-[55%] truncate">{pickup}</span>
+            </div>
+            <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Destination</span>
               <span className="font-semibold text-foreground text-right max-w-[55%] truncate">{destination}</span>
             </div>
             <div className="flex justify-between text-sm border-t border-border/50 pt-2">
-              <span className="text-muted-foreground">Estimated fare</span>
-              <span className="font-bold text-foreground">${FARE.toFixed(2)}</span>
+              <span className="text-muted-foreground">Base fare</span>
+              <span className="font-semibold text-foreground">${BASE_FARE.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Advance booking fee</span>
+              <span className="font-semibold text-foreground">${ADVANCE_FEE.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm border-t border-border/50 pt-2">
+              <span className="text-muted-foreground font-semibold">Total</span>
+              <span className="font-bold text-foreground">${TOTAL_FARE.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -100,7 +116,23 @@ export default function ReserveRide() {
         <div className="w-full bg-primary/5 border border-primary/15 rounded-xl px-4 py-3 space-y-1 text-xs text-muted-foreground">
           <p>• A WeGo driver will be matched 1 hour before your pickup.</p>
           <p>• You'll receive a notification with driver details.</p>
-          <p>• Free cancellation up to 1 hour before pickup.</p>
+          <p className="flex items-center gap-1 flex-wrap">
+            <span>• Free cancellation up to 1 hour before pickup.</span>
+            <button type="button" onClick={() => setCancelInfoOpen((v) => !v)}
+              className="text-primary font-semibold underline underline-offset-2 leading-none">
+              {cancelInfoOpen ? "Hide" : "Learn more"}
+            </button>
+          </p>
+          {cancelInfoOpen && (
+            <div className="mt-2 pt-2 border-t border-primary/15 space-y-1">
+              <p className="font-semibold text-foreground mb-1">Cancellation fees after 1hr window:</p>
+              <p>• Driver nearby (&lt;5 mi) — <span className="text-foreground font-medium">$5.00</span></p>
+              <p>• Driver 5–10 mi en route — <span className="text-foreground font-medium">$9.00</span></p>
+              <p>• Driver 10+ mi en route — <span className="text-foreground font-medium">$14.00</span></p>
+              <p>• Driver arrived — distance fee <span className="text-foreground font-medium">+ $3.00</span> waiting <span className="text-muted-foreground/70">(covers 8 min free · $0.50/min after)</span></p>
+              <p className="text-muted-foreground/70 pt-1">100% goes to the driver. WeGo keeps none of it.</p>
+            </div>
+          )}
         </div>
 
         <button type="button" onClick={() => navigate("/")}
@@ -189,8 +221,14 @@ export default function ReserveRide() {
               </div>
               <div className="space-y-3 flex-1 min-w-0">
                 <div>
-                  <p className="text-xs text-muted-foreground">Pickup</p>
-                  <p className="text-sm font-semibold text-foreground">Current Location</p>
+                  <p className="text-xs text-muted-foreground mb-1">Pickup</p>
+                  <input
+                    type="text"
+                    placeholder="Current Location"
+                    value={pickup}
+                    onChange={(e) => setPickup(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                  />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Dropoff</p>
@@ -232,12 +270,22 @@ export default function ReserveRide() {
         <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estimated Fare</p>
           <div className="flex items-baseline justify-between">
-            <p className="text-3xl font-bold text-foreground">${FARE.toFixed(2)}</p>
+            <p className="text-3xl font-bold text-foreground">${TOTAL_FARE.toFixed(2)}</p>
             <p className="text-xs text-primary font-semibold">No surge — ever</p>
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1 border-t border-border/40">
-            <span>Driver earns <span className="font-bold text-primary">${DRIVER_TAKE.toFixed(2)}</span></span>
-            <span>WeGo <span className="text-muted-foreground">${COOP_FEE.toFixed(2)}</span></span>
+          <div className="space-y-1 pt-1 border-t border-border/40">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Base fare</span>
+              <span>${BASE_FARE.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Advance booking fee <span className="text-primary font-semibold">(100% to driver)</span></span>
+              <span>${ADVANCE_FEE.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/30">
+              <span>Driver earns <span className="font-bold text-primary">${DRIVER_TAKE.toFixed(2)}</span></span>
+              <span>WeGo coop <span className="text-muted-foreground">${COOP_FEE.toFixed(2)}</span></span>
+            </div>
           </div>
         </div>
 

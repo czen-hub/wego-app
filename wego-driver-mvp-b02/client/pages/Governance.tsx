@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Award, CheckCircle, XCircle, Shield, Settings } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 interface InitiativeVote {
   id: string;
@@ -17,6 +18,7 @@ interface PendingVote {
 }
 
 export default function Governance() {
+  const { profile } = useAuth();
   const [initiatives, setInitiatives] = useState<InitiativeVote[]>([
     {
       id: "init-08",
@@ -88,11 +90,11 @@ export default function Governance() {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-white/50 mb-1">Member Name</p>
-                  <p className="text-2xl font-bold text-white">Tenzin C.</p>
+                  <p className="text-2xl font-bold text-white">{profile?.name || "Member"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-white/50 mb-1">Status</p>
-                  <p className="text-lg font-semibold text-white/90">Founding Member #0042</p>
+                  <p className="text-lg font-semibold text-white/90">{profile?.membershipStatus === "founding" ? "Founding Member" : "Member"}</p>
                 </div>
               </div>
 
@@ -233,7 +235,7 @@ export default function Governance() {
             </li>
             <li className="flex gap-2">
               <span className="text-secondary flex-shrink-0">•</span>
-              <span>Complete transparency: all initiatives are publicly logged on-chain</span>
+              <span>Complete transparency: all initiatives are logged on the cooperative ledger</span>
             </li>
           </ul>
         </div>

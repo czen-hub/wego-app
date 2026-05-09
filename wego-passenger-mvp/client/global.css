@@ -153,7 +153,28 @@
     overflow: hidden;
   }
 
+  /* Tailwind preflight sets img { max-width:100%; height:auto } which breaks
+     Leaflet's absolutely-positioned 256×256 tile images */
+  .leaflet-container img {
+    max-width: none;
+    height: auto;
+  }
+
+  /* Leaflet's internal panes have z-index 200-700. Without isolation they bleed
+     into the page stacking context and sit above the bottom sheet (z-20),
+     capturing touch events. isolation:isolate confines them to the container. */
+  .leaflet-container {
+    isolation: isolate;
+  }
+
   .map-placeholder {
     background: #0f172a;
+  }
+
+  .ride-map-grid {
+    background-image:
+      linear-gradient(0deg, transparent 24%, rgba(0,71,255,0.07) 25%, rgba(0,71,255,0.07) 26%, transparent 27%),
+      linear-gradient(90deg, transparent 24%, rgba(0,71,255,0.07) 25%, rgba(0,71,255,0.07) 26%, transparent 27%);
+    background-size: 50px 50px;
   }
 }

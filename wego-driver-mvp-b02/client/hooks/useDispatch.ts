@@ -30,6 +30,30 @@ export function useDispatch(): UseDispatchReturn {
   const [locationError, setLocationError] = useState<string | null>(null);
   const locationWatchRef = useRef<number | null>(null);
 
+  const setGeoError = (error?: GeolocationPositionError) => {
+    if (!error) {
+      setLocationError("Unable to access GPS. Check browser permissions.");
+      return;
+    }
+
+    if (error.code === error.PERMISSION_DENIED) {
+      setLocationError("Location access was denied. Allow GPS permission to go online.");
+      return;
+    }
+
+    if (error.code === error.POSITION_UNAVAILABLE) {
+      setLocationError("GPS position is unavailable right now. Try moving outdoors or retry.");
+      return;
+    }
+
+    if (error.code === error.TIMEOUT) {
+      setLocationError("GPS request timed out. Please try again.");
+      return;
+    }
+
+    setLocationError("Unable to access GPS. Check browser permissions.");
+  };
+
   // Listen for pending rides when online
   useEffect(() => {
     if (!isOnline || !user) return;
@@ -62,14 +86,21 @@ export function useDispatch(): UseDispatchReturn {
       return;
     }
 
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocationError(null);
+        updateDriverLocation(user.uid, pos.coords.latitude, pos.coords.longitude).catch(() => {});
+      },
+      (error) => setGeoError(error),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+
     locationWatchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setLocationError(null);
         updateDriverLocation(user.uid, pos.coords.latitude, pos.coords.longitude).catch(() => {});
       },
-      () => {
-        setLocationError("Unable to access GPS. Check browser permissions.");
-      },
+      (error) => setGeoError(error),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
 

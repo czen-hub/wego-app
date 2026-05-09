@@ -1,7 +1,14 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, MapPin, ChevronUp, ChevronDown, Clock, Building2, X, Home as HomeIcon, Briefcase } from "lucide-react";
+import { Search, MapPin, ChevronUp, ChevronDown, Clock, Building2, X, Home as HomeIcon, Briefcase, Navigation } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
+import { useCurrentLocation } from "@/hooks/useCurrentLocation";
+
+const DEFAULT_COORDS: [number, number] = [37.7749, -122.4194];
+
+function formatCoords(coords: [number, number]) {
+  return `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
+}
 
 function useSavedPlace(key: "home" | "work") {
   const [value, setValue] = useState<string>(() => localStorage.getItem(`wego_${key}`) ?? "");
@@ -61,12 +68,35 @@ const LOCATION_SUGGESTIONS = [
 
 export default function Home() {
   const navigate = useNavigate();
+  const { coords: currentCoords } = useCurrentLocation();
+  const [pickupPin, setPickupPin] = useState<[number, number] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const touchStartY = useRef(0);
   const home = useSavedPlace("home");
   const work = useSavedPlace("work");
+  const [editingPlace, setEditingPlace] = useState<"home" | "work" | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const openEditPlace = (which: "home" | "work") => {
+    const current = which === "home" ? home.value : work.value;
+    setEditDraft(current);
+    setEditingPlace(which);
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  };
+
+  const saveEditPlace = () => {
+    if (!editingPlace) return;
+    const val = editDraft.trim();
+    if (val) {
+      if (editingPlace === "home") home.save(val);
+      else work.save(val);
+    }
+    setEditingPlace(null);
+    setEditDraft("");
+  };
 
   const suggestions = query.trim().length >= 2
     ? LOCATION_SUGGESTIONS.filter((s) =>
@@ -75,10 +105,20 @@ export default function Home() {
       ).slice(0, 5)
     : [];
 
+  const selectedPickupCoords = pickupPin ?? currentCoords ?? DEFAULT_COORDS;
+  const pickupState = {
+    pickup: pickupPin ? "Pinned Pickup" : "Current Location",
+    pickupCoords: selectedPickupCoords,
+  };
+
   const handleSearchFocus = () => setDrawerOpen(true);
 
   const handleSelectDestination = (destination: string) => {
-    navigate("/request", { state: { destination } });
+    navigate("/request", { state: { destination, ...pickupState } });
+  };
+
+  const handleUseGpsPickup = () => {
+    setPickupPin(currentCoords ?? DEFAULT_COORDS);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -94,12 +134,19 @@ export default function Home() {
     <div className="relative h-full overflow-hidden">
 
       {/* ── MAP BACKGROUND ── */}
-      <div className="absolute inset-0">
-        <ClientMap center={[37.7749, -122.4194]} zoom={13} className="absolute inset-0" />
+      <div className="absolute inset-0 z-0">
+        <ClientMap
+          center={selectedPickupCoords}
+          zoom={14}
+          interactive
+          onCenterChange={setPickupPin}
+          onClickLocation={setPickupPin}
+          className="absolute inset-0"
+        />
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="relative">
-            <div className="w-4 h-4 bg-primary rounded-full shadow-lg shadow-primary/50" />
-            <div className="absolute inset-0 w-4 h-4 border-2 border-primary rounded-full animate-ping opacity-50" />
+          <div className="relative -mt-9">
+            <MapPin size={38} className="text-primary drop-shadow-[0_8px_18px_rgba(0,71,255,0.45)]" />
+            <div className="absolute left-1/2 top-[31px] h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-primary/30 blur-[1px]" />
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-b from-transparent via-background/40 to-background/90 pointer-events-none z-10" />
@@ -169,6 +216,26 @@ export default function Home() {
                 <ChevronDown size={14} />
               </button>
             )}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                <MapPin size={14} className="text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground">Pickup pin</p>
+                <p className="text-[11px] text-muted-foreground truncate">{formatCoords(selectedPickupCoords)}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleUseGpsPickup}
+              className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-background px-3 py-1.5 text-xs font-semibold text-primary active:scale-95"
+            >
+              <Navigation size={12} />
+              GPS
+            </button>
           </div>
 
           {/* Service tabs */}
@@ -281,59 +348,89 @@ export default function Home() {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saved Places</p>
               <div className="space-y-2">
                 {/* Home */}
-                <button
-                  type="button"
-                  onClick={() => home.value ? handleSelectDestination(home.value) : undefined}
-                  className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
-                >
-                  <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                    <HomeIcon size={16} className="text-primary" />
+                {editingPlace === "home" ? (
+                  <div className="flex items-center gap-2 p-3 bg-background border border-primary rounded-xl">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                      <HomeIcon size={16} className="text-primary" />
+                    </div>
+                    <input
+                      ref={editInputRef}
+                      type="text"
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") saveEditPlace(); if (e.key === "Escape") setEditingPlace(null); }}
+                      placeholder="Enter home address"
+                      className="flex-1 bg-transparent text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
+                    />
+                    <button type="button" onClick={saveEditPlace} className="text-xs font-bold text-primary px-2">Save</button>
+                    <button type="button" aria-label="Cancel" onClick={() => setEditingPlace(null)} className="text-muted-foreground"><X size={13} /></button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground">Home</p>
-                    {home.value
-                      ? <p className="text-xs text-muted-foreground truncate">{home.value}</p>
-                      : <p className="text-xs text-muted-foreground">Set home address</p>
-                    }
-                  </div>
-                  {home.value && (
-                    <button
-                      type="button"
-                      aria-label="Clear home"
-                      onClick={(e) => { e.stopPropagation(); home.clear(); }}
-                      className="text-muted-foreground p-1"
-                    >
-                      <X size={13} />
+                ) : (
+                  <div className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 transition-all">
+                    <button type="button" onClick={() => home.value ? handleSelectDestination(home.value) : openEditPlace("home")}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                        <HomeIcon size={16} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground">Home</p>
+                        {home.value
+                          ? <p className="text-xs text-muted-foreground truncate">{home.value}</p>
+                          : <p className="text-xs text-primary font-medium">Tap to set home address</p>
+                        }
+                      </div>
                     </button>
-                  )}
-                </button>
+                    <button type="button" aria-label="Edit home" onClick={() => openEditPlace("home")}
+                      className="text-xs text-muted-foreground hover:text-primary px-1 flex-shrink-0">Edit</button>
+                    {home.value && (
+                      <button type="button" aria-label="Clear home" onClick={() => home.clear()} className="text-muted-foreground p-1 flex-shrink-0">
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                )}
                 {/* Work */}
-                <button
-                  type="button"
-                  onClick={() => work.value ? handleSelectDestination(work.value) : undefined}
-                  className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
-                >
-                  <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                    <Briefcase size={16} className="text-primary" />
+                {editingPlace === "work" ? (
+                  <div className="flex items-center gap-2 p-3 bg-background border border-primary rounded-xl">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                      <Briefcase size={16} className="text-primary" />
+                    </div>
+                    <input
+                      ref={editInputRef}
+                      type="text"
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") saveEditPlace(); if (e.key === "Escape") setEditingPlace(null); }}
+                      placeholder="Enter work address"
+                      className="flex-1 bg-transparent text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
+                    />
+                    <button type="button" onClick={saveEditPlace} className="text-xs font-bold text-primary px-2">Save</button>
+                    <button type="button" aria-label="Cancel" onClick={() => setEditingPlace(null)} className="text-muted-foreground"><X size={13} /></button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground">Work</p>
-                    {work.value
-                      ? <p className="text-xs text-muted-foreground truncate">{work.value}</p>
-                      : <p className="text-xs text-muted-foreground">Set work address</p>
-                    }
-                  </div>
-                  {work.value && (
-                    <button
-                      type="button"
-                      aria-label="Clear work"
-                      onClick={(e) => { e.stopPropagation(); work.clear(); }}
-                      className="text-muted-foreground p-1"
-                    >
-                      <X size={13} />
+                ) : (
+                  <div className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 transition-all">
+                    <button type="button" onClick={() => work.value ? handleSelectDestination(work.value) : openEditPlace("work")}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                        <Briefcase size={16} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground">Work</p>
+                        {work.value
+                          ? <p className="text-xs text-muted-foreground truncate">{work.value}</p>
+                          : <p className="text-xs text-primary font-medium">Tap to set work address</p>
+                        }
+                      </div>
                     </button>
-                  )}
-                </button>
+                    <button type="button" aria-label="Edit work" onClick={() => openEditPlace("work")}
+                      className="text-xs text-muted-foreground hover:text-primary px-1 flex-shrink-0">Edit</button>
+                    {work.value && (
+                      <button type="button" aria-label="Clear work" onClick={() => work.clear()} className="text-muted-foreground p-1 flex-shrink-0">
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

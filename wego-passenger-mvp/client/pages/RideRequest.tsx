@@ -2,13 +2,17 @@ import { useState, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, ChevronLeft, Clock, Shield, Info, Navigation } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
+import { useCurrentLocation } from "@/hooks/useCurrentLocation";
+import { requestRide } from "@/lib/db";
+import { useAuth } from "@/context/AuthContext";
 
 const WEGO_FEE_PCT = 0.12;
 const BASE_FARE = 2.50;
 const BOOKING_FEE = 2.00;
-const RATE_PER_MILE = 1.30;
-const MIN_FARE = 8.00;
-const MINS_PER_MILE = 1.0;
+const RATE_PER_MILE = 1.25;
+const RATE_PER_MIN = 0.20;
+const MIN_FARE = 10.00;
+const MINS_PER_MILE = 1.35;
 
 // Approximate lat/lng for known Bay Area locations
 const LOCATION_COORDS: Record<string, [number, number]> = {
@@ -44,20 +48,30 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.15; // road-distance factor
 }
 
-// Uber X Bay Area rate card (calibrated against real fares)
-const UBER_BASE = 1.50;
-const UBER_BOOKING = 2.70;
-const UBER_PER_MILE = 1.60;
-const UBER_PER_MIN = 0.30;
-const UBER_MIN_FARE = 7.00;
+function formatPinnedAddress(label: string, coords: [number, number] | null) {
+  if (!coords) return label;
+  return `${label} (${coords[0].toFixed(5)}, ${coords[1].toFixed(5)})`;
+}
 
-function calcRoute(from: string, to: string) {
-  const c1 = LOCATION_COORDS[from] ?? LOCATION_COORDS["Current Location"];
-  const c2 = LOCATION_COORDS[to] ?? LOCATION_COORDS["Current Location"];
+// Uber X Bay Area rate card (calibrated against real fares)
+const UBER_BASE = 2.20;
+const UBER_BOOKING = 3.75;
+const UBER_PER_MILE = 1.65;
+const UBER_PER_MIN = 0.32;
+const UBER_MIN_FARE = 8.00;
+
+function calcRoute(
+  from: string,
+  to: string,
+  fromOverride?: [number, number] | null,
+  toOverride?: [number, number] | null,
+) {
+  const c1 = fromOverride ?? LOCATION_COORDS[from] ?? LOCATION_COORDS["Current Location"];
+  const c2 = toOverride ?? LOCATION_COORDS[to] ?? LOCATION_COORDS["Current Location"];
   const rawMiles = haversineDistance(c1[0], c1[1], c2[0], c2[1]);
   const miles = Math.max(1, Math.round(rawMiles * 10) / 10);
-  const fare = Math.max(MIN_FARE, Math.round((BASE_FARE + BOOKING_FEE + miles * RATE_PER_MILE) * 100) / 100);
   const mins = Math.round(5 + miles * MINS_PER_MILE);
+  const fare = Math.max(MIN_FARE, Math.round((BASE_FARE + BOOKING_FEE + miles * RATE_PER_MILE + mins * RATE_PER_MIN) * 100) / 100);
   const uberX = Math.max(UBER_MIN_FARE, Math.round((UBER_BASE + UBER_BOOKING + miles * UBER_PER_MILE + mins * UBER_PER_MIN) * 100) / 100);
   return { miles, fare, mins, uberX };
 }
@@ -86,19 +100,41 @@ const LOCATION_SUGGESTIONS = [
 export default function RideRequest() {
   const navigate = useNavigate();
   const location = useLocation();
-  const destination = (location.state as { destination?: string })?.destination ?? "456 Valencia St, San Francisco";
+  const { user, profile } = useAuth();
+  const { coords: currentCoords, error: currentLocationError } = useCurrentLocation();
+  const routeState = (location.state as {
+    destination?: string;
+    pickup?: string;
+    pickupCoords?: [number, number];
+    destinationCoords?: [number, number];
+  }) ?? {};
+  const destination = routeState.destination ?? "456 Valencia St, San Francisco";
 
-  const [pickup, setPickup] = useState("Current Location");
+  const [pickup, setPickup] = useState(routeState.pickup ?? "Current Location");
+  const [pinnedPickupCoords, setPinnedPickupCoords] = useState<[number, number] | null>(routeState.pickupCoords ?? null);
+  const [pinnedDestinationCoords] = useState<[number, number] | null>(routeState.destinationCoords ?? null);
+  const [confirming, setConfirming] = useState(false);
   const [pickupFocused, setPickupFocused] = useState(false);
   const pickupRef = useRef<HTMLInputElement>(null);
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { miles, fare, mins, uberX } = useMemo(() => calcRoute(pickup, destination), [pickup, destination]);
+  const effectivePickupCoords =
+    pinnedPickupCoords ?? (pickup === "Current Location" ? currentCoords : null);
+  const effectiveDestinationCoords = pinnedDestinationCoords;
+
+  const { miles, fare, mins, uberX } = useMemo(
+    () => calcRoute(pickup, destination, effectivePickupCoords, effectiveDestinationCoords),
+    [destination, effectiveDestinationCoords, effectivePickupCoords, pickup],
+  );
   const driverTake = fare * (1 - WEGO_FEE_PCT);
   const coopFee = fare * WEGO_FEE_PCT;
 
-  const fromCoords = LOCATION_COORDS[pickup] ?? LOCATION_COORDS["Current Location"];
-  const toCoords = LOCATION_COORDS[destination] ?? LOCATION_COORDS["Current Location"];
+  const fromCoords =
+    effectivePickupCoords ??
+    (pickup === "Current Location"
+      ? currentCoords ?? LOCATION_COORDS["Current Location"]
+      : LOCATION_COORDS[pickup] ?? currentCoords ?? LOCATION_COORDS["Current Location"]);
+  const toCoords = effectiveDestinationCoords ?? LOCATION_COORDS[destination] ?? LOCATION_COORDS["Current Location"];
 
   const suggestions = pickup.trim().length >= 1 && pickup !== "Current Location"
     ? LOCATION_SUGGESTIONS.filter((s) =>
@@ -111,6 +147,7 @@ export default function RideRequest() {
 
   const selectPickup = (label: string) => {
     setPickup(label);
+    setPinnedPickupCoords(null);
     setPickupFocused(false);
     pickupRef.current?.blur();
   };
@@ -127,7 +164,22 @@ export default function RideRequest() {
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (confirming) return;
+    setConfirming(true);
+    try {
+      if (user) {
+        await requestRide({
+          passengerId: user.uid,
+          passengerName: profile?.name || "Passenger",
+          pickupAddress: formatPinnedAddress(pickup, pinnedPickupCoords),
+          dropoffAddress: formatPinnedAddress(destination, pinnedDestinationCoords),
+          fare,
+        });
+      }
+    } catch {
+      // Firebase not configured yet — still navigate to ride screen
+    }
     navigate("/ride", {
       state: { destination, fare, driverTake, coopFee },
     });
@@ -167,7 +219,10 @@ export default function RideRequest() {
                   value={pickup}
                   title="Pickup location"
                   placeholder="Enter pickup address"
-                  onChange={(e) => setPickup(e.target.value)}
+                  onChange={(e) => {
+                    setPickup(e.target.value);
+                    setPinnedPickupCoords(null);
+                  }}
                   onFocus={handleFocus}
                   onBlur={handleBlur}
                   className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${pickupFocused ? "border-primary" : "border-transparent"}`}
@@ -187,7 +242,9 @@ export default function RideRequest() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-primary">Use Current Location</p>
-                        <p className="text-xs text-muted-foreground">GPS detected location</p>
+                        <p className="text-xs text-muted-foreground">
+                          {currentLocationError ?? "GPS detected location"}
+                        </p>
                       </div>
                     </button>
 
@@ -287,9 +344,9 @@ export default function RideRequest() {
           </div>
         </div>
 
-        <button type="button" onClick={handleConfirm}
-          className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30">
-          Confirm Ride — ${fare.toFixed(2)}
+        <button type="button" onClick={handleConfirm} disabled={confirming}
+          className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30 disabled:opacity-70">
+          {confirming ? "Requesting…" : `Confirm Ride — $${fare.toFixed(2)}`}
         </button>
         <p className="text-xs text-center text-muted-foreground">No cancellation fee if cancelled within 2 minutes</p>
       </div>

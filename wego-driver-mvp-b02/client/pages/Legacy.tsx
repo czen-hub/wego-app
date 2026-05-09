@@ -1,7 +1,12 @@
 import { Wallet, TrendingUp, CheckCircle, Shield, Info } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
-const YEARS_OF_SERVICE: number = 3;
 const TARGET_YEARS = 20;
+
+function yearsFromDate(since: Date | null): number {
+  if (!since) return 0;
+  return Math.max(0, Math.floor((Date.now() - since.getTime()) / (365.25 * 24 * 60 * 60 * 1000)));
+}
 
 const VESTING_TIERS = [
   { label: "3–5 yrs",  pct: 25,  low: 200,  high: 400,  note: "Cooperative in early growth" },
@@ -21,6 +26,8 @@ function getCurrentVesting(years: number) {
 }
 
 export default function Legacy() {
+  const { profile } = useAuth();
+  const YEARS_OF_SERVICE = yearsFromDate(profile?.memberSince ?? null);
   const currentReserve = 2847500;
   const targetReserve  = 5000000;
   const reservePercentage = (currentReserve / targetReserve) * 100;

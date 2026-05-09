@@ -972,6 +972,154 @@
 
             </div>
 
+            <!-- SECTION 11: RIDE CANCELLATIONS -->
+            <div class="faq-section" id="cancellations">
+                <div class="faq-section-title">Section 11 — Ride Cancellations</div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggle(this)">
+                        What is WeGo's cancellation fee policy?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>WeGo's cancellation fees are based on how far the driver has traveled to reach you. Every cent of the cancellation fee goes directly to the driver — WeGo keeps none of it.</p>
+                        <div class="data-row"><span class="label">Within 5 minutes of booking</span><span class="value green">Free — no charge</span></div>
+                        <div class="data-row"><span class="label">Driver en route, nearby (&lt; 5 miles)</span><span class="value">$5.00 to driver</span></div>
+                        <div class="data-row"><span class="label">Driver en route, 5–10 miles away</span><span class="value">$9.00 to driver</span></div>
+                        <div class="data-row"><span class="label">Driver en route, 10+ miles (incl. highway)</span><span class="value">$14.00 to driver</span></div>
+                        <div class="data-row"><span class="label">Driver arrived after short distance</span><span class="value">$5.00 + $3.00 waiting = $8.00</span></div>
+                        <div class="data-row"><span class="label">Driver arrived after 5–10 miles</span><span class="value">$9.00 + $3.00 waiting = $12.00</span></div>
+                        <div class="data-row"><span class="label">Driver arrived after 10+ miles</span><span class="value">$14.00 + $3.00 waiting = $17.00</span></div>
+                        <p class="faq-note">The $3.00 waiting fee covers up to 5 minutes of free wait at your pickup (8 minutes for advance bookings). After that, a $0.50/min meter runs for up to 2 more minutes before the driver is eligible to leave.</p>
+                        <div class="faq-why">
+                            <strong>Why it matters:</strong> Uber and Lyft charge $5 flat for all cancellations regardless of how far the driver drove — and they keep a portion. WeGo's distance-based fees are designed to fully compensate drivers for real fuel and time costs. A driver who drove 15 miles on the highway to reach you has lost real money. $14 is honest compensation, not a corporate penalty.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button type="button" class="faq-question" onclick="toggle(this)">
+                        Why is the cancellation fee higher for longer distances?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Because cost to the driver is proportional to distance driven, not just time elapsed. Consider a driver dispatched from 12 miles away via highway:</p>
+                        <ul>
+                            <li><strong>Fuel &amp; wear:</strong> ~$3.50–$4.50 for 12–15 miles driven</li>
+                            <li><strong>Lost earning time:</strong> 20–25 minutes × ~$25–30/hr effective rate = $8–$12 wasted</li>
+                            <li><strong>Total real loss to driver: $11–$16</strong></li>
+                        </ul>
+                        <p>A flat $3 or $5 fee — as some platforms charge — does not come close to covering this. WeGo's $14 tier is calibrated to the actual cost a driver incurs when a long-haul en-route cancellation happens.</p>
+                        <div class="highlight-box">
+                            <strong>Passenger note:</strong> The exact fee is always shown to you before you confirm a cancellation — you will never be surprised. The app calculates your fee based on real driver distance at the time you tap "Cancel".
+                        </div>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button type="button" class="faq-question" onclick="toggle(this)">
+                        What if my driver is late — can I cancel for free?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Yes. If your driver is significantly late — more than 10 minutes beyond the original ETA — you can cancel at no charge. The app detects the delay and waives the cancellation fee automatically. You should not be penalized for a driver running late.</p>
+                        <p>If you need to cancel for any reason within 5 minutes of booking, it is always free regardless of driver distance — we recognize that plans change immediately after booking.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button type="button" class="faq-question" onclick="toggle(this)">
+                        As a driver, when do I receive the cancellation fee?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Cancellation fees are credited to your WeGo earnings account within <strong>24 hours</strong> of the event. They appear as a separate line item in your Earnings tab labeled "Cancellation Compensation — [date]". The full amount goes to you — WeGo does not deduct the 12% platform fee from cancellation fees since you performed no ride.</p>
+                        <div class="faq-why">
+                            <strong>Why it matters:</strong> On Uber and Lyft, drivers receive $3–5 from cancellation fees and the platform keeps the rest. WeGo's policy is that if a passenger caused you to drive and then cancelled, you should be made whole — not partially compensated while the platform profits from your loss.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button type="button" class="faq-question" onclick="toggle(this)">
+                        Are there any fees for stops or extra wait time during a ride?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Yes — both are charged transparently and go 100% to your driver.</p>
+                        <div class="data-row"><span class="label">Mid-route stop (coffee, ATM, etc.)</span><span class="value">$2.00 per stop</span></div>
+                        <div class="data-row"><span class="label">Wait meter — standard ride (after 5 min free)</span><span class="value">$0.50/min</span></div>
+                        <div class="data-row"><span class="label">Wait meter — advance booking (after 8 min free)</span><span class="value">$0.50/min (max 2 min)</span></div>
+                        <div class="data-row"><span class="label">WeGo's cut of stop or wait fees</span><span class="value green">$0.00</span></div>
+                        <p class="faq-note">All additional fees are shown as separate line items on your receipt. Stop fees are triggered by the passenger in-app before the stop — no surprises.</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- SECTION 12: ADVANCE BOOKINGS -->
+            <div class="faq-section" id="reserve">
+                <div class="faq-section-title">Section 12 — Advance Bookings (WeGo Reserve)</div>
+
+                <div class="faq-item">
+                    <button type="button" class="faq-question" onclick="toggle(this)">
+                        How much does it cost to book a ride in advance?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>WeGo Reserve charges a flat <strong>$8.00 advance booking fee</strong> on top of the base fare. 100% of this fee goes directly to your driver — WeGo keeps none of it.</p>
+                        <div class="data-row"><span class="label">Base fare (distance + time)</span><span class="value">Varies by route</span></div>
+                        <div class="data-row"><span class="label">Advance booking fee</span><span class="value">$8.00 flat</span></div>
+                        <div class="data-row"><span class="label">WeGo's cut of the booking fee</span><span class="value green">$0.00</span></div>
+                        <div class="faq-why">
+                            <strong>How this compares to Uber Reserve:</strong> Uber adds a hidden variable reservation fee that can range from $10 to $35+ depending on demand — and Uber keeps a portion of it. WeGo's $8 flat fee is transparent, fixed, and goes entirely to the driver who committed their schedule to your trip.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button type="button" class="faq-question" onclick="toggle(this)">
+                        Why does the advance booking fee go to the driver and not WeGo?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>When a driver accepts an advance booking, they commit their schedule to a specific pickup time — often hours or days in advance. This has a real cost:</p>
+                        <ul>
+                            <li>They may turn down on-demand rides to stay available for your booking</li>
+                            <li>They plan their day around your pickup time and location</li>
+                            <li>They absorb the risk if you cancel within the 1-hour window</li>
+                        </ul>
+                        <p>The $8.00 fee compensates drivers for that commitment. As a cooperative, WeGo's goal is to put money in drivers' pockets — not to create new revenue streams for the platform.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button type="button" class="faq-question" onclick="toggle(this)">
+                        Is WeGo Reserve cheaper than Uber Reserve?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Yes — significantly. On real Bay Area routes, WeGo Reserve is consistently $15–25 cheaper than Uber Reserve. At peak times (weekend mornings, afternoon rush), the gap is even larger because Uber applies demand-based pricing to its reservation fee.</p>
+                        <div class="data-row"><span class="label">SFO → Santa Clara (Mon 5:57 AM)</span><span class="value">WeGo ~$46 · Uber $50.96</span></div>
+                        <div class="data-row"><span class="label">SFO → Santa Clara (Sat 11:30 AM)</span><span class="value">WeGo ~$46 · Uber $69.93</span></div>
+                        <div class="data-row"><span class="label">SFO → Santa Clara (Mon 2:30 PM)</span><span class="value">WeGo ~$46 · Uber $72.93</span></div>
+                        <p class="faq-note">WeGo has no surge pricing. Your advance fare is fixed at booking regardless of demand.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button type="button" class="faq-question" onclick="toggle(this)">
+                        What is the cancellation policy for advance bookings?
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Free cancellation up to <strong>1 hour before your scheduled pickup</strong>. If you cancel within that hour, standard distance-based cancellation fees apply (see Section 11).</p>
+                        <p>Advance bookings also receive extended driver wait time at pickup: <strong>8 minutes free</strong> (vs 5 minutes for on-demand rides), then a $0.50/min meter runs for up to 2 more minutes before the driver is eligible to leave.</p>
+                    </div>
+                </div>
+
+            </div>
+
         </div>
     </section>
 
@@ -1025,7 +1173,7 @@
             </div>
         </div>
         <div class="footer-apps">
-            <span style="font-size:14px; color:var(--text-dim); padding:8px 0; display:block;">📱 App launching with the Bay Area rollout — join the waitlist to be notified first.</span>
+            <span class="footer-app-note">📱 App launching with the Bay Area rollout — join the waitlist to be notified first.</span>
         </div>
         <div class="footer-meta">
             <div class="meta-left">

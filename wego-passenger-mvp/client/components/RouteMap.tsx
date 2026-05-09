@@ -73,8 +73,9 @@ export default function RouteMap({
         doubleClickZoom={false}
       >
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          subdomains="abc"
+          maxZoom={19}
         />
         <InvalidateSize />
         {from && <Marker position={from} icon={pickupIcon} />}
