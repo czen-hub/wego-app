@@ -285,22 +285,30 @@ export default function Account() {
           <h1 className="text-3xl font-bold text-foreground">Account</h1>
 
           {/* Profile card */}
-          <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full flex-shrink-0 overflow-hidden bg-primary flex items-center justify-center text-white text-2xl font-bold">
+          <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4 shadow-card">
+            <div className="w-16 h-16 rounded-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center text-white text-2xl font-bold shadow-[0_4px_16px_rgba(0,71,255,0.4)]">
               {photo
                 ? <img src={photo} alt="Profile" className="w-full h-full object-cover" />
-                : name.charAt(0)
+                : (name.charAt(0) || "?").toUpperCase()
               }
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xl font-bold text-foreground">{name}</p>
-              <p className="text-sm text-muted-foreground">{email}</p>
-              <div className="flex items-center gap-1 mt-1">
-                <Star size={12} className="text-yellow-500 fill-yellow-500" />
-                <span className="text-xs text-muted-foreground">4.97 passenger rating · 5 rides</span>
+              <p className="text-xl font-bold text-foreground">{name || "—"}</p>
+              <p className="text-sm text-muted-foreground truncate">{email}</p>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <Star size={12} className="text-yellow-400 fill-yellow-400 flex-shrink-0" />
+                <span className="text-xs text-muted-foreground">
+                  {(profile?.rating ?? 5.0).toFixed(2)} rating
+                </span>
+                <span className="text-muted-foreground/40 text-xs">·</span>
+                <span className="text-xs text-muted-foreground">
+                  {profile?.totalRides ?? 0} ride{(profile?.totalRides ?? 0) !== 1 ? "s" : ""}
+                </span>
               </div>
             </div>
-            <button type="button" onClick={openEditProfile} className="text-xs text-primary font-semibold">Edit</button>
+            <button type="button" onClick={openEditProfile} className="text-xs text-primary font-semibold px-1 flex-shrink-0">
+              Edit
+            </button>
           </div>
 
           {/* Notifications */}

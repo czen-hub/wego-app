@@ -207,4 +207,34 @@
     border-radius: 9999px;
     background: rgba(255, 255, 255, 0.30);
   }
+
+  @keyframes wego-shimmer {
+    0%   { background-position: -800px 0; }
+    100% { background-position:  800px 0; }
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted) / 0.18) 0%,
+      hsl(var(--muted) / 0.45) 50%,
+      hsl(var(--muted) / 0.18) 100%
+    );
+    background-size: 800px 100%;
+    animation: wego-shimmer 1.4s ease-in-out infinite;
+    border-radius: 0.5rem;
+    display: block;
+  }
+
+  .shadow-card {
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.30), 0 1px 4px rgba(0, 0, 0, 0.20);
+  }
+
+  .shadow-float {
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.50), 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 24px hsl(var(--primary) / 0.45);
+  }
 }
