@@ -15,6 +15,7 @@ interface ClientMapProps {
   className?: string;
   interactive?: boolean;
   zoomAdjust?: number;
+  autoResetMs?: number;
   onCenterChange?: (coords: [number, number]) => void;
   onClickLocation?: (coords: [number, number]) => void;
 }
@@ -27,6 +28,7 @@ export default function ClientMap({
   zoom = 13,
   interactive = false,
   zoomAdjust = 0,
+  autoResetMs,
   onCenterChange,
   onClickLocation,
 }: ClientMapProps) {
@@ -38,6 +40,9 @@ export default function ClientMap({
   const routeLineRef = useRef<LeafletPolyline | null>(null);
   const baseZoomRef = useRef<number>(zoom);
   const [mapReady, setMapReady] = useState(false);
+  // Refs so auto-reset timer always has the latest center/zoom without stale closure
+  const centerRef = useRef<[number, number]>(center);
+  const zoomRef = useRef<number>(zoom);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,6 +144,36 @@ export default function ClientMap({
       map.off("click", handleClick);
     };
   }, [mapReady, onClickLocation]);
+
+  // Keep center/zoom refs fresh so the auto-reset timer uses latest values
+  useEffect(() => { centerRef.current = center; }, [center]);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+
+  // Auto-reset: after autoResetMs ms of map idle, fly back to GPS center + zoom
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map || !autoResetMs) return;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let resetting = false;
+
+    const scheduleReset = () => {
+      if (resetting) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        resetting = true;
+        map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 0.8 });
+        map.once("moveend", () => { resetting = false; });
+      }, autoResetMs);
+    };
+
+    map.on("moveend", scheduleReset);
+
+    return () => {
+      map.off("moveend", scheduleReset);
+      if (timer) clearTimeout(timer);
+    };
+  }, [mapReady, autoResetMs]);
 
   useEffect(() => {
     const map = mapRef.current;

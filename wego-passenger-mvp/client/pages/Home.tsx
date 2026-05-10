@@ -186,6 +186,7 @@ const handleTouchStart = (e: React.TouchEvent) => {
             center={selectedPickupCoords}
             zoom={14}
             interactive
+            autoResetMs={5000}
             onClickLocation={(coords) => { setPickupPin(coords); setDrawerOpen(false); }}
             className="absolute inset-0"
           />
