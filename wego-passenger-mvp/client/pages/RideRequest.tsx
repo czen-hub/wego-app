@@ -293,7 +293,7 @@ export default function RideRequest() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background">
+    <div className="h-full flex flex-col overflow-hidden bg-background">
 
       {/* ── MAP — top 40% ── */}
       <div className="relative flex-none" style={{ height: "40%" }}>

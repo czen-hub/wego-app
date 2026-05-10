@@ -92,9 +92,7 @@ const App = () => (
                   path="/request"
                   element={
                     <ProtectedRoute>
-                      <div className="max-w-[430px] mx-auto h-screen bg-background overflow-hidden">
-                        <RideRequest />
-                      </div>
+                      <AppLayout><RideRequest /></AppLayout>
                     </ProtectedRoute>
                   }
                 />
