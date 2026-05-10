@@ -163,11 +163,6 @@ const LOCATION_SUGGESTIONS = [
   { label: "Santa Clara Convention Center",  sublabel: "5001 Great America Pkwy, Santa Clara" },
 ];
 
-// Sheet snap points (pixels visible from bottom of screen)
-const SNAP_COLLAPSED = 130;
-const SNAP_MID = 400;
-const SNAP_EXPANDED = 680;
-const SNAPS = [SNAP_COLLAPSED, SNAP_MID, SNAP_EXPANDED];
 
 export default function RideRequest() {
   const navigate = useNavigate();
@@ -188,11 +183,6 @@ export default function RideRequest() {
   const [pickupFocused, setPickupFocused] = useState(false);
   const [destFocused, setDestFocused] = useState(!routeState.destination);
 
-  // Draggable sheet state
-  const [visible, setVisible] = useState(SNAP_MID);
-  const touchStartY = useRef(0);
-  const contentRef = useRef<HTMLDivElement>(null);
-
   const pickupRef = useRef<HTMLInputElement>(null);
   const destRef = useRef<HTMLInputElement>(null);
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -201,9 +191,6 @@ export default function RideRequest() {
   const effectivePickupCoords =
     pinnedPickupCoords ?? (pickup === "Current Location" ? currentCoords : null);
   const effectiveDestinationCoords = pinnedDestinationCoords;
-
-  // Zoom out when more map is visible (sheet pulled down)
-  const zoomAdjust = visible <= SNAP_COLLAPSED ? 0 : visible <= SNAP_MID ? 0 : 1;
 
   useEffect(() => {
     if (!destination.trim() || LOCATION_COORDS[destination]) {
@@ -284,23 +271,6 @@ export default function RideRequest() {
     if (pickup === "Current Location") pickupRef.current?.select();
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const delta = touchStartY.current - e.changedTouches[0].clientY;
-    const swipedUp = delta > 40;
-    const swipedDown = delta < -40;
-    if (!swipedUp && !swipedDown) return;
-    // Don't close sheet if user is scrolling content that isn't at the top
-    if (swipedDown && contentRef.current && contentRef.current.scrollTop > 0) return;
-    const idx = SNAPS.indexOf(visible) !== -1
-      ? SNAPS.indexOf(visible)
-      : SNAPS.reduce((best, s, i) => Math.abs(s - visible) < Math.abs(SNAPS[best] - visible) ? i : best, 0);
-    setVisible(swipedUp ? SNAPS[Math.min(idx + 1, SNAPS.length - 1)] : SNAPS[Math.max(idx - 1, 0)]);
-  };
-
   const handleConfirm = async () => {
     if (confirming) return;
     setConfirming(true);
@@ -322,271 +292,232 @@ export default function RideRequest() {
     });
   };
 
-  const translateY = SNAP_EXPANDED - visible;
-
   return (
-    <div className="relative h-screen overflow-hidden">
-      {/* Full-screen map */}
-      <ClientMap
-        from={fromCoords}
-        to={toCoords}
-        className="absolute inset-0"
-        zoomAdjust={zoomAdjust}
-      />
+    <div className="h-screen flex flex-col overflow-hidden bg-background">
 
-      {/* Back button */}
-      <button
-        type="button"
-        onClick={() => navigate("/")}
-        aria-label="Back"
-        className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center"
-      >
-        <ChevronLeft size={18} className="text-foreground" />
-      </button>
+      {/* ── MAP — top 40% ── */}
+      <div className="relative flex-none" style={{ height: "40%" }}>
+        <ClientMap from={fromCoords} to={toCoords} className="absolute inset-0" />
 
-      {/* Google Maps link */}
-      {destination.trim() && (
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&origin=${fromCoords[0]},${fromCoords[1]}&destination=${toCoords[0]},${toCoords[1]}&travelmode=driving`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/80 backdrop-blur-sm border border-border text-xs font-medium text-foreground"
+        {/* Back button */}
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          aria-label="Back"
+          className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center"
         >
-          <ExternalLink size={12} />
-          Google Maps
-        </a>
-      )}
+          <ChevronLeft size={18} className="text-foreground" />
+        </button>
 
-      {/* Gradient fade — taller than sheet so the fade shows above the sheet edge */}
-      <div className="absolute bottom-0 left-0 right-0 h-[520px] bg-gradient-to-b from-transparent via-background/50 to-background pointer-events-none z-10" />
+        {/* Google Maps link */}
+        {destination.trim() && (
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&origin=${fromCoords[0]},${fromCoords[1]}&destination=${toCoords[0]},${toCoords[1]}&travelmode=driving`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/80 backdrop-blur-sm border border-border text-xs font-medium text-foreground"
+          >
+            <ExternalLink size={12} />
+            Google Maps
+          </a>
+        )}
 
-      {/* Draggable bottom sheet */}
-      <div
-        className="ride-sheet absolute left-0 right-0 bottom-0 flex flex-col transition-transform duration-300 ease-out z-20"
-        style={{
-          height: `${SNAP_EXPANDED}px`,
-          transform: `translateY(${translateY}px)`,
-        }}
-      >
-        {/* Sticky header — touch/tap here to drag or toggle */}
-        <div
-          className="flex-shrink-0 px-4 pt-2.5 pb-3 cursor-pointer select-none"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onClick={() => setVisible((v) => v === SNAP_COLLAPSED ? SNAP_MID : SNAP_COLLAPSED)}
-        >
-          <div className="ride-sheet-handle mx-auto mb-3" />
+        {/* Fade into content panel */}
+        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-b from-transparent to-background pointer-events-none z-10" />
+      </div>
 
-          {/* Compact route summary — always visible in the peek state */}
-          <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3">
-            <div className="flex flex-col items-center gap-1 flex-shrink-0">
-              <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-              <div className="w-px h-3 bg-border" />
-              <div className="w-2.5 h-2.5 rounded-full border-2 border-foreground" />
+      {/* ── CONTENT PANEL — scrollable bottom 60% ── */}
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-6 space-y-4">
+
+        {/* Route card */}
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <div className="flex gap-3 items-start">
+            <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-2">
+              <div className="w-3 h-3 rounded-full bg-primary" />
+              <div className="w-px h-10 bg-border" />
+              <div className="w-3 h-3 rounded-full border-2 border-foreground" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground truncate">{pickup}</p>
-              <p className="text-sm font-semibold text-foreground truncate">{destination || "Where to?"}</p>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-xs text-muted-foreground">~{mins} min</p>
-              <p className="text-sm font-bold text-primary">${(fare + tollTotal).toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Sheet content — scrollable */}
-        <div ref={contentRef} className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
-          {/* Route card */}
-          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-            <div className="flex gap-3 items-start">
-              <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-2">
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <div className="w-px h-10 bg-border" />
-                <div className="w-3 h-3 rounded-full border-2 border-foreground" />
-              </div>
-
-              <div className="space-y-1 flex-1 min-w-0">
-                {/* Pickup */}
-                <div className="relative">
-                  <p className="text-xs text-muted-foreground mb-0.5">Pickup</p>
-                  <input
-                    ref={pickupRef}
-                    type="text"
-                    value={pickup}
-                    title="Pickup location"
-                    placeholder="Enter pickup address"
-                    onChange={(e) => { setPickup(e.target.value); setPinnedPickupCoords(null); }}
-                    onFocus={handleFocus}
-                    onBlur={handleBlur}
-                    className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${pickupFocused ? "border-primary" : "border-transparent"}`}
-                  />
-                  {showDropdown && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                      <button type="button" onMouseDown={() => selectPickup("Current Location")}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/50">
-                        <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                          <Navigation size={13} className="text-primary" />
+            <div className="space-y-1 flex-1 min-w-0">
+              {/* Pickup */}
+              <div className="relative">
+                <p className="text-xs text-muted-foreground mb-0.5">Pickup</p>
+                <input
+                  ref={pickupRef}
+                  type="text"
+                  value={pickup}
+                  title="Pickup location"
+                  placeholder="Enter pickup address"
+                  onChange={(e) => { setPickup(e.target.value); setPinnedPickupCoords(null); }}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
+                  className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${pickupFocused ? "border-primary" : "border-transparent"}`}
+                />
+                {showDropdown && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                    <button type="button" onMouseDown={() => selectPickup("Current Location")}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/50">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                        <Navigation size={13} className="text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-primary">Use Current Location</p>
+                        <p className="text-xs text-muted-foreground">{currentLocationError ?? "GPS detected location"}</p>
+                      </div>
+                    </button>
+                    {suggestions.map((s) => (
+                      <button key={s.label} type="button" onMouseDown={() => selectPickup(s.label)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0">
+                        <div className="w-7 h-7 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
+                          <MapPin size={13} className="text-muted-foreground" />
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold text-primary">Use Current Location</p>
-                          <p className="text-xs text-muted-foreground">{currentLocationError ?? "GPS detected location"}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
+                          <p className="text-xs text-muted-foreground truncate">{s.sublabel}</p>
                         </div>
                       </button>
-                      {suggestions.map((s) => (
-                        <button key={s.label} type="button" onMouseDown={() => selectPickup(s.label)}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0">
-                          <div className="w-7 h-7 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
-                            <MapPin size={13} className="text-muted-foreground" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
-                            <p className="text-xs text-muted-foreground truncate">{s.sublabel}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-                {/* Dropoff */}
-                <div className="pt-2 relative">
-                  <p className="text-xs text-muted-foreground mb-0.5">Dropoff</p>
-                  <input
-                    ref={destRef}
-                    type="text"
-                    value={destination}
-                    placeholder="Where to?"
-                    onChange={(e) => { setDestination(e.target.value); setPinnedDestinationCoords(null); }}
-                    onFocus={handleDestFocus}
-                    onBlur={handleDestBlur}
-                    className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${destFocused ? "border-primary" : "border-transparent"}`}
-                  />
-                  {showDestDropdown && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                      {destSuggestions.map((s) => (
-                        <button key={s.label} type="button" onMouseDown={() => selectDestination(s.label)}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0">
-                          <div className="w-7 h-7 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
-                            <MapPin size={13} className="text-muted-foreground" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
-                            <p className="text-xs text-muted-foreground truncate">{s.sublabel}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 pt-1 border-t border-border/50">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock size={12} /><span>~{mins} min ride</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <MapPin size={12} /><span>{miles} miles</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Fare card */}
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-4">
-            <div className="flex items-start justify-between">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Fare</p>
-              <div className="flex items-center gap-1 text-xs text-primary">
-                <Shield size={11} /><span className="font-semibold">No Surge</span>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-4xl font-bold text-foreground whitespace-nowrap">${(fare + tollTotal).toFixed(2)}</p>
-              <div className="flex items-center gap-2">
-                {uberX > fare ? (
-                  <>
-                    <span className="text-sm text-muted-foreground line-through">${(uberX + tollTotal).toFixed(2)}</span>
-                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      Save ${(uberX - fare).toFixed(2)} vs Uber X
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs font-medium text-muted-foreground">Minimum fare applies</span>
+              {/* Dropoff */}
+              <div className="pt-2 relative">
+                <p className="text-xs text-muted-foreground mb-0.5">Dropoff</p>
+                <input
+                  ref={destRef}
+                  type="text"
+                  value={destination}
+                  placeholder="Where to?"
+                  onChange={(e) => { setDestination(e.target.value); setPinnedDestinationCoords(null); }}
+                  onFocus={handleDestFocus}
+                  onBlur={handleDestBlur}
+                  className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${destFocused ? "border-primary" : "border-transparent"}`}
+                />
+                {showDestDropdown && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                    {destSuggestions.map((s) => (
+                      <button key={s.label} type="button" onMouseDown={() => selectDestination(s.label)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0">
+                        <div className="w-7 h-7 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
+                          <MapPin size={13} className="text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
+                          <p className="text-xs text-muted-foreground truncate">{s.sublabel}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
+          </div>
 
-            {bridgeTolls.length > 0 && (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5 space-y-1.5">
-                <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-wide">Bridge Tolls Included</p>
-                {bridgeTolls.map((t) => (
-                  <div key={t.name} className="flex items-center justify-between">
-                    <span className="text-xs text-amber-700 dark:text-amber-400">{t.name}</span>
-                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">+${t.toll.toFixed(2)}</span>
-                  </div>
-                ))}
-                <p className="text-[10px] text-amber-600/70">Tolls passed 100% to your driver</p>
+          <div className="flex items-center gap-4 pt-1 border-t border-border/50">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock size={12} /><span>~{mins} min ride</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <MapPin size={12} /><span>{miles} miles</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Fare card */}
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-4">
+          <div className="flex items-start justify-between">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Fare</p>
+            <div className="flex items-center gap-1 text-xs text-primary">
+              <Shield size={11} /><span className="font-semibold">No Surge</span>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-4xl font-bold text-foreground whitespace-nowrap">${(fare + tollTotal).toFixed(2)}</p>
+            <div className="flex items-center gap-2">
+              {uberX > fare ? (
+                <>
+                  <span className="text-sm text-muted-foreground line-through">${(uberX + tollTotal).toFixed(2)}</span>
+                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                    Save ${(uberX - fare).toFixed(2)} vs Uber X
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs font-medium text-muted-foreground">Minimum fare applies</span>
+              )}
+            </div>
+          </div>
+
+          {bridgeTolls.length > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5 space-y-1.5">
+              <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-wide">Bridge Tolls Included</p>
+              {bridgeTolls.map((t) => (
+                <div key={t.name} className="flex items-center justify-between">
+                  <span className="text-xs text-amber-700 dark:text-amber-400">{t.name}</span>
+                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">+${t.toll.toFixed(2)}</span>
+                </div>
+              ))}
+              <p className="text-[10px] text-amber-600/70">Tolls passed 100% to your driver</p>
+            </div>
+          )}
+
+          <div className="space-y-2 border-t border-border/40 pt-3">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+              <Info size={10} /> Where your money goes
+            </p>
+            {tollTotal > 0 && (
+              <div className="flex items-center justify-between pb-1 border-b border-border/30">
+                <span className="text-xs text-muted-foreground">Base ride fare</span>
+                <span className="text-xs text-muted-foreground">${fare.toFixed(2)}</span>
               </div>
             )}
-
-            <div className="space-y-2 border-t border-border/40 pt-3">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                <Info size={10} /> Where your money goes
-              </p>
-              {tollTotal > 0 && (
-                <div className="flex items-center justify-between pb-1 border-b border-border/30">
-                  <span className="text-xs text-muted-foreground">Base ride fare</span>
-                  <span className="text-xs text-muted-foreground">${fare.toFixed(2)}</span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                  <span className="text-sm text-foreground font-medium">Driver earns</span>
+                  <span className="text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">
+                    {tollTotal > 0 ? "88% + tolls" : "88%"}
+                  </span>
                 </div>
-              )}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-                    <span className="text-sm text-foreground font-medium">Driver earns</span>
-                    <span className="text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">
-                      {tollTotal > 0 ? "88% + tolls" : "88%"}
-                    </span>
-                  </div>
-                  <span className="text-sm font-bold text-primary">${(driverTake + tollTotal).toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground flex-shrink-0" />
-                    <span className="text-sm text-muted-foreground">WeGo Cooperative</span>
-                    <span className="text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">12%</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">${coopFee.toFixed(2)}</span>
-                </div>
+                <span className="text-sm font-bold text-primary">${(driverTake + tollTotal).toFixed(2)}</span>
               </div>
-              <div className="w-full h-2 bg-muted/30 rounded-full overflow-hidden mt-1">
-                <div className="h-full w-[88%] bg-primary rounded-full" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-muted-foreground flex-shrink-0" />
+                  <span className="text-sm text-muted-foreground">WeGo Cooperative</span>
+                  <span className="text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">12%</span>
+                </div>
+                <span className="text-sm font-medium text-muted-foreground">${coopFee.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-muted-foreground">The 12% cooperative fee funds driver pensions, insurance & AV fleet.</p>
             </div>
+            <div className="w-full h-2 bg-muted/30 rounded-full overflow-hidden mt-1">
+              <div className="h-full w-[88%] bg-primary rounded-full" />
+            </div>
+            <p className="text-xs text-muted-foreground">The 12% cooperative fee funds driver pensions, insurance & AV fleet.</p>
           </div>
-
-          {/* ETA */}
-          <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-              <Clock size={18} className="text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">Driver ~6 min away</p>
-              <p className="text-xs text-muted-foreground">Nearest WeGo driver is close by</p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={confirming || !destination.trim()}
-            className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30 disabled:opacity-50"
-          >
-            {confirming ? "Requesting…" : destination.trim() ? `Confirm Ride — $${(fare + tollTotal).toFixed(2)}` : "Enter a destination"}
-          </button>
-          <p className="text-xs text-center text-muted-foreground pb-2">No cancellation fee if cancelled within 2 minutes</p>
         </div>
+
+        {/* ETA */}
+        <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+            <Clock size={18} className="text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Driver ~6 min away</p>
+            <p className="text-xs text-muted-foreground">Nearest WeGo driver is close by</p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={confirming || !destination.trim()}
+          className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30 disabled:opacity-50"
+        >
+          {confirming ? "Requesting…" : destination.trim() ? `Confirm Ride — $${(fare + tollTotal).toFixed(2)}` : "Enter a destination"}
+        </button>
+        <p className="text-xs text-center text-muted-foreground pb-2">No cancellation fee if cancelled within 2 minutes</p>
       </div>
     </div>
   );
