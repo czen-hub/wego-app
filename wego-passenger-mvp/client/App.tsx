@@ -92,7 +92,9 @@ const App = () => (
                   path="/request"
                   element={
                     <ProtectedRoute>
-                      <AppLayout><RideRequest /></AppLayout>
+                      <div className="max-w-[430px] mx-auto h-screen bg-background overflow-hidden">
+                        <RideRequest />
+                      </div>
                     </ProtectedRoute>
                   }
                 />
@@ -100,7 +102,9 @@ const App = () => (
                   path="/ride"
                   element={
                     <ProtectedRoute>
-                      <RideInProgress />
+                      <div className="max-w-[430px] mx-auto h-screen bg-background overflow-hidden">
+                        <RideInProgress />
+                      </div>
                     </ProtectedRoute>
                   }
                 />

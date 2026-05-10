@@ -14,6 +14,7 @@ interface ClientMapProps {
   zoom?: number;
   className?: string;
   interactive?: boolean;
+  zoomAdjust?: number;
   onCenterChange?: (coords: [number, number]) => void;
   onClickLocation?: (coords: [number, number]) => void;
 }
@@ -25,6 +26,7 @@ export default function ClientMap({
   center = [37.7749, -122.4194],
   zoom = 13,
   interactive = false,
+  zoomAdjust = 0,
   onCenterChange,
   onClickLocation,
 }: ClientMapProps) {
@@ -34,6 +36,7 @@ export default function ClientMap({
   const fromMarkerRef = useRef<LeafletMarker | null>(null);
   const toMarkerRef = useRef<LeafletMarker | null>(null);
   const routeLineRef = useRef<LeafletPolyline | null>(null);
+  const baseZoomRef = useRef<number>(zoom);
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
@@ -207,8 +210,18 @@ export default function ClientMap({
       if (needsMove) map.setView(center, zoom, { animate: false });
     }
 
+    // Store base zoom so scroll-driven adjustments can reference it
+    baseZoomRef.current = map.getZoom();
+
     setTimeout(() => map.invalidateSize({ animate: false }), 0);
   }, [center, from, mapReady, to, zoom]);
+
+  // Scroll-driven zoom: zoomAdjust 0 = full route view, positive = zoom in
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    map.setZoom(baseZoomRef.current + zoomAdjust, { animate: true });
+  }, [zoomAdjust, mapReady]);
 
   return (
     <div
