@@ -22,6 +22,7 @@ import TripInProgress from "./pages/TripInProgress";
 import CourierJobs from "./pages/CourierJobs";
 import FoodPickups from "./pages/FoodPickups";
 import ScheduledRides from "./pages/ScheduledRides";
+import RideHistory from "./pages/RideHistory";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -159,6 +160,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <AppLayout><ScheduledRides /></AppLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/history"
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout><RideHistory /></AppLayout>
                     </ProtectedRoute>
                   }
                 />

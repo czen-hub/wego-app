@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   updateDoc,
+  setDoc,
   onSnapshot,
   query,
   where,
@@ -94,17 +95,17 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
 // ── Driver presence ────────────────────────────────────────────────────────
 
 export function setDriverOnline(driverId: string, online: boolean) {
-  return updateDoc(doc(db, "drivers", driverId), {
+  return setDoc(doc(db, "drivers", driverId), {
     isOnline: online,
     lastSeen: serverTimestamp(),
-  });
+  }, { merge: true });
 }
 
 export function updateDriverLocation(driverId: string, lat: number, lng: number) {
-  return updateDoc(doc(db, "drivers", driverId), {
+  return setDoc(doc(db, "drivers", driverId), {
     location: new GeoPoint(lat, lng),
     lastSeen: serverTimestamp(),
-  });
+  }, { merge: true });
 }
 
 // ── Ride listeners ─────────────────────────────────────────────────────────
@@ -229,6 +230,23 @@ export function listenToWeeklyEarnings(
       };
     });
     callback(entries);
+  });
+}
+
+export function listenToCompletedRides(
+  driverId: string,
+  callback: (rides: Ride[]) => void
+): () => void {
+  const q = query(
+    collection(db, "rides"),
+    where("driverId", "==", driverId),
+    where("status", "==", "completed"),
+    orderBy("completedAt", "desc"),
+    limit(50)
+  );
+  return onSnapshot(q, (snap) => {
+    const rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
+    callback(rides);
   });
 }
 

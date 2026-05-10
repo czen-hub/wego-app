@@ -1,0 +1,13 @@
+{
+  "projects": {},
+  "targets": {
+    "wego-app-53f6d": {
+      "hosting": {
+        "driver": [
+          "wego-driver-app"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

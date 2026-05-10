@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign } from "lucide-react";
+import ClientMap from "@/components/ClientMap";
+import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 
 type TripPhase = "to-pickup" | "waiting" | "in-progress" | "complete";
 
@@ -14,6 +16,8 @@ interface TripData {
   estimatedTime: number;
   type?: "ride" | "courier" | "food";
   isAdvanced?: boolean;
+  pickupCoords?: [number, number];
+  dropoffCoords?: [number, number];
 }
 
 const DEFAULT_TRIP: TripData = {
@@ -63,6 +67,7 @@ export default function TripInProgress() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [passengerCancelled, setPassengerCancelled] = useState(false);
   const [cancellationFee, setCancellationFee] = useState(0);
+  const { coords: driverCoords } = useCurrentLocation();
 
   const sendMessage = () => {
     const text = chatInput.trim();
@@ -201,16 +206,30 @@ export default function TripInProgress() {
     );
   }
 
+  const mapFrom = phase === "to-pickup"
+    ? (driverCoords ?? trip.pickupCoords)
+    : trip.pickupCoords;
+  const mapTo = phase === "to-pickup"
+    ? trip.pickupCoords
+    : trip.dropoffCoords;
+  const mapCenter: [number, number] = driverCoords ?? trip.pickupCoords ?? [37.3541, -121.9552];
+
   return (
     <div className="min-h-screen bg-background flex flex-col pb-6">
-      {/* Map Placeholder */}
-      <div className="relative flex-1 bg-gradient-to-br from-blue-950 via-slate-900 to-slate-950 min-h-64">
-        {/* Grid pattern */}
-        <div className="absolute inset-0 opacity-15 map-grid" />
+      {/* Live Map */}
+      <div className="relative flex-1 min-h-64">
+        <ClientMap
+          from={mapFrom}
+          to={mapTo}
+          center={mapCenter}
+          className="absolute inset-0"
+          interactive={false}
+        />
 
         {/* Back button */}
         <button
           type="button"
+          aria-label="Back to Command"
           onClick={() => navigate("/")}
           className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center"
         >
@@ -242,14 +261,6 @@ export default function TripInProgress() {
           </div>
         </div>
 
-        {/* Animated location dot */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative">
-            <div className="w-5 h-5 bg-primary rounded-full animate-pulse shadow-lg shadow-primary/50" />
-            <div className="absolute inset-0 w-5 h-5 border-2 border-primary rounded-full animate-ping opacity-60" />
-          </div>
-        </div>
-
         {/* Timer — only during in-progress */}
         {phase === "in-progress" && (
           <div className="absolute bottom-4 right-4 bg-card/80 backdrop-blur-sm border border-border rounded-xl px-3 py-2 flex items-center gap-2">
@@ -268,7 +279,7 @@ export default function TripInProgress() {
           </div>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-background" />
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-background pointer-events-none" />
       </div>
 
       {/* Bottom Panel */}
@@ -341,10 +352,6 @@ export default function TripInProgress() {
               className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
               <CheckCircle size={22} />
               {arrivedLabel}
-            </button>
-            <button type="button" onClick={simulatePassengerCancel}
-              className="w-full py-2.5 rounded-xl border border-border text-xs text-muted-foreground active:scale-95 transition-transform">
-              Simulate: Passenger Cancels
             </button>
           </>
         )}

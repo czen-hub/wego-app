@@ -146,4 +146,19 @@
   .glass-card {
     @apply bg-card/80 backdrop-blur-md border border-border rounded-xl;
   }
+
+  .leaflet-fill {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .leaflet-container img {
+    max-width: none;
+    height: auto;
+  }
+
+  .leaflet-container {
+    isolation: isolate;
+  }
 }

@@ -6,7 +6,9 @@ import {
   SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Wifi,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
+import ClientMap from "@/components/ClientMap";
 import { useDispatch } from "@/hooks/useDispatch";
+import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { type Ride } from "@/lib/db";
 
 const OPPORTUNITIES = [
@@ -107,6 +109,8 @@ export default function Command() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { isOnline, setOnline, incomingRides, accept, activeRide, locationError } = dispatch;
+  const { coords: currentCoords, loading: locationLoading } = useCurrentLocation();
+  const mapCenter: [number, number] = currentCoords ?? [37.3541, -121.9552];
 
   const [declinedRideId, setDeclinedRideId] = useState<string | null>(null);
   const pendingRide = incomingRides.find((r) => r.id !== declinedRideId) ?? null;
@@ -119,7 +123,7 @@ export default function Command() {
   const weeklyGoal = 20;
   const weeklyDone = 12;
   const [earningsVisible, setEarningsVisible] = useState(true);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(true);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartY = useRef(0);
@@ -141,6 +145,12 @@ export default function Command() {
           estimatedTime: activeRide.estimatedMinutes,
           type: activeRide.type,
           rideId: activeRide.id,
+          pickupCoords: activeRide.pickupLocation
+            ? [activeRide.pickupLocation.latitude, activeRide.pickupLocation.longitude] as [number, number]
+            : undefined,
+          dropoffCoords: activeRide.dropoffLocation
+            ? [activeRide.dropoffLocation.latitude, activeRide.dropoffLocation.longitude] as [number, number]
+            : undefined,
         },
       });
     }
@@ -178,6 +188,12 @@ export default function Command() {
         estimatedTime: pendingRide.estimatedMinutes,
         type: pendingRide.type,
         rideId: pendingRide.id,
+        pickupCoords: pendingRide.pickupLocation
+          ? [pendingRide.pickupLocation.latitude, pendingRide.pickupLocation.longitude] as [number, number]
+          : undefined,
+        dropoffCoords: pendingRide.dropoffLocation
+          ? [pendingRide.dropoffLocation.latitude, pendingRide.dropoffLocation.longitude] as [number, number]
+          : undefined,
       },
     });
   };
@@ -209,15 +225,15 @@ export default function Command() {
     <div className="relative h-full overflow-hidden">
 
       {/* ── MAP BACKGROUND ── */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-950 via-slate-900 to-slate-950">
-        <div className="absolute inset-0 opacity-15 map-grid" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative">
-            <div className={`w-5 h-5 rounded-full transition-colors duration-500 ${isOnline ? "bg-primary" : "bg-slate-500"} animate-pulse`} />
-            <div className={`absolute inset-0 w-5 h-5 border-2 rounded-full animate-ping opacity-60 transition-colors duration-500 ${isOnline ? "border-primary" : "border-slate-500"}`} />
+      <div className="absolute inset-0 z-0">
+        {locationLoading ? (
+          <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
           </div>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95" />
+        ) : (
+          <ClientMap center={mapCenter} zoom={14} className="absolute inset-0" interactive onClickLocation={() => setDrawerOpen(false)} />
+        )}
+        <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
       </div>
 
       {/* ── ONLINE / OFFLINE BADGE — top center, always visible, tappable ── */}
@@ -282,15 +298,18 @@ export default function Command() {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Handle area */}
-        <div className="flex-shrink-0 pt-2.5 pb-3 px-4">
+        {/* Handle area — tap anywhere to toggle */}
+        <div
+          className="flex-shrink-0 pt-2.5 pb-3 px-4 cursor-pointer"
+          onClick={() => { if (!hasRequest) setDrawerOpen((o) => !o); }}
+        >
           <div className="w-10 h-1 bg-muted-foreground/25 rounded-full mx-auto mb-3" />
 
           <div className="flex items-center bg-background border border-border rounded-full px-1 py-1 gap-0">
             {/* Left: Preferences icon */}
             <button
               type="button"
-              onClick={() => setPrefsOpen(true)}
+              onClick={(e) => { e.stopPropagation(); setPrefsOpen(true); }}
               className="p-2 rounded-full active:scale-95 transition-transform flex-shrink-0 hover:bg-muted/30"
               aria-label="Open preferences"
             >
@@ -300,14 +319,11 @@ export default function Command() {
             {/* Divider */}
             <div className="w-px h-4 bg-border flex-shrink-0" />
 
-            {/* Right: expand/close toggle */}
-            <button
-              type="button"
-              onClick={() => { if (!hasRequest) setDrawerOpen((o) => !o); }}
-              className="flex-1 flex items-center justify-end px-3 py-1 rounded-full hover:bg-muted/30 active:scale-95 transition-transform"
-            >
-              {drawerOpen ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronUp size={14} className="text-muted-foreground" />}
-            </button>
+            {/* Right: open/close indicator */}
+            <div className="flex-1 flex items-center justify-end gap-1 px-3 py-1 text-muted-foreground pointer-events-none">
+              <span className="text-[11px]">{drawerOpen ? "Close" : "Open"}</span>
+              {drawerOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            </div>
           </div>
         </div>
 
