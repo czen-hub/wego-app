@@ -90,7 +90,7 @@ export default function Home() {
   useEffect(() => {
     const interval = setInterval(() => {
       const t = lastMapMoveRef.current;
-      if (t > 0 && Date.now() - t >= 5000) {
+      if (t > 0 && Date.now() - t >= 7000) {
         lastMapMoveRef.current = 0;
         setMapResetToken((n) => n + 1);
       }

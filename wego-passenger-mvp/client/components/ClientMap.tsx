@@ -123,10 +123,12 @@ export default function ClientMap({
       onCenterChange([next.lat, next.lng]);
     };
 
-    map.on("moveend", emitCenter);
+    // dragend fires only on real user drags, NOT on programmatic flyTo/setView.
+    // Using moveend would cause flyTo to re-trigger the reset timer infinitely.
+    map.on("dragend", emitCenter);
 
     return () => {
-      map.off("moveend", emitCenter);
+      map.off("dragend", emitCenter);
     };
   }, [mapReady, onCenterChange]);
 
@@ -153,7 +155,7 @@ export default function ClientMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map || !forceResetToken) return;
-    map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 0.75 });
+    map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 1.4 });
   }, [forceResetToken, mapReady]);
 
   useEffect(() => {
