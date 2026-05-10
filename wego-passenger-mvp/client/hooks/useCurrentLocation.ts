@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const DEFAULT_COORDS: [number, number] = [37.7749, -122.4194];
+const DEFAULT_COORDS: [number, number] = [37.3541, -121.9552]; // Santa Clara
 
 interface UseCurrentLocationResult {
   coords: [number, number] | null;
@@ -21,7 +21,7 @@ export function useCurrentLocation(): UseCurrentLocationResult {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
+    const watchId = navigator.geolocation.watchPosition(
       (position) => {
         setCoords([position.coords.latitude, position.coords.longitude]);
         setError(null);
@@ -42,9 +42,11 @@ export function useCurrentLocation(): UseCurrentLocationResult {
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 60000,
+        maximumAge: 3000,
       },
     );
+
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   return { coords, error, loading };

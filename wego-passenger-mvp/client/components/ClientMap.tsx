@@ -203,11 +203,11 @@ export default function ClientMap({
     } else {
       const current = map.getCenter();
       const needsMove =
-        Math.abs(current.lat - center[0]) > 0.00001 ||
-        Math.abs(current.lng - center[1]) > 0.00001 ||
+        Math.abs(current.lat - center[0]) > 0.0001 ||
+        Math.abs(current.lng - center[1]) > 0.0001 ||
         map.getZoom() !== zoom;
 
-      if (needsMove) map.setView(center, zoom, { animate: false });
+      if (needsMove) map.setView(center, zoom, { animate: true });
     }
 
     // Store base zoom so scroll-driven adjustments can reference it
