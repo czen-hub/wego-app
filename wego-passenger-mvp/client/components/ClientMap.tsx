@@ -155,7 +155,7 @@ export default function ClientMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map || !forceResetToken) return;
-    map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 1.4 });
+    map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 2.2 });
   }, [forceResetToken, mapReady]);
 
   useEffect(() => {
