@@ -15,7 +15,7 @@ interface ClientMapProps {
   className?: string;
   interactive?: boolean;
   zoomAdjust?: number;
-  autoResetMs?: number;
+  forceResetToken?: number;
   onCenterChange?: (coords: [number, number]) => void;
   onClickLocation?: (coords: [number, number]) => void;
 }
@@ -28,7 +28,7 @@ export default function ClientMap({
   zoom = 13,
   interactive = false,
   zoomAdjust = 0,
-  autoResetMs,
+  forceResetToken,
   onCenterChange,
   onClickLocation,
 }: ClientMapProps) {
@@ -145,35 +145,16 @@ export default function ClientMap({
     };
   }, [mapReady, onClickLocation]);
 
-  // Keep center/zoom refs fresh so the auto-reset timer uses latest values
+  // Keep center/zoom refs fresh for the force-reset flyTo
   useEffect(() => { centerRef.current = center; }, [center]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
-  // Auto-reset: after autoResetMs ms of map idle, fly back to GPS center + zoom
+  // Force-reset: when token increments, fly back to current GPS center + zoom
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map || !autoResetMs) return;
-
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let resetting = false;
-
-    const scheduleReset = () => {
-      if (resetting) return;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        resetting = true;
-        map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 0.8 });
-        map.once("moveend", () => { resetting = false; });
-      }, autoResetMs);
-    };
-
-    map.on("moveend", scheduleReset);
-
-    return () => {
-      map.off("moveend", scheduleReset);
-      if (timer) clearTimeout(timer);
-    };
-  }, [mapReady, autoResetMs]);
+    if (!mapReady || !map || !forceResetToken) return;
+    map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 0.75 });
+  }, [forceResetToken, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;

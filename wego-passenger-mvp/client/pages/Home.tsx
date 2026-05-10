@@ -74,6 +74,8 @@ export default function Home() {
   const { coords: currentCoords, loading: locationLoading } = useCurrentLocation();
   const [recentRides, setRecentRides] = useState<Ride[]>([]);
   const [ridesLoaded, setRidesLoaded] = useState(false);
+  const [mapResetToken, setMapResetToken] = useState(0);
+  const lastMapMoveRef = useRef<number>(0);
 
   useEffect(() => {
     if (!user) return;
@@ -83,6 +85,18 @@ export default function Home() {
     });
     return unsub;
   }, [user]);
+
+  // After 5 seconds of map idle, trigger ClientMap to fly back to GPS location
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const t = lastMapMoveRef.current;
+      if (t > 0 && Date.now() - t >= 5000) {
+        lastMapMoveRef.current = 0;
+        setMapResetToken((n) => n + 1);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
   const [pickupPin, setPickupPin] = useState<[number, number] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [query, setQuery] = useState("");
@@ -186,7 +200,8 @@ const handleTouchStart = (e: React.TouchEvent) => {
             center={selectedPickupCoords}
             zoom={14}
             interactive
-            autoResetMs={5000}
+            forceResetToken={mapResetToken}
+            onCenterChange={() => { lastMapMoveRef.current = Date.now(); }}
             onClickLocation={(coords) => { setPickupPin(coords); setDrawerOpen(false); }}
             className="absolute inset-0"
           />
