@@ -114,23 +114,33 @@ export default function ClientMap({
     }
   }, [interactive, mapReady]);
 
+  const onCenterChangeRef = useRef(onCenterChange);
+  useEffect(() => {
+    onCenterChangeRef.current = onCenterChange;
+  }, [onCenterChange]);
+
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map || !onCenterChange) return;
+    if (!mapReady || !map) return;
 
     const emitCenter = () => {
+      if (!onCenterChangeRef.current) return;
       const next = map.getCenter();
-      onCenterChange([next.lat, next.lng]);
+      const dist = Math.abs(next.lat - centerRef.current[0]) + Math.abs(next.lng - centerRef.current[1]);
+      const zoomDiff = Math.abs(map.getZoom() - zoomRef.current);
+      
+      // Only emit if the map moved away from the target center (i.e. user interaction)
+      if (dist > 0.0001 || zoomDiff > 0) {
+        onCenterChangeRef.current([next.lat, next.lng]);
+      }
     };
 
-    // dragend fires only on real user drags, NOT on programmatic flyTo/setView.
-    // Using moveend would cause flyTo to re-trigger the reset timer infinitely.
-    map.on("dragend", emitCenter);
+    map.on("moveend", emitCenter);
 
     return () => {
-      map.off("dragend", emitCenter);
+      map.off("moveend", emitCenter);
     };
-  }, [mapReady, onCenterChange]);
+  }, [mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;

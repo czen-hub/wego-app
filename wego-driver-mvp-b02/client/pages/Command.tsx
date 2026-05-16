@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plane, Music, Target, Clock, ChevronUp, ChevronDown,
   Package, UtensilsCrossed, MapPin, CheckCircle, X,
@@ -9,7 +9,8 @@ import RideCard from "@/components/RideCard";
 import ClientMap from "@/components/ClientMap";
 import { useDispatch } from "@/hooks/useDispatch";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
-import { type Ride } from "@/lib/db";
+import { useAuth } from "@/context/AuthContext";
+import { type Ride, acceptRide } from "@/lib/db";
 
 const OPPORTUNITIES = [
   { id: "airport", icon: Plane,  iconColor: "text-primary", iconBg: "bg-primary/10", title: "Airport Bonus",  detail: "SFO Terminal 2",      bonus: "+$8/trip",    bonusColor: "text-primary", tag: "Active now", tagColor: "bg-primary/15 text-primary" },
@@ -107,12 +108,30 @@ function FoodCard({ ride, onAccept, onDecline }: { ride: Ride; onAccept: () => v
 
 export default function Command() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user, profile } = useAuth();
   const dispatch = useDispatch();
-  const { isOnline, setOnline, incomingRides, accept, activeRide, locationError } = dispatch;
+  const { isOnline, setOnline, incomingRides, activeRide, locationError } = dispatch;
   const { coords: currentCoords, loading: locationLoading } = useCurrentLocation();
   const mapCenter: [number, number] = currentCoords ?? [37.3541, -121.9552];
 
+  const [mapResetToken, setMapResetToken] = useState(0);
+  const lastMapMoveRef = useRef<number>(0);
+
+  // After 10 seconds of map idle, trigger ClientMap to fly back to GPS location
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const t = lastMapMoveRef.current;
+      if (t > 0 && Date.now() - t >= 10000) {
+        lastMapMoveRef.current = 0;
+        setMapResetToken((n) => n + 1);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
   const [declinedRideId, setDeclinedRideId] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
   const pendingRide = incomingRides.find((r) => r.id !== declinedRideId) ?? null;
   const hasRequest = pendingRide !== null;
 
@@ -127,7 +146,7 @@ export default function Command() {
   const [prefsOpen, setPrefsOpen] = useState(false);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartY = useRef(0);
-  const navigatedRef = useRef(false);
+  const navigatedRef = useRef(!!(location.state as { tripCompleted?: boolean } | null)?.tripCompleted);
 
   // If driver already has an active ride (e.g., app reopened mid-trip), redirect
   useEffect(() => {
@@ -151,6 +170,7 @@ export default function Command() {
           dropoffCoords: activeRide.dropoffLocation
             ? [activeRide.dropoffLocation.latitude, activeRide.dropoffLocation.longitude] as [number, number]
             : undefined,
+          requestedAt: activeRide.requestedAt?.getTime() ?? Date.now(),
         },
       });
     }
@@ -174,9 +194,22 @@ export default function Command() {
   };
 
   const handleAccept = async () => {
-    if (!pendingRide) return;
+    if (!pendingRide || accepting) return;
+    setAccepting(true);
+    try {
+      if (user) {
+        await acceptRide(pendingRide.id, user.uid, {
+          name: profile?.name || "Driver",
+          rating: profile?.rating || 5.0,
+          car: profile?.vehicleMake ? `${profile.vehicleYear} ${profile.vehicleMake} ${profile.vehicleModel}` : "Standard Vehicle",
+          plate: profile?.licensePlate || "WEGO-1"
+        });
+      }
+    } catch (e) {
+      console.error("Accept ride failed:", e);
+    }
+    setAccepting(false);
     navigatedRef.current = true;
-    await accept(pendingRide.id);
     navigate("/trip", {
       state: {
         riderName: pendingRide.passengerName,
@@ -194,6 +227,7 @@ export default function Command() {
         dropoffCoords: pendingRide.dropoffLocation
           ? [pendingRide.dropoffLocation.latitude, pendingRide.dropoffLocation.longitude] as [number, number]
           : undefined,
+        requestedAt: pendingRide.requestedAt?.getTime() ?? Date.now(),
       },
     });
   };
@@ -231,7 +265,15 @@ export default function Command() {
             <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
           </div>
         ) : (
-          <ClientMap center={mapCenter} zoom={14} className="absolute inset-0" interactive onClickLocation={() => setDrawerOpen(false)} />
+          <ClientMap
+            center={mapCenter}
+            zoom={14}
+            className="absolute inset-0"
+            interactive
+            forceResetToken={mapResetToken}
+            onCenterChange={() => { lastMapMoveRef.current = Date.now(); }}
+            onClickLocation={() => setDrawerOpen(false)}
+          />
         )}
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
       </div>

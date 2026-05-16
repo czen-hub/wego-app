@@ -142,6 +142,7 @@ export default function ReserveRide() {
   const [destFocused,   setDestFocused]   = useState(false);
   const destBlurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmed,     setConfirmed]     = useState(false);
+  const [timeOpen,      setTimeOpen]      = useState(false);
   const [policyOpen,    setPolicyOpen]    = useState(false);
   const [bookingRef]    = useState(() => `WG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`);
 
@@ -276,70 +277,80 @@ export default function ReserveRide() {
         </div>
 
         {/* Time selector */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 px-1">
-            <Clock size={13} className="text-muted-foreground" />
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pickup Time</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4 space-y-5">
-            {/* Big live display */}
-            <div className="flex items-baseline justify-center gap-2">
-              <span className="text-5xl font-bold text-foreground tabular-nums tracking-tight">
-                {(selectedHour % 12 || 12).toString().padStart(2, "0")}:{selectedMinute.toString().padStart(2, "0")}
-              </span>
-              <span className="text-xl font-bold text-primary">{selectedHour < 12 ? "AM" : "PM"}</span>
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <button type="button" onClick={() => setTimeOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3.5 text-left">
+            <div className="flex items-center gap-2">
+              <Clock size={14} className="text-primary flex-shrink-0" />
+              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pickup Time</span>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="text-base font-bold text-foreground">{formatTime(selectedHour, selectedMinute)}</span>
+              <ChevronRight size={14} className={`text-muted-foreground transition-transform flex-shrink-0 ${timeOpen ? "rotate-90" : ""}`} />
+            </div>
+          </button>
 
-            {/* Hour slider */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Hour</span>
-                <span className="text-sm font-bold text-primary">{selectedHour % 12 || 12} {selectedHour < 12 ? "AM" : "PM"}</span>
+          {timeOpen && (
+            <div className="px-4 pb-4 space-y-5 border-t border-border/50 pt-4">
+              {/* Big live display */}
+              <div className="flex items-baseline justify-center gap-2">
+                <span className="text-5xl font-bold text-foreground tabular-nums tracking-tight">
+                  {(selectedHour % 12 || 12).toString().padStart(2, "0")}:{selectedMinute.toString().padStart(2, "0")}
+                </span>
+                <span className="text-xl font-bold text-primary">{selectedHour < 12 ? "AM" : "PM"}</span>
               </div>
-              <input
-                type="range"
-                aria-label="Pickup hour"
-                min={0}
-                max={23}
-                step={1}
-                value={selectedHour}
-                onChange={(e) => setSelectedHour(Number(e.target.value))}
-                className="w-full h-2 rounded-full accent-primary cursor-pointer"
-              />
-              <div className="flex justify-between text-[10px] text-muted-foreground select-none">
-                <span>12 AM</span>
-                <span>6 AM</span>
-                <span>12 PM</span>
-                <span>6 PM</span>
-                <span>11 PM</span>
-              </div>
-            </div>
 
-            {/* Minute slider */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Minute</span>
-                <span className="text-sm font-bold text-primary">:{selectedMinute.toString().padStart(2, "0")}</span>
+              {/* Hour slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Hour</span>
+                  <span className="text-sm font-bold text-primary">{selectedHour % 12 || 12} {selectedHour < 12 ? "AM" : "PM"}</span>
+                </div>
+                <input
+                  type="range"
+                  aria-label="Pickup hour"
+                  min={0}
+                  max={23}
+                  step={1}
+                  value={selectedHour}
+                  onChange={(e) => setSelectedHour(Number(e.target.value))}
+                  className="w-full h-2 rounded-full accent-primary cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground select-none">
+                  <span>12 AM</span>
+                  <span>6 AM</span>
+                  <span>12 PM</span>
+                  <span>6 PM</span>
+                  <span>11 PM</span>
+                </div>
               </div>
-              <input
-                type="range"
-                aria-label="Pickup minute"
-                min={0}
-                max={55}
-                step={5}
-                value={selectedMinute}
-                onChange={(e) => setSelectedMinute(Number(e.target.value))}
-                className="w-full h-2 rounded-full accent-primary cursor-pointer"
-              />
-              <div className="flex justify-between text-[10px] text-muted-foreground select-none">
-                <span>:00</span>
-                <span>:15</span>
-                <span>:30</span>
-                <span>:45</span>
-                <span>:55</span>
+
+              {/* Minute slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Minute</span>
+                  <span className="text-sm font-bold text-primary">:{selectedMinute.toString().padStart(2, "0")}</span>
+                </div>
+                <input
+                  type="range"
+                  aria-label="Pickup minute"
+                  min={0}
+                  max={55}
+                  step={5}
+                  value={selectedMinute}
+                  onChange={(e) => setSelectedMinute(Number(e.target.value))}
+                  className="w-full h-2 rounded-full accent-primary cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground select-none">
+                  <span>:00</span>
+                  <span>:15</span>
+                  <span>:30</span>
+                  <span>:45</span>
+                  <span>:55</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Destination */}

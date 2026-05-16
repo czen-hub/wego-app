@@ -35,7 +35,7 @@ const queryClient = new QueryClient({
 });
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => (
-  <div className="max-w-[430px] mx-auto h-screen flex flex-col bg-background">
+  <div className="w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden">
     <div className="flex-1 overflow-y-auto">
       <ErrorBoundary>{children}</ErrorBoundary>
     </div>
@@ -79,7 +79,9 @@ const App = () => (
                   path="/login"
                   element={
                     <PublicOnlyRoute>
-                      <Login />
+                      <div className="w-full max-w-[430px] mx-auto h-screen bg-background overflow-hidden">
+                        <Login />
+                      </div>
                     </PublicOnlyRoute>
                   }
                 />
@@ -135,7 +137,9 @@ const App = () => (
                   path="/trip"
                   element={
                     <ProtectedRoute>
-                      <TripInProgress />
+                      <div className="w-full max-w-[430px] mx-auto h-screen bg-background overflow-hidden">
+                        <TripInProgress />
+                      </div>
                     </ProtectedRoute>
                   }
                 />

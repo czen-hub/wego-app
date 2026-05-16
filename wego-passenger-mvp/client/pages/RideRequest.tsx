@@ -293,7 +293,7 @@ export default function RideRequest() {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    <div className="h-screen flex flex-col overflow-hidden bg-background">
 
       {/* ── MAP — top 40% ── */}
       <div className="relative flex-none" style={{ height: "40%" }}>
@@ -518,6 +518,20 @@ export default function RideRequest() {
           {confirming ? "Requesting…" : destination.trim() ? `Confirm Ride — $${(fare + tollTotal).toFixed(2)}` : "Enter a destination"}
         </button>
         <p className="text-xs text-center text-muted-foreground pb-2">No cancellation fee if cancelled within 2 minutes</p>
+      </div>
+
+      {/* Centered home button */}
+      <div className="flex-shrink-0 flex justify-center items-center py-2 border-t border-border bg-card">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="flex flex-col items-center gap-0.5 px-6 py-1.5 rounded-full bg-primary/10 border border-primary/20 active:scale-95 transition-transform"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span className="text-[10px] font-semibold text-primary">Home</span>
+        </button>
       </div>
     </div>
   );

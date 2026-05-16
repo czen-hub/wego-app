@@ -90,19 +90,27 @@
     @apply border-border;
   }
 
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+  }
+
   html {
     @apply scroll-smooth;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: #000;
     font-family: "Inter", sans-serif;
   }
 
   #root {
-    max-width: 430px;
-    margin: 0 auto;
-    overflow-x: hidden;
+    width: 100%;
+    min-height: 100dvh;
+    background-color: #000;
+    position: relative;
   }
 
   :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {

@@ -93,7 +93,7 @@ const RideCard = ({
           className="py-3 px-4 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-destructive transition-all flex items-center justify-center gap-2"
         >
           <X size={18} />
-          <span className="font-semibold">Decline</span>
+          <span className="font-semibold">Decline Ride</span>
         </button>
         <button
           type="button"
@@ -101,7 +101,7 @@ const RideCard = ({
           className="py-3 px-4 rounded-lg bg-gradient-to-r from-primary to-blue-600 text-foreground font-semibold hover:opacity-90 transition-all flex items-center justify-center gap-2"
         >
           <CheckCircle size={18} />
-          <span>Accept</span>
+          <span>Accept Ride</span>
         </button>
       </div>
     </div>

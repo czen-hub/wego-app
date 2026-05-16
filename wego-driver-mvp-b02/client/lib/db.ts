@@ -17,7 +17,7 @@ import { db } from "./firebase";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type RideStatus = "pending" | "accepted" | "inProgress" | "completed" | "cancelled";
+export type RideStatus = "pending" | "accepted" | "arrived" | "inProgress" | "completed" | "cancelled";
 export type RideType = "ride" | "courier" | "food";
 
 export interface Ride {
@@ -27,6 +27,10 @@ export interface Ride {
   passengerId: string;
   passengerName: string;
   driverId: string | null;
+  driverName: string;
+  driverRating: number;
+  driverCar: string;
+  driverPlate: string;
   pickupAddress: string;
   dropoffAddress: string;
   pickupLocation: GeoPoint | null;
@@ -39,6 +43,15 @@ export interface Ride {
   acceptedAt: Date | null;
   completedAt: Date | null;
   riderRating: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  rideId: string;
+  senderId: string;
+  senderType: "driver" | "passenger";
+  text: string;
+  createdAt: Date | null;
 }
 
 export interface Message {
@@ -77,6 +90,10 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     passengerId: (data.passengerId as string) ?? "",
     passengerName: (data.passengerName as string) ?? "Passenger",
     driverId: (data.driverId as string | null) ?? null,
+    driverName: (data.driverName as string) ?? "",
+    driverRating: (data.driverRating as number) ?? 5.0,
+    driverCar: (data.driverCar as string) ?? "",
+    driverPlate: (data.driverPlate as string) ?? "",
     pickupAddress: (data.pickupAddress as string) ?? "",
     dropoffAddress: (data.dropoffAddress as string) ?? "",
     pickupLocation: (data.pickupLocation as GeoPoint | null) ?? null,
@@ -116,14 +133,17 @@ export function listenForPendingRides(
   const q = query(
     collection(db, "rides"),
     where("status", "==", "pending"),
-    where("driverId", "==", null),
-    orderBy("requestedAt", "desc"),
-    limit(5)
+    where("driverId", "==", null)
   );
   return onSnapshot(q, (snap) => {
-    const rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
+    let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
+    // Filter out rides older than 30 minutes in memory to prevent ghost pings from past test sessions
+    const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
+    rides = rides.filter(r => (r.requestedAt?.getTime() ?? 0) > thirtyMinsAgo);
+    rides.sort((a, b) => (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0));
+    rides = rides.slice(0, 5);
     callback(rides);
-  });
+  }, (err) => console.error("Error in listenForPendingRides:", err));
 }
 
 export function listenToDriverRide(
@@ -146,26 +166,31 @@ export function listenToDriverRide(
   });
 }
 
-export async function acceptRide(rideId: string, driverId: string) {
+export async function acceptRide(rideId: string, driverId: string, driverMetadata: { name: string; rating: number; car: string; plate: string; }) {
   await updateDoc(doc(db, "rides", rideId), {
     driverId,
+    driverName: driverMetadata.name,
+    driverRating: driverMetadata.rating,
+    driverCar: driverMetadata.car,
+    driverPlate: driverMetadata.plate,
     status: "accepted",
     acceptedAt: serverTimestamp(),
   });
 }
 
+export async function updateRideStatus(rideId: string, status: RideStatus) {
+  const updates: Record<string, any> = { status };
+  if (status === "inProgress") updates.startedAt = serverTimestamp();
+  if (status === "completed") updates.completedAt = serverTimestamp();
+  await updateDoc(doc(db, "rides", rideId), updates);
+}
+
 export async function startRide(rideId: string) {
-  await updateDoc(doc(db, "rides", rideId), {
-    status: "inProgress",
-    startedAt: serverTimestamp(),
-  });
+  await updateRideStatus(rideId, "inProgress");
 }
 
 export async function completeRide(rideId: string) {
-  await updateDoc(doc(db, "rides", rideId), {
-    status: "completed",
-    completedAt: serverTimestamp(),
-  });
+  await updateRideStatus(rideId, "completed");
 }
 
 // ── Messages ───────────────────────────────────────────────────────────────
@@ -176,12 +201,10 @@ export function listenToMessages(
 ): () => void {
   const q = query(
     collection(db, "messages"),
-    where("userId", "==", driverId),
-    orderBy("createdAt", "desc"),
-    limit(20)
+    where("userId", "==", driverId)
   );
   return onSnapshot(q, (snap) => {
-    const msgs = snap.docs.map((d) => {
+    let msgs = snap.docs.map((d) => {
       const data = d.data() as Record<string, unknown>;
       return {
         id: d.id,
@@ -192,12 +215,49 @@ export function listenToMessages(
         createdAt: toDate(data.createdAt),
       };
     });
+    msgs.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+    msgs = msgs.slice(0, 20);
     callback(msgs);
-  });
+  }, (err) => console.error("Error in listenToMessages:", err));
 }
 
 export function markMessageRead(messageId: string) {
   return updateDoc(doc(db, "messages", messageId), { read: true });
+}
+
+// ── Ride Chat ──────────────────────────────────────────────────────────────
+
+export async function sendRideMessage(rideId: string, senderId: string, senderType: "driver" | "passenger", text: string) {
+  await addDoc(collection(db, "ride_chats"), {
+    rideId,
+    senderId,
+    senderType,
+    text,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export function listenToRideMessages(rideId: string, callback: (messages: ChatMessage[]) => void) {
+  const q = query(
+    collection(db, "ride_chats"),
+    where("rideId", "==", rideId)
+  );
+  return onSnapshot(q, (snap) => {
+    let msgs = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        rideId: data.rideId,
+        senderId: data.senderId,
+        senderType: data.senderType,
+        text: data.text,
+        createdAt: toDate(data.createdAt)
+      } as ChatMessage;
+    });
+    // Sort ascending so latest is at the bottom
+    msgs.sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+    callback(msgs);
+  }, (err) => console.error("Error in listenToRideMessages:", err));
 }
 
 // ── Earnings ───────────────────────────────────────────────────────────────
@@ -211,12 +271,10 @@ export function listenToWeeklyEarnings(
 
   const q = query(
     collection(db, "earnings"),
-    where("driverId", "==", driverId),
-    where("completedAt", ">=", Timestamp.fromDate(weekAgo)),
-    orderBy("completedAt", "desc")
+    where("driverId", "==", driverId)
   );
   return onSnapshot(q, (snap) => {
-    const entries = snap.docs.map((d) => {
+    let entries = snap.docs.map((d) => {
       const data = d.data() as Record<string, unknown>;
       return {
         id: d.id,
@@ -229,7 +287,14 @@ export function listenToWeeklyEarnings(
         completedAt: toDate(data.completedAt),
       };
     });
+    
+    entries = entries.filter(e => e.completedAt && e.completedAt >= weekAgo);
+    entries.sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
+    
     callback(entries);
+  }, (err) => {
+    console.error("Error in listenToWeeklyEarnings:", err);
+    callback([]); // Call with empty so UI finishes loading state
   });
 }
 
@@ -240,14 +305,14 @@ export function listenToCompletedRides(
   const q = query(
     collection(db, "rides"),
     where("driverId", "==", driverId),
-    where("status", "==", "completed"),
-    orderBy("completedAt", "desc"),
-    limit(50)
+    where("status", "==", "completed")
   );
   return onSnapshot(q, (snap) => {
-    const rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
+    let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
+    rides.sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
+    rides = rides.slice(0, 50);
     callback(rides);
-  });
+  }, (err) => console.error("Error in listenToCompletedRides:", err));
 }
 
 // ── Ride request (passenger side, used for testing) ────────────────────────

@@ -10,6 +10,8 @@ import {
   type Ride,
 } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
+import { onSnapshot, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface UseDispatchReturn {
   isOnline: boolean;
@@ -53,6 +55,18 @@ export function useDispatch(): UseDispatchReturn {
 
     setLocationError("Unable to access GPS. Check browser permissions.");
   };
+
+  // Sync isOnline from Firestore on mount so state survives navigation
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(doc(db, "drivers", user.uid), (snap) => {
+      if (snap.exists()) {
+        const online = snap.data().isOnline ?? false;
+        setIsOnline(online);
+      }
+    });
+    return unsub;
+  }, [user]);
 
   // Listen for pending rides when online
   useEffect(() => {

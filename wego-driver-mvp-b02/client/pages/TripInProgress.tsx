@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign } from "lucide-react";
+import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign, CornerUpRight, Star } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
+import { updateRideStatus, sendRideMessage, listenToRideMessages, type ChatMessage } from "@/lib/db";
+import { useAuth } from "@/context/AuthContext";
+import { onSnapshot, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type TripPhase = "to-pickup" | "waiting" | "in-progress" | "complete";
 
@@ -18,6 +22,7 @@ interface TripData {
   isAdvanced?: boolean;
   pickupCoords?: [number, number];
   dropoffCoords?: [number, number];
+  rideId?: string;
 }
 
 const DEFAULT_TRIP: TripData = {
@@ -60,25 +65,86 @@ export default function TripInProgress() {
   }, [phase]);
 
   const [stopEarnings, setStopEarnings] = useState(0);
+  const [passengerRating, setPassengerRating] = useState(0);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [navModalOpen, setNavModalOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState<{ from: "me" | "rider"; text: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const { user } = useAuth();
   const [calling, setCalling] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [passengerCancelled, setPassengerCancelled] = useState(false);
   const [cancellationFee, setCancellationFee] = useState(0);
   const { coords: driverCoords } = useCurrentLocation();
 
-  const sendMessage = () => {
+  const phaseRef = useRef(phase);
+  const waitElapsedRef = useRef(waitElapsed);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    waitElapsedRef.current = waitElapsed;
+  }, [waitElapsed]);
+
+  // Listen for chat messages
+  useEffect(() => {
+    if (!trip.rideId) return;
+    const unsub = listenToRideMessages(trip.rideId, (msgs) => {
+      setChatMessages(msgs);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    });
+    return unsub;
+  }, [trip.rideId]);
+
+  // Listen for passenger cancellation
+  useEffect(() => {
+    if (!trip.rideId) {
+      console.error("No trip.rideId available to listen for cancellation.");
+      return;
+    }
+    console.log("Starting listener for ride cancellation on rideId:", trip.rideId);
+    
+    const unsub = onSnapshot(doc(db, "rides", trip.rideId), (docSnap) => {
+      if (!docSnap.exists()) {
+        console.log("Ride document does not exist anymore.");
+        return;
+      }
+      
+      const status = docSnap.data().status;
+      console.log("Ride status update received in driver app:", status);
+      
+      if (status === "cancelled") {
+        console.log("Passenger cancelled! Triggering cancellation flow.");
+        // Calculate fee exactly like we do in simulatePassengerCancel
+        let fee = 0;
+        const currentPhase = phaseRef.current;
+        const currentWaitElapsed = waitElapsedRef.current;
+        
+        if (currentPhase === "to-pickup") {
+          fee = enRouteFeeRef.current;
+        } else if (currentPhase === "waiting") {
+          const freeWait = trip.isAdvanced ? 480 : 300;
+          const meterSecs = trip.isAdvanced ? Math.max(0, currentWaitElapsed - freeWait) : 0;
+          const meterFee = parseFloat(Math.min((meterSecs / 60) * 0.50, 1.00).toFixed(2));
+          fee = enRouteFeeRef.current + 3.00 + meterFee;
+        }
+        setCancellationFee(fee);
+        setPassengerCancelled(true);
+      }
+    }, (err) => {
+      console.error("Error in driver ride cancellation listener:", err);
+    });
+    return unsub;
+  }, [trip.rideId, trip.isAdvanced]);
+
+  const sendMessage = async () => {
     const text = chatInput.trim();
-    if (!text) return;
-    setChatMessages((prev) => [...prev, { from: "me", text }]);
+    if (!text || !user || !trip.rideId) return;
     setChatInput("");
-    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    setTimeout(() => {
-      setChatMessages((prev) => [...prev, { from: "rider", text: "Thanks, see you soon!" }]);
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    }, 2000);
+    await sendRideMessage(trip.rideId, user.uid, "driver", text);
   };
 
   const handleCall = () => {
@@ -127,7 +193,7 @@ export default function TripInProgress() {
 
   if (phase === "complete") {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-12">
+      <div className="min-h-screen bg-background flex flex-col items-center px-4 py-12 overflow-y-auto">
         <div className="max-w-md w-full space-y-6">
           {/* Success Icon */}
           <div className="flex flex-col items-center gap-3 pt-8">
@@ -194,9 +260,56 @@ export default function TripInProgress() {
             </div>
           </div>
 
+          {/* Passenger Rating */}
+          {!isDelivery && (
+            <div className="glass-card p-4 border border-border rounded-xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+                  {trip.riderName.charAt(0)}
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">{trip.riderName}</p>
+                  <p className="text-xs text-muted-foreground">Rate this passenger</p>
+                </div>
+              </div>
+              {!ratingSubmitted ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground text-center">How was your passenger?</p>
+                  <div className="flex justify-center gap-3">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                        onClick={() => setPassengerRating(star)}
+                        className={`transition-transform active:scale-90 ${star <= passengerRating ? "text-yellow-400" : "text-muted-foreground/30"}`}
+                      >
+                        <Star size={32} fill={star <= passengerRating ? "currentColor" : "none"} />
+                      </button>
+                    ))}
+                  </div>
+                  {passengerRating > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setRatingSubmitted(true)}
+                      className="w-full py-2.5 rounded-xl bg-primary/10 border border-primary/25 text-primary font-semibold text-sm active:scale-95 transition-transform"
+                    >
+                      Submit Rating
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 py-2 text-primary">
+                  <CheckCircle size={16} />
+                  <span className="text-sm font-semibold">Thanks for rating!</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/", { state: { tripCompleted: true } })}
             className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"
           >
             Back to Command
@@ -214,6 +327,17 @@ export default function TripInProgress() {
     : trip.dropoffCoords;
   const mapCenter: [number, number] = driverCoords ?? trip.pickupCoords ?? [37.3541, -121.9552];
 
+  const handleNavigate = (app: "google" | "waze") => {
+    const lat = mapTo?.[0] || mapCenter[0];
+    const lng = mapTo?.[1] || mapCenter[1];
+    if (app === "google") {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, "_blank");
+    } else if (app === "waze") {
+      window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, "_blank");
+    }
+    setNavModalOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col pb-6">
       {/* Live Map */}
@@ -226,12 +350,18 @@ export default function TripInProgress() {
           interactive={false}
         />
 
-        {/* Back button */}
+        {/* Back / Cancel button */}
         <button
           type="button"
-          aria-label="Back to Command"
-          onClick={() => navigate("/")}
-          className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center"
+          aria-label="Cancel Trip"
+          onClick={async () => {
+            const confirm = window.confirm("Are you sure you want to cancel this trip?");
+            if (confirm) {
+              if (trip.rideId) await updateRideStatus(trip.rideId, "cancelled");
+              navigate("/");
+            }
+          }}
+          className="absolute top-4 left-4 z-[1000] w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center shadow-lg active:scale-95"
         >
           <ChevronLeft size={20} className="text-foreground" />
         </button>
@@ -242,14 +372,14 @@ export default function TripInProgress() {
           onClick={() => alert("Emergency services notified. Stay calm.")}
           aria-label="Emergency SOS"
           title="Emergency SOS"
-          className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-2 bg-destructive/90 backdrop-blur-sm border border-destructive rounded-full shadow-lg active:scale-95 transition-transform"
+          className="absolute top-4 right-4 z-[1000] flex items-center gap-1.5 px-3 py-2 bg-destructive/90 backdrop-blur-sm border border-destructive rounded-full shadow-lg active:scale-95 transition-transform"
         >
           <AlertTriangle size={14} className="text-white" />
           <span className="text-xs font-bold text-white">SOS</span>
         </button>
 
         {/* Phase badge */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
           <div
             className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border backdrop-blur-sm ${
               phase === "to-pickup"
@@ -263,7 +393,7 @@ export default function TripInProgress() {
 
         {/* Timer — only during in-progress */}
         {phase === "in-progress" && (
-          <div className="absolute bottom-4 right-4 bg-card/80 backdrop-blur-sm border border-border rounded-xl px-3 py-2 flex items-center gap-2">
+          <div className="absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm border border-border rounded-xl px-3 py-2 flex items-center gap-2">
             <Clock size={14} className="text-primary" />
             <span className="text-sm font-bold text-primary font-mono">{formatTime(elapsed)}</span>
           </div>
@@ -271,13 +401,23 @@ export default function TripInProgress() {
 
         {/* Wait timer — during waiting phase */}
         {phase === "waiting" && (
-          <div className={`absolute bottom-4 right-4 bg-card/80 backdrop-blur-sm border rounded-xl px-3 py-2 flex items-center gap-2 ${canLeave ? "border-destructive/40" : "border-border"}`}>
+          <div className={`absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm border rounded-xl px-3 py-2 flex items-center gap-2 ${canLeave ? "border-destructive/40" : "border-border"}`}>
             <Clock size={14} className={canLeave ? "text-destructive" : "text-primary"} />
             <span className={`text-sm font-bold font-mono ${canLeave ? "text-destructive" : "text-primary"}`}>
               {canLeave ? `+${formatTime(waitElapsed - freeWaitSecs)}` : formatTime(waitRemaining)}
             </span>
           </div>
         )}
+
+        {/* External Navigation Button */}
+        <button
+          type="button"
+          onClick={() => setNavModalOpen(true)}
+          aria-label="Open Navigation"
+          className="absolute bottom-4 right-4 z-[1000] w-14 h-14 bg-muted text-foreground rounded-2xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+        >
+          <CornerUpRight size={24} strokeWidth={2.5} className="text-foreground" />
+        </button>
 
         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-background pointer-events-none" />
       </div>
@@ -348,7 +488,10 @@ export default function TripInProgress() {
         {/* Action Button */}
         {phase === "to-pickup" && (
           <>
-            <button type="button" onClick={() => setPhase("waiting")}
+            <button type="button" onClick={() => {
+                setPhase("waiting");
+                if (trip.rideId) updateRideStatus(trip.rideId, "arrived");
+              }}
               className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
               <CheckCircle size={22} />
               {arrivedLabel}
@@ -381,7 +524,10 @@ export default function TripInProgress() {
               </p>
             </div>
 
-            <button type="button" onClick={() => setPhase("in-progress")}
+            <button type="button" onClick={() => {
+                setPhase("in-progress");
+                if (trip.rideId) updateRideStatus(trip.rideId, "inProgress");
+              }}
               className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
               <CheckCircle size={22} />
               Passenger is Here
@@ -411,7 +557,10 @@ export default function TripInProgress() {
               className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-muted-foreground active:scale-95 transition-transform">
               Log Passenger Stop (+$2.00)
             </button>
-            <button type="button" onClick={() => setPhase("complete")}
+            <button type="button" onClick={() => {
+                setPhase("complete");
+                if (trip.rideId) updateRideStatus(trip.rideId, "completed");
+              }}
               className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
               <CheckCircle size={22} />
               {completeLabel}
@@ -430,12 +579,13 @@ export default function TripInProgress() {
 
       {/* Passenger cancelled overlay */}
       {passengerCancelled && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
           <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-4">
             <div className="flex flex-col items-center gap-2 text-center">
-              <div className="w-16 h-16 rounded-full bg-destructive/10 border border-destructive/30 flex items-center justify-center">
+              <button type="button" onClick={() => navigate("/", { state: { tripCompleted: true } })} aria-label="Dismiss"
+                className="w-16 h-16 rounded-full bg-destructive/10 border border-destructive/30 flex items-center justify-center active:scale-95 transition-transform hover:bg-destructive/20">
                 <X size={28} className="text-destructive" />
-              </div>
+              </button>
               <h2 className="text-lg font-bold text-foreground">Passenger Cancelled</h2>
               <p className="text-sm text-muted-foreground">{trip.riderName.split(" ")[0]} cancelled the ride.</p>
             </div>
@@ -464,7 +614,7 @@ export default function TripInProgress() {
               )}
             </div>
 
-            <button type="button" onClick={() => navigate("/")}
+            <button type="button" onClick={() => navigate("/", { state: { tripCompleted: true } })}
               className="w-full py-3 rounded-xl bg-primary text-white font-bold text-sm active:scale-95 transition-transform">
               Back to Command
             </button>
@@ -493,7 +643,10 @@ export default function TripInProgress() {
               {chatMessages.length === 0 && (
                 <div className="space-y-2">
                   {["I'm on my way!", "I've arrived, look for my car", "Running 3 min late — apologies"].map((t) => (
-                    <button key={t} type="button" onClick={() => setChatMessages((p) => [...p, { from: "me", text: t }])}
+                    <button key={t} type="button" onClick={async () => {
+                        if (!user || !trip.rideId) return;
+                        await sendRideMessage(trip.rideId, user.uid, "driver", t);
+                      }}
                       className="block w-full text-left px-3 py-2 rounded-xl bg-muted/30 border border-border text-sm text-foreground hover:border-primary/40 transition-colors">
                       {t}
                     </button>
@@ -501,9 +654,9 @@ export default function TripInProgress() {
                   <p className="text-xs text-muted-foreground text-center pt-1">Quick messages or type your own</p>
                 </div>
               )}
-              {chatMessages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${msg.from === "me" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className={`flex ${msg.senderType === "driver" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${msg.senderType === "driver" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
                     {msg.text}
                   </div>
                 </div>
@@ -518,6 +671,52 @@ export default function TripInProgress() {
               <button type="button" aria-label="Send message" onClick={sendMessage} disabled={!chatInput.trim()}
                 className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform">
                 <Send size={16} className="text-white" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* External Navigation Modal */}
+      {navModalOpen && (
+        <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setNavModalOpen(false)} />
+          <div className="relative w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-4 animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:fade-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-foreground">Open in Maps</h2>
+              <button type="button" aria-label="Close" onClick={() => setNavModalOpen(false)} className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleNavigate("google")}
+                className="w-full flex items-center justify-between p-4 rounded-xl border border-border bg-background hover:bg-muted/50 active:scale-95 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
+                    {/* Google Maps simple G logo simulation */}
+                    <span className="text-blue-500 font-bold text-xl">G</span>
+                  </div>
+                  <span className="font-semibold text-foreground">Google Maps</span>
+                </div>
+                <CornerUpRight size={18} className="text-muted-foreground" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleNavigate("waze")}
+                className="w-full flex items-center justify-between p-4 rounded-xl border border-border bg-background hover:bg-muted/50 active:scale-95 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center shadow-sm">
+                    {/* Waze simple W logo simulation */}
+                    <span className="text-sky-500 font-bold text-xl">W</span>
+                  </div>
+                  <span className="font-semibold text-foreground">Waze</span>
+                </div>
+                <CornerUpRight size={18} className="text-muted-foreground" />
               </button>
             </div>
           </div>

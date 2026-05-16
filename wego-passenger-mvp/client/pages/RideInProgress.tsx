@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X } from "lucide-react";
+import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert } from "lucide-react";
+import ClientMap from "@/components/ClientMap";
+
+import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, type Ride, type ChatMessage } from "@/lib/db";
+import { useAuth } from "@/context/AuthContext";
+import { onSnapshot, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type RidePhase = "matching" | "en_route" | "arrived" | "in_progress" | "complete";
 
@@ -10,6 +16,8 @@ interface RideData {
   driverTake: number;
   coopFee: number;
   isAdvanced?: boolean;
+  fromCoords?: [number, number];
+  toCoords?: [number, number];
 }
 
 const DEFAULT_RIDE: RideData = {
@@ -35,7 +43,9 @@ const PHASE_SEQUENCE: RidePhase[] = ["matching", "en_route", "arrived", "in_prog
 export default function RideInProgress() {
   const navigate = useNavigate();
   const location = useLocation();
-  const ride: RideData = (location.state as RideData) ?? DEFAULT_RIDE;
+  const { user } = useAuth();
+  const rideMock: RideData = (location.state as RideData) ?? DEFAULT_RIDE;
+  const [liveRide, setLiveRide] = useState<Ride | null>(null);
 
   const [phase, setPhase] = useState<RidePhase>("matching");
   const [elapsed, setElapsed] = useState(0);
@@ -49,7 +59,7 @@ export default function RideInProgress() {
 
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState<{ from: "me" | "driver"; text: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [calling, setCalling] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [waitElapsed, setWaitElapsed] = useState(0);
@@ -59,6 +69,7 @@ export default function RideInProgress() {
   const [stopModalOpen, setStopModalOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelled, setCancelled] = useState(false);
+  const [sosModalOpen, setSosModalOpen] = useState(false);
   const STOP_FEE = 2.00;
 
   // Track how long driver has been en route (proxy for distance)
@@ -72,12 +83,43 @@ export default function RideInProgress() {
     }
   }, [phase]);
 
-  // Wait timer during arrived phase — stops when cancelled
+  // Listen to live ride from Firebase
   useEffect(() => {
-    if (phase !== "arrived" || cancelled) return;
-    const id = setInterval(() => setWaitElapsed((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [phase, cancelled]);
+    if (!user) return;
+    const unsub = listenToPassengerRide(user.uid, (ride) => {
+      setLiveRide(ride);
+      if (!ride) return;
+      if (ride.status === "pending") setPhase("matching");
+      if (ride.status === "accepted") setPhase("en_route");
+      if (ride.status === "arrived") setPhase("arrived");
+      if (ride.status === "inProgress") setPhase("in_progress");
+      if (ride.status === "completed") setPhase("complete");
+      if (ride.status === "cancelled") setCancelled(true);
+    });
+    return unsub;
+  }, [user]);
+
+  // Listen to live chat
+  useEffect(() => {
+    if (!liveRide?.id) return;
+    const unsub = listenToRideMessages(liveRide.id, (msgs) => {
+      setChatMessages(msgs);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    });
+    return unsub;
+  }, [liveRide?.id]);
+
+  // Direct ride status listener — catches completed/cancelled even after listenToPassengerRide drops the ride
+  useEffect(() => {
+    if (!liveRide?.id) return;
+    const unsub = onSnapshot(doc(db, "rides", liveRide.id), (snap) => {
+      if (!snap.exists()) return;
+      const status = snap.data().status;
+      if (status === "completed") setPhase("complete");
+      if (status === "cancelled") setCancelled(true);
+    });
+    return unsub;
+  }, [liveRide?.id]);
 
   const getCancellationFee = (): { fee: number; label: string; driverNote: string } => {
     const bookingAge = (Date.now() - bookingTimeRef.current) / 1000;
@@ -93,8 +135,8 @@ export default function RideInProgress() {
     }
     if (phase === "arrived") {
       const distanceFee = enRouteFeeRef.current;
-      const freeWait = ride.isAdvanced ? 480 : 300;
-      const waitMeterSecs = ride.isAdvanced ? Math.max(0, waitElapsed - freeWait) : 0;
+      const freeWait = rideMock.isAdvanced ? 480 : 300;
+      const waitMeterSecs = rideMock.isAdvanced ? Math.max(0, waitElapsed - freeWait) : 0;
       const waitMeterCharge = parseFloat(Math.min((waitMeterSecs / 60) * 0.50, 1.00).toFixed(2));
       const fee = distanceFee + 3.00 + waitMeterCharge;
       const label = distanceFee >= 14
@@ -108,22 +150,19 @@ export default function RideInProgress() {
     return { fee: 0, label: "Free", driverNote: "" };
   };
 
-  const confirmCancel = () => {
+  const confirmCancel = async () => {
+    if (liveRide?.id) {
+      await cancelRide(liveRide.id);
+    }
     setCancelled(true);
     setCancelOpen(false);
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const text = chatInput.trim();
-    if (!text) return;
-    setChatMessages((prev) => [...prev, { from: "me", text }]);
+    if (!text || !user || !liveRide?.id) return;
     setChatInput("");
-    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    // Auto-reply after 2s
-    setTimeout(() => {
-      setChatMessages((prev) => [...prev, { from: "driver", text: "Got it, on my way!" }]);
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    }, 2000);
+    await sendRideMessage(liveRide.id, user.uid, "passenger", text);
   };
 
   const handleCall = () => {
@@ -131,20 +170,17 @@ export default function RideInProgress() {
     setTimeout(() => setCalling(false), 3000);
   };
 
-  // Auto-advance from matching → en_route after 3 seconds (demo)
-  useEffect(() => {
-    if (phase === "matching") {
-      matchingTimerRef.current = setTimeout(() => setPhase("en_route"), 3000);
-    }
-    return () => {
-      if (matchingTimerRef.current) clearTimeout(matchingTimerRef.current);
-    };
-  }, [phase]);
-
   // Timer during in_progress phase
   useEffect(() => {
     if (phase !== "in_progress") return;
     const id = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  // Wait timer during arrived phase
+  useEffect(() => {
+    if (phase !== "arrived") return;
+    const id = setInterval(() => setWaitElapsed((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [phase]);
 
@@ -154,19 +190,11 @@ export default function RideInProgress() {
     return `${m}:${s}`;
   };
 
-  const freeWaitSecs = ride.isAdvanced ? 480 : 300;
+  const freeWaitSecs = rideMock.isAdvanced ? 480 : 300;
   const waitRemaining = Math.max(0, freeWaitSecs - waitElapsed);
-  const waitMeterSecs = ride.isAdvanced ? Math.max(0, waitElapsed - freeWaitSecs) : 0;
+  const waitMeterSecs = rideMock.isAdvanced ? Math.max(0, waitElapsed - freeWaitSecs) : 0;
   const waitMeterCharge = parseFloat(Math.min((waitMeterSecs / 60) * 0.50, 1.00).toFixed(2));
   const driverCanLeave = waitElapsed >= freeWaitSecs;
-
-  const advance = () => {
-    const idx = PHASE_SEQUENCE.indexOf(phase);
-    if (idx < PHASE_SEQUENCE.length - 1) {
-      if (phase === "arrived") setWaitFeeCharged(waitMeterCharge);
-      setPhase(PHASE_SEQUENCE[idx + 1]);
-    }
-  };
 
   const confirmStop = () => {
     setStopCount((c) => c + 1);
@@ -174,20 +202,21 @@ export default function RideInProgress() {
     setStopModalOpen(false);
   };
 
-  const totalFare = parseFloat((ride.fare + waitFeeCharged + stopFeeTotal).toFixed(2));
-  const totalDriverTake = parseFloat((ride.driverTake + waitFeeCharged + stopFeeTotal).toFixed(2));
-  const totalCoopFee = ride.coopFee;
+  const totalFare = parseFloat(((liveRide?.fare ?? rideMock.fare) + waitFeeCharged + stopFeeTotal).toFixed(2));
+  const totalDriverTake = parseFloat(((liveRide?.driverTake ?? rideMock.driverTake) + waitFeeCharged + stopFeeTotal).toFixed(2));
+  const totalCoopFee = liveRide?.coopFee ?? rideMock.coopFee;
 
   // ── CANCELLED VIEW ─────────────────────────────────────────────────────────
   if (cancelled) {
     const { fee } = getCancellationFee();
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-10">
-        <div className="max-w-md w-full space-y-5">
+      <div className="h-screen bg-background flex flex-col items-center justify-center px-4 py-10 overflow-y-auto">
+        <div className="w-full space-y-5">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-20 h-20 rounded-full bg-destructive/10 border border-destructive/30 flex items-center justify-center">
+            <button type="button" onClick={() => navigate("/")} aria-label="Dismiss" title="Dismiss"
+              className="w-20 h-20 rounded-full bg-destructive/10 border border-destructive/30 flex items-center justify-center active:scale-95 transition-transform hover:bg-destructive/20">
               <X size={36} className="text-destructive" />
-            </div>
+            </button>
             <h1 className="text-2xl font-bold text-foreground">Ride Cancelled</h1>
             <p className="text-sm text-muted-foreground text-center">Your ride has been cancelled.</p>
           </div>
@@ -224,8 +253,8 @@ export default function RideInProgress() {
   // ── COMPLETE VIEW ──────────────────────────────────────────────────────────
   if (phase === "complete") {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-10">
-        <div className="max-w-md w-full space-y-5">
+      <div className="h-screen bg-background flex flex-col items-center px-4 py-10 overflow-y-auto">
+        <div className="w-full space-y-5">
 
           {/* Success */}
           <div className="flex flex-col items-center gap-3">
@@ -242,7 +271,7 @@ export default function RideInProgress() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Base fare</span>
-                <span className="text-foreground font-semibold">${ride.fare.toFixed(2)}</span>
+                <span className="text-foreground font-semibold">${(liveRide?.fare ?? rideMock.fare).toFixed(2)}</span>
               </div>
               {waitFeeCharged > 0 && (
                 <div className="flex justify-between text-sm">
@@ -282,15 +311,43 @@ export default function RideInProgress() {
             </div>
           </div>
 
+          {/* Trip Summary */}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Trip Summary</p>
+            <div className="space-y-2">
+              <div className="flex gap-3 items-start">
+                <MapPin size={16} className="text-primary flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Pickup</p>
+                  <p className="text-sm text-foreground">{liveRide?.pickupAddress || "Your Location"}</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Dropoff</p>
+                  <p className="text-sm text-foreground">{liveRide?.dropoffAddress || rideMock.destination}</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <Clock size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Duration</p>
+                  <p className="text-sm text-foreground">{formatTime(elapsed)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Rate your driver */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                {MOCK_DRIVER.initial}
+                {liveRide?.driverName?.charAt(0) || "M"}
               </div>
               <div>
-                <p className="font-semibold text-foreground">{MOCK_DRIVER.name}</p>
-                <p className="text-xs text-muted-foreground">{MOCK_DRIVER.car} · {MOCK_DRIVER.plate}</p>
+                <p className="font-semibold text-foreground">{liveRide?.driverName || "Marcus T."}</p>
+                <p className="text-xs text-muted-foreground">{liveRide?.driverCar || "2021 Toyota Camry"} · {liveRide?.driverPlate || "ABC-1234"}</p>
               </div>
             </div>
 
@@ -342,12 +399,15 @@ export default function RideInProgress() {
 
   // ── ACTIVE TRIP VIEW ───────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-6">
+    <div className="max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden">
       {/* Map */}
-      <div className="relative flex-1 bg-gradient-to-br from-blue-950 via-slate-900 to-slate-950 min-h-64">
-        <div className="absolute inset-0 opacity-15">
-          <div className="absolute inset-0 ride-map-grid" />
-        </div>
+      <div className="relative z-0 ride-map-panel">
+        <ClientMap
+          from={rideMock.fromCoords}
+          to={phase === "in_progress" ? rideMock.toCoords : rideMock.fromCoords}
+          center={rideMock.fromCoords ?? [37.7749, -122.4194]}
+          className="absolute inset-0"
+        />
 
         <button
           type="button"
@@ -368,29 +428,28 @@ export default function RideInProgress() {
           </div>
         </div>
 
-        {/* Animated dot */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative">
-            {phase === "matching" ? (
-              <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-            ) : (
-              <>
-                <div className="w-5 h-5 bg-primary rounded-full animate-pulse shadow-lg shadow-primary/50" />
-                <div className="absolute inset-0 w-5 h-5 border-2 border-primary rounded-full animate-ping opacity-60" />
-              </>
-            )}
-          </div>
-        </div>
+        {/* SOS Button */}
+        {(phase === "en_route" || phase === "arrived" || phase === "in_progress") && (
+          <button
+            type="button"
+            aria-label="Emergency SOS"
+            onClick={() => setSosModalOpen(true)}
+            className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 h-10 rounded-full bg-destructive text-destructive-foreground shadow-lg active:scale-95 transition-transform"
+          >
+            <TriangleAlert size={16} />
+            <span className="font-bold text-sm tracking-wide">SOS</span>
+          </button>
+        )}
 
         {/* Timer */}
         {phase === "in_progress" && (
-          <div className="absolute bottom-4 right-4 bg-card/80 backdrop-blur-sm border border-border rounded-xl px-3 py-2 flex items-center gap-2">
+          <div className="absolute bottom-4 right-4 z-10 bg-card/80 backdrop-blur-sm border border-border rounded-xl px-3 py-2 flex items-center gap-2">
             <Clock size={14} className="text-primary" />
             <span className="text-sm font-bold text-primary font-mono">{formatTime(elapsed)}</span>
           </div>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-background" />
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-background pointer-events-none z-10" />
       </div>
 
       {/* Bottom Panel */}
@@ -410,13 +469,13 @@ export default function RideInProgress() {
           <div className="glass-card p-4 border border-border rounded-xl space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                {MOCK_DRIVER.initial}
+                {liveRide?.driverName?.charAt(0) || "M"}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground">{MOCK_DRIVER.name}</p>
+                <p className="font-semibold text-foreground">{liveRide?.driverName || "Marcus T."}</p>
                 <div className="flex items-center gap-1">
                   <Star size={11} fill="currentColor" className="text-yellow-400" />
-                  <span className="text-xs text-muted-foreground">{MOCK_DRIVER.rating} · {MOCK_DRIVER.trips} trips · {MOCK_DRIVER.yearsWithWeGo} yrs WeGo</span>
+                  <span className="text-xs text-muted-foreground">{liveRide?.driverRating || 4.95} · {MOCK_DRIVER.trips} trips · {MOCK_DRIVER.yearsWithWeGo} yrs WeGo</span>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -433,8 +492,8 @@ export default function RideInProgress() {
 
             <div className="bg-background border border-border/50 rounded-lg px-3 py-2 flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">{MOCK_DRIVER.color} {MOCK_DRIVER.car}</p>
-                <p className="text-sm font-bold text-foreground tracking-widest">{MOCK_DRIVER.plate}</p>
+                <p className="text-xs text-muted-foreground">{liveRide?.driverCar || "Silver 2021 Toyota Camry"}</p>
+                <p className="text-sm font-bold text-foreground tracking-widest">{liveRide?.driverPlate || "ABC-1234"}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Member since</p>
@@ -456,7 +515,7 @@ export default function RideInProgress() {
                   {phase === "in_progress" ? "Dropoff" : phase === "arrived" ? "Pickup — Driver Here" : "Heading to you"}
                 </p>
                 <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
-                  {phase === "in_progress" ? ride.destination : "Your Current Location"}
+                  {phase === "in_progress" ? rideMock.destination : "Your Current Location"}
                 </p>
                 {phase === "en_route" && (
                   <p className="text-xs text-muted-foreground mt-1">6 min away</p>
@@ -466,43 +525,33 @@ export default function RideInProgress() {
           </div>
         )}
 
-        {/* Action button */}
+        {/* Passive status — driver controls all phase transitions */}
         {phase === "en_route" && (
-          <button type="button" onClick={advance}
-            className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30">
-            Driver Has Arrived
-          </button>
+          <div className="glass-card p-4 border border-border rounded-xl flex items-center gap-3">
+            <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse flex-shrink-0" />
+            <p className="text-sm text-foreground font-medium">Your driver is on the way</p>
+          </div>
         )}
         {phase === "arrived" && (
-          <>
-            <div className={`glass-card p-4 border rounded-xl space-y-2 ${driverCanLeave ? "border-destructive/30" : "border-border"}`}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {driverCanLeave ? (waitMeterSecs > 0 ? "On Meter" : "Driver May Leave Soon") : "Driver Wait Time"}
-                </p>
-                <span className={`text-xl font-bold font-mono ${driverCanLeave ? "text-destructive" : "text-primary"}`}>
-                  {driverCanLeave ? `+${formatTime(waitElapsed - freeWaitSecs)}` : formatTime(waitRemaining)}
-                </span>
-              </div>
-              {ride.isAdvanced && waitMeterSecs > 0 && (
-                <div className="flex items-center justify-between bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-                  <span className="text-xs text-muted-foreground">Meter charge</span>
-                  <span className="text-sm font-bold text-destructive">+${waitMeterCharge.toFixed(2)}</span>
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {driverCanLeave
-                  ? "Your driver may leave soon — please hurry!"
-                  : ride.isAdvanced
-                  ? `Advance booking: 8 min free · ${formatTime(waitRemaining)} remaining`
-                  : `Standard: ${formatTime(waitRemaining)} remaining`}
+          <div className={`glass-card p-4 border rounded-xl space-y-2 ${driverCanLeave ? "border-destructive/30" : "border-primary/30"}`}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground">
+                {driverCanLeave ? "Please hurry — driver may leave" : "Head to your vehicle"}
               </p>
+              <span className={`text-lg font-bold font-mono ${driverCanLeave ? "text-destructive" : "text-primary"}`}>
+                {driverCanLeave ? `+${formatTime(waitElapsed - freeWaitSecs)}` : formatTime(waitRemaining)}
+              </span>
             </div>
-            <button type="button" onClick={advance}
-              className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30">
-              Start Ride
-            </button>
-          </>
+            {rideMock.isAdvanced && waitMeterSecs > 0 && (
+              <div className="flex items-center justify-between bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                <span className="text-xs text-muted-foreground">Wait meter</span>
+                <span className="text-sm font-bold text-destructive">+${waitMeterCharge.toFixed(2)}</span>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {rideMock.isAdvanced ? `Advance booking: 8 min free · ${formatTime(waitRemaining)} remaining` : `${formatTime(waitRemaining)} free wait remaining`}
+            </p>
+          </div>
         )}
         {phase === "in_progress" && (
           <>
@@ -516,15 +565,11 @@ export default function RideInProgress() {
               className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-foreground active:scale-95 transition-transform">
               Request a Stop (+${STOP_FEE.toFixed(2)})
             </button>
-            <button type="button" onClick={advance}
-              className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30">
-              End Ride
-            </button>
           </>
         )}
 
-        {/* Cancel button — not shown during in_progress */}
-        {phase !== "in_progress" && (
+        {/* Cancel — only available before ride starts */}
+        {(phase === "matching" || phase === "en_route" || phase === "arrived") && (
           <button type="button" onClick={() => setCancelOpen(true)}
             className="w-full py-3 rounded-2xl border border-destructive/30 text-destructive text-sm font-semibold active:scale-95 transition-transform hover:bg-destructive/5">
             Cancel Ride
@@ -618,7 +663,7 @@ export default function RideInProgress() {
       {calling && (
         <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border border-border rounded-2xl px-5 py-3 shadow-xl">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          <p className="text-sm font-semibold text-foreground">Calling {MOCK_DRIVER.name}…</p>
+          <p className="text-sm font-semibold text-foreground">Calling {liveRide?.driverName || "Marcus"}…</p>
         </div>
       )}
 
@@ -631,9 +676,9 @@ export default function RideInProgress() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">
-                  {MOCK_DRIVER.initial}
+                  {liveRide?.driverName?.charAt(0) || "M"}
                 </div>
-                <p className="text-sm font-semibold text-foreground">{MOCK_DRIVER.name}</p>
+                <p className="text-sm font-semibold text-foreground">{liveRide?.driverName || "Marcus T."}</p>
               </div>
               <button type="button" aria-label="Close chat" onClick={() => setChatOpen(false)}
                 className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
@@ -646,7 +691,10 @@ export default function RideInProgress() {
               {chatMessages.length === 0 && (
                 <div className="space-y-2">
                   {["I'm on my way!", "Running 2 min late", "I'm outside"].map((t) => (
-                    <button key={t} type="button" onClick={() => { setChatMessages((p) => [...p, { from: "me", text: t }]); }}
+                    <button key={t} type="button" onClick={async () => {
+                        if (!user || !liveRide?.id) return;
+                        await sendRideMessage(liveRide.id, user.uid, "passenger", t);
+                      }}
                       className="block w-full text-left px-3 py-2 rounded-xl bg-muted/30 border border-border text-sm text-foreground hover:border-primary/40 transition-colors">
                       {t}
                     </button>
@@ -654,9 +702,9 @@ export default function RideInProgress() {
                   <p className="text-xs text-muted-foreground text-center pt-1">Quick messages or type your own below</p>
                 </div>
               )}
-              {chatMessages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${msg.from === "me" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className={`flex ${msg.senderType === "passenger" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${msg.senderType === "passenger" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
                     {msg.text}
                   </div>
                 </div>
@@ -682,6 +730,56 @@ export default function RideInProgress() {
           </div>
         </div>
       )}
+      {/* SOS Modal */}
+      {sosModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-destructive/10 border border-destructive/30 flex items-center justify-center">
+                  <TriangleAlert size={24} className="text-destructive" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-foreground">Emergency SOS</h2>
+                  <p className="text-sm text-muted-foreground">Do you need immediate help?</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setSosModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
+                <X size={15} className="text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <button type="button" onClick={() => {
+                alert("Calling 911...");
+                setSosModalOpen(false);
+              }}
+                className="w-full flex items-center justify-between p-4 rounded-xl bg-destructive text-destructive-foreground hover:opacity-90 active:scale-95 transition-all">
+                <div className="flex items-center gap-3">
+                  <Phone size={18} />
+                  <span className="font-bold">Call 911</span>
+                </div>
+              </button>
+              
+              <button type="button" onClick={() => {
+                alert("Location and driver details shared with emergency contacts.");
+                setSosModalOpen(false);
+              }}
+                className="w-full flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-95 transition-all text-foreground">
+                <div className="flex items-center gap-3">
+                  <MessageSquare size={18} className="text-primary" />
+                  <span className="font-semibold">Text Emergency Contacts</span>
+                </div>
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              Using SOS will instantly record audio, share your live location, and notify WeGo support.
+            </p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

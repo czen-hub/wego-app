@@ -14,6 +14,8 @@ interface ClientMapProps {
   zoom?: number;
   className?: string;
   interactive?: boolean;
+  zoomAdjust?: number;
+  forceResetToken?: number;
   onCenterChange?: (coords: [number, number]) => void;
   onClickLocation?: (coords: [number, number]) => void;
 }
@@ -25,6 +27,8 @@ export default function ClientMap({
   center = [37.7749, -122.4194],
   zoom = 13,
   interactive = false,
+  zoomAdjust = 0,
+  forceResetToken,
   onCenterChange,
   onClickLocation,
 }: ClientMapProps) {
@@ -34,7 +38,11 @@ export default function ClientMap({
   const fromMarkerRef = useRef<LeafletMarker | null>(null);
   const toMarkerRef = useRef<LeafletMarker | null>(null);
   const routeLineRef = useRef<LeafletPolyline | null>(null);
+  const baseZoomRef = useRef<number>(zoom);
   const [mapReady, setMapReady] = useState(false);
+  // Refs so auto-reset timer always has the latest center/zoom without stale closure
+  const centerRef = useRef<[number, number]>(center);
+  const zoomRef = useRef<number>(zoom);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,13 +114,25 @@ export default function ClientMap({
     }
   }, [interactive, mapReady]);
 
+  const onCenterChangeRef = useRef(onCenterChange);
+  useEffect(() => {
+    onCenterChangeRef.current = onCenterChange;
+  }, [onCenterChange]);
+
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map || !onCenterChange) return;
+    if (!mapReady || !map) return;
 
     const emitCenter = () => {
+      if (!onCenterChangeRef.current) return;
       const next = map.getCenter();
-      onCenterChange([next.lat, next.lng]);
+      const dist = Math.abs(next.lat - centerRef.current[0]) + Math.abs(next.lng - centerRef.current[1]);
+      const zoomDiff = Math.abs(map.getZoom() - zoomRef.current);
+      
+      // Only emit if the map moved away from the target center (i.e. user interaction)
+      if (dist > 0.0001 || zoomDiff > 0) {
+        onCenterChangeRef.current([next.lat, next.lng]);
+      }
     };
 
     map.on("moveend", emitCenter);
@@ -120,7 +140,7 @@ export default function ClientMap({
     return () => {
       map.off("moveend", emitCenter);
     };
-  }, [mapReady, onCenterChange]);
+  }, [mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -136,6 +156,17 @@ export default function ClientMap({
       map.off("click", handleClick);
     };
   }, [mapReady, onClickLocation]);
+
+  // Keep center/zoom refs fresh for the force-reset flyTo
+  useEffect(() => { centerRef.current = center; }, [center]);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+
+  // Force-reset: when token increments, fly back to current GPS center + zoom
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map || !forceResetToken) return;
+    map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 3.0 });
+  }, [forceResetToken, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -200,15 +231,25 @@ export default function ClientMap({
     } else {
       const current = map.getCenter();
       const needsMove =
-        Math.abs(current.lat - center[0]) > 0.00001 ||
-        Math.abs(current.lng - center[1]) > 0.00001 ||
+        Math.abs(current.lat - center[0]) > 0.0001 ||
+        Math.abs(current.lng - center[1]) > 0.0001 ||
         map.getZoom() !== zoom;
 
-      if (needsMove) map.setView(center, zoom, { animate: false });
+      if (needsMove) map.setView(center, zoom, { animate: true });
     }
+
+    // Store base zoom so scroll-driven adjustments can reference it
+    baseZoomRef.current = map.getZoom();
 
     setTimeout(() => map.invalidateSize({ animate: false }), 0);
   }, [center, from, mapReady, to, zoom]);
+
+  // Scroll-driven zoom: zoomAdjust 0 = full route view, positive = zoom in
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    map.setZoom(baseZoomRef.current + zoomAdjust, { animate: true });
+  }, [zoomAdjust, mapReady]);
 
   return (
     <div
