@@ -28,8 +28,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # We need to tell GitHub where the index.html is located
-          path: './wego-app/wego-website'
+          path: './wego-website'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
