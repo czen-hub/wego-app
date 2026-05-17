@@ -314,7 +314,7 @@ header .cta {
   display: inline-flex;
   align-items: center;
   background: var(--primary);
-  color: var(--white);
+  color: #fff;
   padding: 12px 26px;
   border-radius: 100px;
   font-size: 14px;
@@ -578,7 +578,7 @@ section { padding: 104px 0; }
 
 .cta-banner a.cta {
   display: inline-flex; align-items: center;
-  background: var(--primary); color: var(--white);
+  background: var(--primary); color: #fff;
   padding: 16px 44px; border-radius: 100px;
   font-size: 16px; font-weight: 700; transition: all var(--transition);
 }
@@ -587,7 +587,7 @@ section { padding: 104px 0; }
 /* ── SHARED BUTTONS ──────────────────────────────────────────── */
 .btn-white {
   display: inline-block;
-  background: var(--white); color: var(--primary);
+  background: #fff; color: var(--primary);
   padding: 16px 40px; border-radius: 100px;
   font-size: 17px; font-weight: 700; text-decoration: none; margin: 8px;
   transition: transform 0.2s, box-shadow 0.2s;
@@ -596,18 +596,18 @@ section { padding: 104px 0; }
 
 .btn-ghost {
   display: inline-block;
-  background: transparent; color: var(--white);
+  background: transparent; color: #fff;
   padding: 16px 40px; border-radius: 100px;
   font-size: 17px; font-weight: 700; text-decoration: none; margin: 8px;
   border: 2px solid rgba(255,255,255,0.5);
   transition: border-color 0.2s;
 }
-.btn-ghost:hover { border-color: var(--white); }
+.btn-ghost:hover { border-color: #fff; }
 
 /* Blue-section CTA pair — features / services final section */
 .btn-wego-primary {
   display: inline-flex; align-items: center;
-  background: var(--white); color: var(--primary);
+  background: #fff; color: var(--primary);
   padding: 16px 44px; border-radius: 100px;
   font-size: 17px; font-weight: 700; text-decoration: none; margin: 6px;
   transition: all 0.2s;
@@ -616,13 +616,13 @@ section { padding: 104px 0; }
 
 .btn-wego-ghost {
   display: inline-flex; align-items: center;
-  background: transparent; color: var(--white);
+  background: transparent; color: #fff;
   padding: 16px 44px; border-radius: 100px;
   font-size: 17px; font-weight: 700; text-decoration: none; margin: 6px;
   border: 2px solid rgba(255,255,255,0.4);
   transition: border-color 0.2s;
 }
-.btn-wego-ghost:hover { border-color: var(--white); }
+.btn-wego-ghost:hover { border-color: #fff; }
 
 /* Shared final-cta block (blue sections) */
 .final-cta { text-align: center; padding: 100px 0; }
@@ -691,7 +691,7 @@ section { padding: 104px 0; }
 .form-group textarea { min-height: 120px; resize: vertical; }
 
 .form-submit {
-  width: 100%; padding: 16px; background: var(--primary); color: var(--white);
+  width: 100%; padding: 16px; background: var(--primary); color: #fff;
   border: none; border-radius: 100px; font-size: 16px; font-weight: 700;
   cursor: pointer; transition: all var(--transition); margin-top: 8px;
 }
@@ -1065,7 +1065,7 @@ section { padding: 104px 0; }
 .form-hint { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
 
 .submit-btn {
-  width: 100%; padding: 16px; background: var(--primary); color: var(--white);
+  width: 100%; padding: 16px; background: var(--primary); color: #fff;
   border: none; border-radius: 100px; font-size: 16px; font-weight: 700;
   cursor: pointer; font-family: inherit; transition: all 0.2s; margin-top: 4px;
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -1135,7 +1135,7 @@ section { padding: 104px 0; }
 .faq-quick-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 32px; }
 .faq-quick-link { display: inline-flex; align-items: center; background: var(--off-white); border: 1px solid var(--border); color: var(--text); border-radius: 100px; padding: 9px 20px; font-size: 14px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
 .faq-quick-link:hover { background: var(--primary-muted); border-color: var(--primary); color: var(--primary); }
-.faq-read-btn { display: inline-flex; align-items: center; background: var(--primary); color: var(--white); padding: 14px 36px; border-radius: 100px; font-size: 15px; font-weight: 700; text-decoration: none; transition: all 0.2s; }
+.faq-read-btn { display: inline-flex; align-items: center; background: var(--primary); color: #fff; padding: 14px 36px; border-radius: 100px; font-size: 15px; font-weight: 700; text-decoration: none; transition: all 0.2s; }
 .faq-read-btn:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(26,86,219,0.3); }
 
 
