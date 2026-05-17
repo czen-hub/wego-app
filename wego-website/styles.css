@@ -258,7 +258,7 @@ a { color: inherit; text-decoration: none; }
 ul { list-style: none; }
 button { font-family: inherit; }
 
-/* ── EDGE VIGNETTE — subtle left/right shading to focus center ── */
+/* ── EDGE VIGNETTE — left/right shading to focus center ────────── */
 body::before {
   content: '';
   position: fixed;
@@ -267,30 +267,30 @@ body::before {
   z-index: 9999;
   background: linear-gradient(
     to right,
-    rgba(10, 20, 60, 0.04) 0%,
-    transparent 10%,
-    transparent 90%,
-    rgba(10, 20, 60, 0.04) 100%
+    rgba(180, 185, 200, 0.22) 0%,
+    transparent 14%,
+    transparent 86%,
+    rgba(180, 185, 200, 0.22) 100%
   );
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body::before {
     background: linear-gradient(
       to right,
-      rgba(0, 0, 0, 0.08) 0%,
-      transparent 10%,
-      transparent 90%,
-      rgba(0, 0, 0, 0.08) 100%
+      rgba(0, 0, 0, 0.30) 0%,
+      transparent 14%,
+      transparent 86%,
+      rgba(0, 0, 0, 0.30) 100%
     );
   }
 }
 [data-theme="dark"] body::before {
   background: linear-gradient(
     to right,
-    rgba(0, 0, 0, 0.08) 0%,
-    transparent 10%,
-    transparent 90%,
-    rgba(0, 0, 0, 0.08) 100%
+    rgba(0, 0, 0, 0.30) 0%,
+    transparent 14%,
+    transparent 86%,
+    rgba(0, 0, 0, 0.30) 100%
   );
 }
 
