@@ -626,7 +626,7 @@ section { padding: 104px 0; }
 
 /* Shared final-cta block (blue sections) */
 .final-cta { text-align: center; padding: 100px 0; }
-.final-cta h2 { font-size: clamp(26px, 4vw, 42px); font-weight: 900; margin-bottom: 18px; line-height: 1.2; }
+.final-cta h2 { font-size: clamp(26px, 4vw, 42px); font-family: var(--font-display); font-weight: 900; margin-bottom: 18px; line-height: 1.2; letter-spacing: -0.5px; }
 .final-cta p  { font-size: 18px; max-width: 580px; margin: 0 auto 40px; line-height: 1.8; }
 
 /* ── MEGA FOOTER ─────────────────────────────────────────────── */
