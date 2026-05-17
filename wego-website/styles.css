@@ -64,7 +64,8 @@
   --radius-md:    14px;
   --radius-lg:    20px;
   --radius-xl:    28px;
-  --font-sans:    'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-sans:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
   --transition:   0.2s ease;
 }
 
@@ -282,7 +283,7 @@ header .container {
   gap: 32px;
 }
 
-.logo { font-size: 28px; font-weight: 900; color: var(--fg-heading); letter-spacing: -0.8px; flex-shrink: 0; }
+.logo { font-size: 28px; font-weight: 900; font-family: var(--font-display); color: var(--fg-heading); letter-spacing: -0.8px; flex-shrink: 0; }
 .logo a { color: var(--fg-heading); text-decoration: none; transition: color var(--transition); }
 .logo a:hover { color: var(--primary); }
 
@@ -419,6 +420,7 @@ header .cta:hover {
 
 .hero-content h2 {
   font-size: clamp(42px, 6vw, 76px);
+  font-family: var(--font-display);
   font-weight: 900;
   line-height: 1.08;
   letter-spacing: -2px;
@@ -493,6 +495,7 @@ section { padding: 104px 0; }
 /* Primary heading — used on about, contact, index */
 .section-title {
   font-size: clamp(30px, 4vw, 48px);
+  font-family: var(--font-display);
   font-weight: 900;
   color: var(--fg-heading);
   line-height: 1.15;
@@ -505,6 +508,7 @@ section { padding: 104px 0; }
 /* Primary heading — used on features, services */
 .page-section-title {
   font-size: clamp(30px, 4vw, 48px);
+  font-family: var(--font-display);
   font-weight: 900;
   letter-spacing: -1px;
   line-height: 1.15;
