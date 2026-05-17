@@ -283,11 +283,13 @@ header .container {
 }
 
 .logo { font-size: 28px; font-weight: 900; color: var(--fg-heading); letter-spacing: -0.8px; flex-shrink: 0; }
-.logo a { color: var(--fg-heading); transition: color var(--transition); }
+.logo a { color: var(--fg-heading); text-decoration: none; transition: color var(--transition); }
 .logo a:hover { color: var(--primary); }
 
 /* ── NAV ─────────────────────────────────────────────────────── */
-nav ul { display: flex; align-items: center; gap: 2px; }
+nav ul { display: flex; align-items: center; gap: 2px; list-style: none; }
+nav ul li { list-style: none; }
+nav ul li::marker { display: none; font-size: 0; }
 
 nav ul li a {
   display: block;
@@ -295,6 +297,7 @@ nav ul li a {
   font-size: 15px;
   font-weight: 500;
   color: var(--text-soft);
+  text-decoration: none;
   border-radius: var(--radius-sm);
   transition: color var(--transition), background var(--transition);
 }
