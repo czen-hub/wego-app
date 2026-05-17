@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign, CornerUpRight, Star } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
-import { updateRideStatus, sendRideMessage, listenToRideMessages, type ChatMessage } from "@/lib/db";
+import { updateRideStatus, sendRideMessage, listenToRideMessages, submitRating, logStop, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -73,6 +73,8 @@ export default function TripInProgress() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const { user } = useAuth();
   const [calling, setCalling] = useState(false);
+  const [sosModalOpen, setSosModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [passengerCancelled, setPassengerCancelled] = useState(false);
   const [cancellationFee, setCancellationFee] = useState(0);
@@ -101,28 +103,14 @@ export default function TripInProgress() {
 
   // Listen for passenger cancellation
   useEffect(() => {
-    if (!trip.rideId) {
-      console.error("No trip.rideId available to listen for cancellation.");
-      return;
-    }
-    console.log("Starting listener for ride cancellation on rideId:", trip.rideId);
-    
+    if (!trip.rideId) return;
     const unsub = onSnapshot(doc(db, "rides", trip.rideId), (docSnap) => {
-      if (!docSnap.exists()) {
-        console.log("Ride document does not exist anymore.");
-        return;
-      }
-      
+      if (!docSnap.exists()) return;
       const status = docSnap.data().status;
-      console.log("Ride status update received in driver app:", status);
-      
       if (status === "cancelled") {
-        console.log("Passenger cancelled! Triggering cancellation flow.");
-        // Calculate fee exactly like we do in simulatePassengerCancel
         let fee = 0;
         const currentPhase = phaseRef.current;
         const currentWaitElapsed = waitElapsedRef.current;
-        
         if (currentPhase === "to-pickup") {
           fee = enRouteFeeRef.current;
         } else if (currentPhase === "waiting") {
@@ -134,8 +122,6 @@ export default function TripInProgress() {
         setCancellationFee(fee);
         setPassengerCancelled(true);
       }
-    }, (err) => {
-      console.error("Error in driver ride cancellation listener:", err);
     });
     return unsub;
   }, [trip.rideId, trip.isAdvanced]);
@@ -291,7 +277,10 @@ export default function TripInProgress() {
                   {passengerRating > 0 && (
                     <button
                       type="button"
-                      onClick={() => setRatingSubmitted(true)}
+                      onClick={async () => {
+                        setRatingSubmitted(true);
+                        if (trip.rideId) await submitRating(trip.rideId, passengerRating, "driver");
+                      }}
                       className="w-full py-2.5 rounded-xl bg-primary/10 border border-primary/25 text-primary font-semibold text-sm active:scale-95 transition-transform"
                     >
                       Submit Rating
@@ -354,13 +343,7 @@ export default function TripInProgress() {
         <button
           type="button"
           aria-label="Cancel Trip"
-          onClick={async () => {
-            const confirm = window.confirm("Are you sure you want to cancel this trip?");
-            if (confirm) {
-              if (trip.rideId) await updateRideStatus(trip.rideId, "cancelled");
-              navigate("/");
-            }
-          }}
+          onClick={() => setCancelModalOpen(true)}
           className="absolute top-4 left-4 z-[1000] w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center shadow-lg active:scale-95"
         >
           <ChevronLeft size={20} className="text-foreground" />
@@ -369,7 +352,7 @@ export default function TripInProgress() {
         {/* SOS button */}
         <button
           type="button"
-          onClick={() => alert("Emergency services notified. Stay calm.")}
+          onClick={() => setSosModalOpen(true)}
           aria-label="Emergency SOS"
           title="Emergency SOS"
           className="absolute top-4 right-4 z-[1000] flex items-center gap-1.5 px-3 py-2 bg-destructive/90 backdrop-blur-sm border border-destructive rounded-full shadow-lg active:scale-95 transition-transform"
@@ -433,20 +416,18 @@ export default function TripInProgress() {
             <p className="font-semibold text-foreground truncate">{trip.riderName}</p>
             <p className="text-xs text-muted-foreground">Your Take: <span className="text-primary font-semibold">${trip.driverTake.toFixed(2)}</span></p>
           </div>
-          {!isDelivery && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button type="button" aria-label="Message rider" title="Message rider"
-                onClick={() => setChatOpen(true)}
-                className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center active:scale-95 transition-transform">
-                <MessageCircle size={16} className="text-muted-foreground" />
-              </button>
-              <button type="button" aria-label="Call rider" title="Call rider"
-                onClick={handleCall}
-                className={`w-9 h-9 rounded-full border flex items-center justify-center active:scale-95 transition-transform ${calling ? "bg-primary border-primary" : "bg-primary/10 border-primary/20"}`}>
-                <Phone size={16} className={calling ? "text-white" : "text-primary"} />
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button type="button" aria-label="Message rider" title="Message rider"
+              onClick={() => setChatOpen(true)}
+              className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center active:scale-95 transition-transform">
+              <MessageCircle size={16} className="text-muted-foreground" />
+            </button>
+            <button type="button" aria-label="Call rider" title="Call rider"
+              onClick={handleCall}
+              className={`w-9 h-9 rounded-full border flex items-center justify-center active:scale-95 transition-transform ${calling ? "bg-primary border-primary" : "bg-primary/10 border-primary/20"}`}>
+              <Phone size={16} className={calling ? "text-white" : "text-primary"} />
+            </button>
+          </div>
         </div>
 
         {/* Destination Card */}
@@ -487,21 +468,18 @@ export default function TripInProgress() {
 
         {/* Action Button */}
         {phase === "to-pickup" && (
-          <>
-            <button type="button" onClick={() => {
-                setPhase("waiting");
-                if (trip.rideId) updateRideStatus(trip.rideId, "arrived");
-              }}
-              className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
-              <CheckCircle size={22} />
-              {arrivedLabel}
-            </button>
-          </>
+          <button type="button" onClick={() => {
+              setPhase("waiting");
+              if (trip.rideId) updateRideStatus(trip.rideId, "arrived").catch(() => {});
+            }}
+            className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
+            <CheckCircle size={22} />
+            {arrivedLabel}
+          </button>
         )}
 
         {phase === "waiting" && (
           <>
-            {/* Wait timer card */}
             <div className={`glass-card p-4 border rounded-xl space-y-2 ${canLeave ? "border-destructive/30" : "border-border"}`}>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -526,7 +504,7 @@ export default function TripInProgress() {
 
             <button type="button" onClick={() => {
                 setPhase("in-progress");
-                if (trip.rideId) updateRideStatus(trip.rideId, "inProgress");
+                if (trip.rideId) updateRideStatus(trip.rideId, "inProgress").catch(() => {});
               }}
               className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
               <CheckCircle size={22} />
@@ -553,13 +531,16 @@ export default function TripInProgress() {
                 <span className="text-sm font-bold text-primary">+${stopEarnings.toFixed(2)}</span>
               </div>
             )}
-            <button type="button" onClick={() => setStopEarnings((e) => parseFloat((e + 2.00).toFixed(2)))}
+            <button type="button" onClick={() => {
+                setStopEarnings((e) => parseFloat((e + 2.00).toFixed(2)));
+                if (trip.rideId) logStop(trip.rideId, 2.00).catch(() => {});
+              }}
               className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-muted-foreground active:scale-95 transition-transform">
               Log Passenger Stop (+$2.00)
             </button>
             <button type="button" onClick={() => {
                 setPhase("complete");
-                if (trip.rideId) updateRideStatus(trip.rideId, "completed");
+                if (trip.rideId) updateRideStatus(trip.rideId, "completed").catch(() => {});
               }}
               className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
               <CheckCircle size={22} />
@@ -671,6 +652,66 @@ export default function TripInProgress() {
               <button type="button" aria-label="Send message" onClick={sendMessage} disabled={!chatInput.trim()}
                 className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform">
                 <Send size={16} className="text-white" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SOS Modal */}
+      {sosModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/70">
+          <div className="w-full max-w-sm bg-card border border-destructive/40 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={20} className="text-destructive" />
+                <h2 className="text-lg font-bold text-foreground">Emergency</h2>
+              </div>
+              <button type="button" aria-label="Close" onClick={() => setSosModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <a href="tel:911"
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-destructive text-white font-bold text-sm active:scale-95 transition-transform">
+                <Phone size={16} />
+                Call 911
+              </a>
+              <div className="flex flex-col items-center gap-1">
+                <button type="button"
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-border text-foreground font-semibold text-sm opacity-50 cursor-not-allowed">
+                  Text Emergency Contacts
+                </button>
+                <span className="text-xs text-muted-foreground">Coming soon</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Trip Modal */}
+      {cancelModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-4">
+            <h2 className="text-lg font-bold text-foreground">Cancel Trip?</h2>
+            <p className="text-sm text-muted-foreground">
+              {phase === "to-pickup"
+                ? "Cancelling before pickup may affect your acceptance rate."
+                : "Cancelling mid-trip may affect your standing."}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setCancelModalOpen(false)}
+                className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
+                Keep Trip
+              </button>
+              <button type="button" onClick={async () => {
+                  setCancelModalOpen(false);
+                  if (trip.rideId) await updateRideStatus(trip.rideId, "cancelled");
+                  navigate("/");
+                }}
+                className="py-3 rounded-xl bg-destructive/10 border border-destructive/40 text-destructive font-semibold text-sm active:scale-95 transition-transform">
+                Cancel Trip
               </button>
             </div>
           </div>

@@ -128,6 +128,10 @@ export function useDispatch(): UseDispatchReturn {
 
   const setOnline = async (online: boolean) => {
     if (!user) return;
+    if (!online && activeRide) {
+      setLocationError("Cannot go offline while on an active trip.");
+      return;
+    }
     await setDriverOnline(user.uid, online);
     setIsOnline(online);
     if (!online) setIncomingRides([]);
@@ -135,7 +139,7 @@ export function useDispatch(): UseDispatchReturn {
 
   const accept = async (rideId: string) => {
     if (!user) return;
-    await acceptRide(rideId, user.uid);
+    await acceptRide(rideId, user.uid, { name: "Driver", rating: 5.0, car: "", plate: "" });
     setIncomingRides([]);
   };
 

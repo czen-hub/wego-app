@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   Timestamp,
   GeoPoint,
+  increment,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -39,10 +40,17 @@ export interface Ride {
   driverTake: number;
   coopFee: number;
   estimatedMinutes: number;
+  stopCount: number;
+  stopFeeTotal: number;
+  scheduledDate: string | null;
+  scheduledHour: number | null;
+  scheduledMinute: number | null;
+  isAdvanced: boolean;
   requestedAt: Date | null;
   acceptedAt: Date | null;
   completedAt: Date | null;
   riderRating: number;
+  driverRatingGiven: number;
 }
 
 export interface ChatMessage {
@@ -102,10 +110,17 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     driverTake: (data.driverTake as number) ?? 0,
     coopFee: (data.coopFee as number) ?? 0,
     estimatedMinutes: (data.estimatedMinutes as number) ?? 10,
+    stopCount: (data.stopCount as number) ?? 0,
+    stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
+    scheduledDate: (data.scheduledDate as string | null) ?? null,
+    scheduledHour: (data.scheduledHour as number | null) ?? null,
+    scheduledMinute: (data.scheduledMinute as number | null) ?? null,
+    isAdvanced: (data.isAdvanced as boolean) ?? false,
     requestedAt: toDate(data.requestedAt),
     acceptedAt: toDate(data.acceptedAt),
     completedAt: toDate(data.completedAt),
     riderRating: (data.riderRating as number) ?? 4.87,
+    driverRatingGiven: (data.driverRatingGiven as number) ?? 0,
   };
 }
 
@@ -153,7 +168,7 @@ export function listenToDriverRide(
   const q = query(
     collection(db, "rides"),
     where("driverId", "==", driverId),
-    where("status", "in", ["accepted", "inProgress"]),
+    where("status", "in", ["accepted", "arrived", "inProgress"]),
     limit(1)
   );
   return onSnapshot(q, (snap) => {
@@ -191,6 +206,15 @@ export async function startRide(rideId: string) {
 
 export async function completeRide(rideId: string) {
   await updateRideStatus(rideId, "completed");
+}
+
+export async function submitRating(rideId: string, rating: number, raterType: "passenger" | "driver"): Promise<void> {
+  const field = raterType === "driver" ? "driverRatingGiven" : "passengerRatingGiven";
+  try {
+    await updateDoc(doc(db, "rides", rideId), { [field]: rating });
+  } catch (err) {
+    console.error("submitRating failed:", err);
+  }
 }
 
 // ── Messages ───────────────────────────────────────────────────────────────
@@ -313,6 +337,35 @@ export function listenToCompletedRides(
     rides = rides.slice(0, 50);
     callback(rides);
   }, (err) => console.error("Error in listenToCompletedRides:", err));
+}
+
+export function listenToReservedRides(
+  callback: (rides: Ride[]) => void
+): () => void {
+  const q = query(
+    collection(db, "rides"),
+    where("status", "==", "reserved"),
+    where("driverId", "==", null)
+  );
+  return onSnapshot(q, (snap) => {
+    const rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
+    rides.sort((a, b) => (a.scheduledDate ?? "").localeCompare(b.scheduledDate ?? ""));
+    callback(rides);
+  }, (err) => {
+    console.error("listenToReservedRides:", err);
+    callback([]);
+  });
+}
+
+export async function logStop(rideId: string, feeAmount: number): Promise<void> {
+  try {
+    await updateDoc(doc(db, "rides", rideId), {
+      stopCount: increment(1),
+      stopFeeTotal: increment(feeAmount),
+    });
+  } catch (err) {
+    console.error("logStop failed:", err);
+  }
 }
 
 // ── Ride request (passenger side, used for testing) ────────────────────────

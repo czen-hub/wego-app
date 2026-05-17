@@ -4,16 +4,16 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
-  limit,
   addDoc,
   updateDoc,
   serverTimestamp,
   Timestamp,
+  GeoPoint,
+  increment,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-export type RideStatus = "pending" | "accepted" | "arrived" | "inProgress" | "completed" | "cancelled";
+export type RideStatus = "pending" | "accepted" | "arrived" | "inProgress" | "completed" | "cancelled" | "reserved";
 export type RideType = "ride" | "courier" | "food";
 
 export interface Ride {
@@ -29,11 +29,23 @@ export interface Ride {
   driverPlate: string;
   pickupAddress: string;
   dropoffAddress: string;
+  pickupLocation: GeoPoint | null;
+  dropoffLocation: GeoPoint | null;
   fare: number;
+  driverTake: number;
+  coopFee: number;
   estimatedMinutes: number;
+  isAdvanced: boolean;
+  stopCount: number;
+  stopFeeTotal: number;
+  startedAt: Date | null;
   requestedAt: Date | null;
   acceptedAt: Date | null;
   completedAt: Date | null;
+  cancelledAt: Date | null;
+  riderRating: number;
+  passengerRatingGiven: number;
+  driverRatingGiven: number;
 }
 
 export interface ChatMessage {
@@ -65,11 +77,23 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     driverPlate: (data.driverPlate as string) ?? "",
     pickupAddress: (data.pickupAddress as string) ?? "",
     dropoffAddress: (data.dropoffAddress as string) ?? "",
+    pickupLocation: (data.pickupLocation as GeoPoint | null) ?? null,
+    dropoffLocation: (data.dropoffLocation as GeoPoint | null) ?? null,
     fare: (data.fare as number) ?? 0,
-    estimatedMinutes: (data.estimatedMinutes as number) ?? 10,
+    driverTake: (data.driverTake as number) ?? 0,
+    coopFee: (data.coopFee as number) ?? 0,
+    estimatedMinutes: (data.estimatedMinutes as number) ?? 8,
+    isAdvanced: (data.isAdvanced as boolean) ?? false,
+    stopCount: (data.stopCount as number) ?? 0,
+    stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
+    startedAt: toDate(data.startedAt),
     requestedAt: toDate(data.requestedAt),
     acceptedAt: toDate(data.acceptedAt),
     completedAt: toDate(data.completedAt),
+    cancelledAt: toDate(data.cancelledAt),
+    riderRating: (data.riderRating as number) ?? 0,
+    passengerRatingGiven: (data.passengerRatingGiven as number) ?? 0,
+    driverRatingGiven: (data.driverRatingGiven as number) ?? 0,
   };
 }
 
@@ -82,9 +106,13 @@ export async function requestRide(opts: {
   dropoffAddress: string;
   fare: number;
   type?: RideType;
+  pickupCoords?: [number, number] | null;
+  dropoffCoords?: [number, number] | null;
+  estimatedMinutes?: number;
+  isAdvanced?: boolean;
 }) {
-  const coopFee = opts.fare * 0.12;
-  const driverTake = opts.fare - coopFee;
+  const coopFee = Math.round(opts.fare * 0.12 * 100) / 100;
+  const driverTake = Math.round((opts.fare - coopFee) * 100) / 100;
   return addDoc(collection(db, "rides"), {
     status: "pending",
     type: opts.type ?? "ride",
@@ -93,25 +121,92 @@ export async function requestRide(opts: {
     driverId: null,
     driverName: "",
     driverRating: 5.0,
+    driverCar: "",
+    driverPlate: "",
     pickupAddress: opts.pickupAddress,
     dropoffAddress: opts.dropoffAddress,
+    pickupLocation: opts.pickupCoords ? new GeoPoint(opts.pickupCoords[0], opts.pickupCoords[1]) : null,
+    dropoffLocation: opts.dropoffCoords ? new GeoPoint(opts.dropoffCoords[0], opts.dropoffCoords[1]) : null,
+    fare: opts.fare,
+    driverTake,
+    coopFee,
+    estimatedMinutes: opts.estimatedMinutes ?? 8,
+    isAdvanced: opts.isAdvanced ?? false,
+    requestedAt: serverTimestamp(),
+    acceptedAt: null,
+    completedAt: null,
+    cancelledAt: null,
+  });
+}
+
+// ── Reserve a ride ─────────────────────────────────────────────────────────
+
+export async function createReservedRide(opts: {
+  passengerId: string;
+  passengerName: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  fare: number;
+  scheduledDate: string;
+  scheduledHour: number;
+  scheduledMinute: number;
+  pickupCoords?: [number, number] | null;
+  dropoffCoords?: [number, number] | null;
+}) {
+  const coopFee = Math.round(opts.fare * 0.12 * 100) / 100;
+  const driverTake = Math.round((opts.fare - coopFee) * 100) / 100;
+  return addDoc(collection(db, "rides"), {
+    status: "reserved",
+    type: "ride",
+    passengerId: opts.passengerId,
+    passengerName: opts.passengerName,
+    driverId: null,
+    driverName: "",
+    driverRating: 5.0,
+    driverCar: "",
+    driverPlate: "",
+    pickupAddress: opts.pickupAddress,
+    dropoffAddress: opts.dropoffAddress,
+    pickupLocation: opts.pickupCoords ? new GeoPoint(opts.pickupCoords[0], opts.pickupCoords[1]) : null,
+    dropoffLocation: opts.dropoffCoords ? new GeoPoint(opts.dropoffCoords[0], opts.dropoffCoords[1]) : null,
     fare: opts.fare,
     driverTake,
     coopFee,
     estimatedMinutes: 8,
+    isAdvanced: true,
+    scheduledDate: opts.scheduledDate,
+    scheduledHour: opts.scheduledHour,
+    scheduledMinute: opts.scheduledMinute,
     requestedAt: serverTimestamp(),
     acceptedAt: null,
     completedAt: null,
+    cancelledAt: null,
   });
 }
 
 // ── Cancel a ride ──────────────────────────────────────────────────────────
 
-export async function cancelRide(rideId: string) {
-  await updateDoc(doc(db, "rides", rideId), {
-    status: "cancelled",
-    cancelledAt: serverTimestamp(),
-  });
+export async function cancelRide(rideId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, "rides", rideId), {
+      status: "cancelled",
+      cancelledAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.error("cancelRide failed:", err);
+    throw err;
+  }
+}
+
+// ── Submit rating ──────────────────────────────────────────────────────────
+
+export async function submitRating(rideId: string, rating: number, raterType: "passenger" | "driver"): Promise<void> {
+  const field = raterType === "passenger" ? "passengerRatingGiven" : "driverRatingGiven";
+  try {
+    await updateDoc(doc(db, "rides", rideId), { [field]: rating });
+  } catch (err) {
+    console.error("submitRating failed:", err);
+  }
 }
 
 // ── Listen to active ride ──────────────────────────────────────────────────
@@ -120,23 +215,16 @@ export function listenToPassengerRide(
   passengerId: string,
   callback: (ride: Ride | null) => void
 ): () => void {
-  // Query just by passengerId to avoid missing composite index errors
   const q = query(
     collection(db, "rides"),
     where("passengerId", "==", passengerId)
   );
   return onSnapshot(q, (snap) => {
     let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
-    // Filter in-memory for active states
     rides = rides.filter(r => ["pending", "accepted", "arrived", "inProgress"].includes(r.status));
     rides.sort((a, b) => (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0));
-    
-    if (rides.length === 0) {
-      callback(null);
-    } else {
-      callback(rides[0]);
-    }
-  }, (err) => console.error("Error in listenToPassengerRide:", err));
+    callback(rides.length === 0 ? null : rides[0]);
+  }, (err) => console.error("listenToPassengerRide:", err));
 }
 
 // ── Ride history ───────────────────────────────────────────────────────────
@@ -154,7 +242,7 @@ export function listenToRideHistory(
     rides = rides.filter(r => r.status === "completed");
     rides.sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
     callback(rides.slice(0, 20));
-  }, (err) => console.error("Error in listenToRideHistory:", err));
+  }, (err) => console.error("listenToRideHistory:", err));
 }
 
 // ── Ride Chat ──────────────────────────────────────────────────────────────
@@ -175,7 +263,7 @@ export function listenToRideMessages(rideId: string, callback: (messages: ChatMe
     where("rideId", "==", rideId)
   );
   return onSnapshot(q, (snap) => {
-    let msgs = snap.docs.map(d => {
+    const msgs = snap.docs.map(d => {
       const data = d.data();
       return {
         id: d.id,
@@ -183,13 +271,23 @@ export function listenToRideMessages(rideId: string, callback: (messages: ChatMe
         senderId: data.senderId,
         senderType: data.senderType,
         text: data.text,
-        createdAt: toDate(data.createdAt)
+        createdAt: toDate(data.createdAt),
       } as ChatMessage;
     });
-    // Sort ascending so latest is at the bottom
     msgs.sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
     callback(msgs);
-  }, (err) => console.error("Error in listenToRideMessages:", err));
+  }, (err) => console.error("listenToRideMessages:", err));
+}
+
+export async function logStop(rideId: string, feeAmount: number): Promise<void> {
+  try {
+    await updateDoc(doc(db, "rides", rideId), {
+      stopCount: increment(1),
+      stopFeeTotal: increment(feeAmount),
+    });
+  } catch (err) {
+    console.error("logStop failed:", err);
+  }
 }
 
 // ── Fare estimate ──────────────────────────────────────────────────────────

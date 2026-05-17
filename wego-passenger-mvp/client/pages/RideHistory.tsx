@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { MapPin, Star, Package, X, Send, Check, MessageSquare, Clock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { listenToRideHistory, type Ride } from "@/lib/db";
+import { listenToRideHistory, sendRideMessage, type Ride } from "@/lib/db";
 
 interface LostItemState {
   ride: Ride;
@@ -42,7 +42,7 @@ export default function RideHistory() {
   }, [user]);
 
   const totalFares = rides.reduce((s, r) => s + r.fare, 0);
-  const totalDriverEarned = rides.reduce((s, r) => s + r.fare * 0.88, 0);
+  const totalDriverEarned = rides.reduce((s, r) => s + (r.driverTake || r.fare * 0.88), 0);
   const uberEstimate = totalFares * 1.5;
   const totalSaved = uberEstimate - totalFares;
   const isEmpty = loaded && rides.length === 0;
@@ -69,8 +69,13 @@ export default function RideHistory() {
     }
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!lostItem?.message.trim()) return;
+    if (user && lostItem.ride.id) {
+      try {
+        await sendRideMessage(lostItem.ride.id, user.uid, "passenger", lostItem.message.trim());
+      } catch { /* fail silently — still mark sent */ }
+    }
     setLostItem((prev) => (prev ? { ...prev, sent: true } : null));
   };
 
@@ -176,7 +181,7 @@ export default function RideHistory() {
               {/* Ride list */}
               <div className="space-y-3">
                 {rides.map((ride) => {
-                  const driverTake = ride.fare * 0.88;
+                  const driverTake = ride.driverTake || ride.fare * 0.88;
                   const canContact = ride.completedAt
                     ? Date.now() - ride.completedAt.getTime() < 24 * 60 * 60 * 1000
                     : false;

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 
-import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, type Ride, type ChatMessage } from "@/lib/db";
+import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, type Ride, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -16,6 +16,7 @@ interface RideData {
   driverTake: number;
   coopFee: number;
   isAdvanced?: boolean;
+  estimatedMinutes?: number;
   fromCoords?: [number, number];
   toCoords?: [number, number];
 }
@@ -27,16 +28,6 @@ const DEFAULT_RIDE: RideData = {
   coopFee: 6.00,
 };
 
-const MOCK_DRIVER = {
-  name: "Marcus T.",
-  initial: "M",
-  rating: 4.94,
-  trips: 847,
-  car: "2021 Toyota Camry",
-  color: "Silver",
-  plate: "ABC-1234",
-  yearsWithWeGo: 3,
-};
 
 const PHASE_SEQUENCE: RidePhase[] = ["matching", "en_route", "arrived", "in_progress", "complete"];
 
@@ -70,6 +61,9 @@ export default function RideInProgress() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const [sosModalOpen, setSosModalOpen] = useState(false);
+  const [matchTimeout, setMatchTimeout] = useState(false);
+  const [driverCoords, setDriverCoords] = useState<[number, number] | null>(null);
+  const effectiveRideIdRef = useRef<string | null>(null);
   const STOP_FEE = 2.00;
 
   // Track how long driver has been en route (proxy for distance)
@@ -88,6 +82,7 @@ export default function RideInProgress() {
     if (!user) return;
     const unsub = listenToPassengerRide(user.uid, (ride) => {
       setLiveRide(ride);
+      if (ride?.id) effectiveRideIdRef.current = ride.id;
       if (!ride) return;
       if (ride.status === "pending") setPhase("matching");
       if (ride.status === "accepted") setPhase("en_route");
@@ -109,10 +104,11 @@ export default function RideInProgress() {
     return unsub;
   }, [liveRide?.id]);
 
-  // Direct ride status listener — catches completed/cancelled even after listenToPassengerRide drops the ride
+  // Direct ride status listener — uses effectiveRideIdRef so it persists when liveRide becomes null
   useEffect(() => {
     if (!liveRide?.id) return;
-    const unsub = onSnapshot(doc(db, "rides", liveRide.id), (snap) => {
+    const rideId = liveRide.id;
+    const unsub = onSnapshot(doc(db, "rides", rideId), (snap) => {
       if (!snap.exists()) return;
       const status = snap.data().status;
       if (status === "completed") setPhase("complete");
@@ -120,6 +116,33 @@ export default function RideInProgress() {
     });
     return unsub;
   }, [liveRide?.id]);
+
+  // Track driver location during en_route and arrived phases
+  useEffect(() => {
+    if (!liveRide?.driverId || (phase !== "en_route" && phase !== "arrived")) return;
+    const unsub = onSnapshot(doc(db, "drivers", liveRide.driverId), (snap) => {
+      if (!snap.exists()) return;
+      const loc = snap.data().location;
+      if (loc) setDriverCoords([loc.latitude, loc.longitude]);
+    });
+    return unsub;
+  }, [liveRide?.driverId, phase]);
+
+  // Match timeout — show escalation UI after 5 min
+  useEffect(() => {
+    if (phase !== "matching") { setMatchTimeout(false); return; }
+    const timer = setTimeout(() => setMatchTimeout(true), 5 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  // Commit wait meter charge when transitioning from arrived → in_progress
+  const prevPhaseRef = useRef<RidePhase>(phase);
+  useEffect(() => {
+    if (prevPhaseRef.current === "arrived" && phase === "in_progress") {
+      setWaitFeeCharged(waitMeterCharge);
+    }
+    prevPhaseRef.current = phase;
+  });
 
   const getCancellationFee = (): { fee: number; label: string; driverNote: string } => {
     const bookingAge = (Date.now() - bookingTimeRef.current) / 1000;
@@ -135,8 +158,8 @@ export default function RideInProgress() {
     }
     if (phase === "arrived") {
       const distanceFee = enRouteFeeRef.current;
-      const freeWait = rideMock.isAdvanced ? 480 : 300;
-      const waitMeterSecs = rideMock.isAdvanced ? Math.max(0, waitElapsed - freeWait) : 0;
+      const freeWait = isAdvanced ? 480 : 300;
+      const waitMeterSecs = isAdvanced ? Math.max(0, waitElapsed - freeWait) : 0;
       const waitMeterCharge = parseFloat(Math.min((waitMeterSecs / 60) * 0.50, 1.00).toFixed(2));
       const fee = distanceFee + 3.00 + waitMeterCharge;
       const label = distanceFee >= 14
@@ -152,7 +175,11 @@ export default function RideInProgress() {
 
   const confirmCancel = async () => {
     if (liveRide?.id) {
-      await cancelRide(liveRide.id);
+      try {
+        await cancelRide(liveRide.id);
+      } catch {
+        // Firestore write failed — still show cancelled UI locally
+      }
     }
     setCancelled(true);
     setCancelOpen(false);
@@ -190,9 +217,10 @@ export default function RideInProgress() {
     return `${m}:${s}`;
   };
 
-  const freeWaitSecs = rideMock.isAdvanced ? 480 : 300;
+  const isAdvanced = liveRide?.isAdvanced ?? rideMock.isAdvanced ?? false;
+  const freeWaitSecs = isAdvanced ? 480 : 300;
   const waitRemaining = Math.max(0, freeWaitSecs - waitElapsed);
-  const waitMeterSecs = rideMock.isAdvanced ? Math.max(0, waitElapsed - freeWaitSecs) : 0;
+  const waitMeterSecs = isAdvanced ? Math.max(0, waitElapsed - freeWaitSecs) : 0;
   const waitMeterCharge = parseFloat(Math.min((waitMeterSecs / 60) * 0.50, 1.00).toFixed(2));
   const driverCanLeave = waitElapsed >= freeWaitSecs;
 
@@ -343,11 +371,11 @@ export default function RideInProgress() {
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                {liveRide?.driverName?.charAt(0) || "M"}
+                {liveRide?.driverName?.charAt(0) || "?"}
               </div>
               <div>
-                <p className="font-semibold text-foreground">{liveRide?.driverName || "Marcus T."}</p>
-                <p className="text-xs text-muted-foreground">{liveRide?.driverCar || "2021 Toyota Camry"} · {liveRide?.driverPlate || "ABC-1234"}</p>
+                <p className="font-semibold text-foreground">{liveRide?.driverName || "Your Driver"}</p>
+                <p className="text-xs text-muted-foreground">{liveRide?.driverCar || ""} {liveRide?.driverPlate ? `· ${liveRide.driverPlate}` : ""}</p>
               </div>
             </div>
 
@@ -370,7 +398,10 @@ export default function RideInProgress() {
                 {rating > 0 && (
                   <button
                     type="button"
-                    onClick={() => setRatingSubmitted(true)}
+                    onClick={async () => {
+                      setRatingSubmitted(true);
+                      if (liveRide?.id) await submitRating(liveRide.id, rating, "passenger");
+                    }}
                     className="w-full py-2.5 rounded-xl bg-primary/10 border border-primary/25 text-primary font-semibold text-sm active:scale-95 transition-transform"
                   >
                     Submit Rating
@@ -402,12 +433,27 @@ export default function RideInProgress() {
     <div className="max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden">
       {/* Map */}
       <div className="relative z-0 ride-map-panel">
-        <ClientMap
-          from={rideMock.fromCoords}
-          to={phase === "in_progress" ? rideMock.toCoords : rideMock.fromCoords}
-          center={rideMock.fromCoords ?? [37.7749, -122.4194]}
-          className="absolute inset-0"
-        />
+        {(() => {
+          const pickupCoords = liveRide?.pickupLocation
+            ? [liveRide.pickupLocation.latitude, liveRide.pickupLocation.longitude] as [number, number]
+            : rideMock.fromCoords;
+          const dropoffCoords = liveRide?.dropoffLocation
+            ? [liveRide.dropoffLocation.latitude, liveRide.dropoffLocation.longitude] as [number, number]
+            : rideMock.toCoords;
+          const mapFrom = (phase === "en_route" || phase === "arrived")
+            ? (driverCoords ?? pickupCoords)
+            : pickupCoords;
+          const mapTo = phase === "in_progress" ? dropoffCoords : pickupCoords;
+          const mapCenter = mapFrom ?? pickupCoords ?? [37.7749, -122.4194];
+          return (
+            <ClientMap
+              from={mapFrom}
+              to={mapTo}
+              center={mapCenter}
+              className="absolute inset-0"
+            />
+          );
+        })()}
 
         <button
           type="button"
@@ -428,8 +474,8 @@ export default function RideInProgress() {
           </div>
         </div>
 
-        {/* SOS Button */}
-        {(phase === "en_route" || phase === "arrived" || phase === "in_progress") && (
+        {/* SOS Button — visible in all active phases */}
+        {(phase === "matching" || phase === "en_route" || phase === "arrived" || phase === "in_progress") && (
           <button
             type="button"
             aria-label="Emergency SOS"
@@ -460,7 +506,11 @@ export default function RideInProgress() {
           <div className="glass-card p-5 border border-border rounded-xl text-center space-y-2">
             <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto" />
             <p className="font-semibold text-foreground">Finding your driver...</p>
-            <p className="text-xs text-muted-foreground">Usually takes 2–5 minutes in your area</p>
+            {matchTimeout ? (
+              <p className="text-xs text-destructive font-medium">Taking longer than expected. You can cancel for free.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Usually takes 2–5 minutes in your area</p>
+            )}
           </div>
         )}
 
@@ -469,13 +519,13 @@ export default function RideInProgress() {
           <div className="glass-card p-4 border border-border rounded-xl space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                {liveRide?.driverName?.charAt(0) || "M"}
+                {liveRide?.driverName?.charAt(0) || "?"}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground">{liveRide?.driverName || "Marcus T."}</p>
+                <p className="font-semibold text-foreground">{liveRide?.driverName || "Your Driver"}</p>
                 <div className="flex items-center gap-1">
                   <Star size={11} fill="currentColor" className="text-yellow-400" />
-                  <span className="text-xs text-muted-foreground">{liveRide?.driverRating || 4.95} · {MOCK_DRIVER.trips} trips · {MOCK_DRIVER.yearsWithWeGo} yrs WeGo</span>
+                  <span className="text-xs text-muted-foreground">{(liveRide?.driverRating || 4.95).toFixed(2)}</span>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -492,12 +542,12 @@ export default function RideInProgress() {
 
             <div className="bg-background border border-border/50 rounded-lg px-3 py-2 flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">{liveRide?.driverCar || "Silver 2021 Toyota Camry"}</p>
-                <p className="text-sm font-bold text-foreground tracking-widest">{liveRide?.driverPlate || "ABC-1234"}</p>
+                <p className="text-xs text-muted-foreground">{liveRide?.driverCar || "Connecting…"}</p>
+                <p className="text-sm font-bold text-foreground tracking-widest">{liveRide?.driverPlate || "—"}</p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-muted-foreground">Member since</p>
-                <p className="text-xs font-semibold text-primary">Year 3 WeGo</p>
+                <p className="text-xs text-muted-foreground">WeGo Driver</p>
+                <p className="text-xs font-semibold text-primary">Verified</p>
               </div>
             </div>
           </div>
@@ -518,7 +568,7 @@ export default function RideInProgress() {
                   {phase === "in_progress" ? rideMock.destination : "Your Current Location"}
                 </p>
                 {phase === "en_route" && (
-                  <p className="text-xs text-muted-foreground mt-1">6 min away</p>
+                  <p className="text-xs text-muted-foreground mt-1">{liveRide?.estimatedMinutes ?? rideMock.estimatedMinutes ?? 6} min away</p>
                 )}
               </div>
             </div>
@@ -542,14 +592,14 @@ export default function RideInProgress() {
                 {driverCanLeave ? `+${formatTime(waitElapsed - freeWaitSecs)}` : formatTime(waitRemaining)}
               </span>
             </div>
-            {rideMock.isAdvanced && waitMeterSecs > 0 && (
+            {isAdvanced && waitMeterSecs > 0 && (
               <div className="flex items-center justify-between bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
                 <span className="text-xs text-muted-foreground">Wait meter</span>
                 <span className="text-sm font-bold text-destructive">+${waitMeterCharge.toFixed(2)}</span>
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              {rideMock.isAdvanced ? `Advance booking: 8 min free · ${formatTime(waitRemaining)} remaining` : `${formatTime(waitRemaining)} free wait remaining`}
+              {isAdvanced ? `Advance booking: 8 min free · ${formatTime(waitRemaining)} remaining` : `${formatTime(waitRemaining)} free wait remaining`}
             </p>
           </div>
         )}
@@ -663,7 +713,7 @@ export default function RideInProgress() {
       {calling && (
         <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border border-border rounded-2xl px-5 py-3 shadow-xl">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          <p className="text-sm font-semibold text-foreground">Calling {liveRide?.driverName || "Marcus"}…</p>
+          <p className="text-sm font-semibold text-foreground">Calling {liveRide?.driverName || "Driver"}…</p>
         </div>
       )}
 
@@ -676,9 +726,9 @@ export default function RideInProgress() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">
-                  {liveRide?.driverName?.charAt(0) || "M"}
+                  {liveRide?.driverName?.charAt(0) || "?"}
                 </div>
-                <p className="text-sm font-semibold text-foreground">{liveRide?.driverName || "Marcus T."}</p>
+                <p className="text-sm font-semibold text-foreground">{liveRide?.driverName || "Your Driver"}</p>
               </div>
               <button type="button" aria-label="Close chat" onClick={() => setChatOpen(false)}
                 className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
@@ -751,30 +801,22 @@ export default function RideInProgress() {
             </div>
 
             <div className="space-y-3">
-              <button type="button" onClick={() => {
-                alert("Calling 911...");
-                setSosModalOpen(false);
-              }}
-                className="w-full flex items-center justify-between p-4 rounded-xl bg-destructive text-destructive-foreground hover:opacity-90 active:scale-95 transition-all">
-                <div className="flex items-center gap-3">
-                  <Phone size={18} />
-                  <span className="font-bold">Call 911</span>
-                </div>
-              </button>
-              
-              <button type="button" onClick={() => {
-                alert("Location and driver details shared with emergency contacts.");
-                setSosModalOpen(false);
-              }}
-                className="w-full flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-95 transition-all text-foreground">
-                <div className="flex items-center gap-3">
-                  <MessageSquare size={18} className="text-primary" />
-                  <span className="font-semibold">Text Emergency Contacts</span>
-                </div>
+              <a href="tel:911"
+                onClick={() => setSosModalOpen(false)}
+                className="w-full flex items-center gap-3 p-4 rounded-xl bg-destructive text-destructive-foreground hover:opacity-90 active:scale-95 transition-all">
+                <Phone size={18} />
+                <span className="font-bold">Call 911</span>
+              </a>
+
+              <button type="button" onClick={() => setSosModalOpen(false)}
+                className="w-full flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:bg-muted/30 active:scale-95 transition-all text-foreground">
+                <MessageSquare size={18} className="text-primary" />
+                <span className="font-semibold">Text Emergency Contacts</span>
+                <span className="ml-auto text-xs text-muted-foreground">Coming soon</span>
               </button>
             </div>
             <p className="text-xs text-muted-foreground text-center">
-              Using SOS will instantly record audio, share your live location, and notify WeGo support.
+              Your safety is our priority. Use these options to get immediate help.
             </p>
           </div>
         </div>

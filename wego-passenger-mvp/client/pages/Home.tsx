@@ -143,7 +143,7 @@ export default function Home() {
     const timer = setTimeout(async () => {
       setGeocoding(true);
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + " CA")}&format=json&limit=5&countrycodes=us&bounded=1&viewbox=-123.1,38.7,-119.6,36.5`;
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + " CA")}&format=json&limit=5&countrycodes=us&bounded=1&viewbox=-124.0,39.8,-119.5,36.5`;
         const res = await fetch(url, { headers: { "Accept-Language": "en" } });
         const data = await res.json();
         if (!cancelled) {

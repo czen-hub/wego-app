@@ -10,7 +10,7 @@ import ClientMap from "@/components/ClientMap";
 import { useDispatch } from "@/hooks/useDispatch";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
-import { type Ride, acceptRide } from "@/lib/db";
+import { type Ride, type EarningsEntry, acceptRide, listenToWeeklyEarnings } from "@/lib/db";
 
 const OPPORTUNITIES = [
   { id: "airport", icon: Plane,  iconColor: "text-primary", iconBg: "bg-primary/10", title: "Airport Bonus",  detail: "SFO Terminal 2",      bonus: "+$8/trip",    bonusColor: "text-primary", tag: "Active now", tagColor: "bg-primary/15 text-primary" },
@@ -140,8 +140,20 @@ export default function Command() {
   const [acceptFood, setAcceptFood] = useState(false);
   const [acceptPets, setAcceptPets] = useState(false);
   const weeklyGoal = 20;
-  const weeklyDone = 12;
   const [earningsVisible, setEarningsVisible] = useState(true);
+  const [todayEntries, setTodayEntries] = useState<EarningsEntry[]>([]);
+  const [weeklyEntries, setWeeklyEntries] = useState<EarningsEntry[]>([]);
+  const weeklyDone = weeklyEntries.length;
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = listenToWeeklyEarnings(user.uid, (entries) => {
+      setWeeklyEntries(entries);
+      const todayStr = new Date().toDateString();
+      setTodayEntries(entries.filter(e => e.completedAt?.toDateString() === todayStr));
+    });
+    return unsub;
+  }, [user]);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -205,31 +217,32 @@ export default function Command() {
           plate: profile?.licensePlate || "WEGO-1"
         });
       }
+      setAccepting(false);
+      navigatedRef.current = true;
+      navigate("/trip", {
+        state: {
+          riderName: pendingRide.passengerName,
+          pickupLocation: pendingRide.pickupAddress,
+          dropoffLocation: pendingRide.dropoffAddress,
+          riderPayment: pendingRide.fare,
+          coopFee: pendingRide.coopFee,
+          driverTake: pendingRide.driverTake,
+          estimatedTime: pendingRide.estimatedMinutes,
+          type: pendingRide.type,
+          rideId: pendingRide.id,
+          pickupCoords: pendingRide.pickupLocation
+            ? [pendingRide.pickupLocation.latitude, pendingRide.pickupLocation.longitude] as [number, number]
+            : undefined,
+          dropoffCoords: pendingRide.dropoffLocation
+            ? [pendingRide.dropoffLocation.latitude, pendingRide.dropoffLocation.longitude] as [number, number]
+            : undefined,
+          requestedAt: pendingRide.requestedAt?.getTime() ?? Date.now(),
+        },
+      });
     } catch (e) {
       console.error("Accept ride failed:", e);
+      setAccepting(false);
     }
-    setAccepting(false);
-    navigatedRef.current = true;
-    navigate("/trip", {
-      state: {
-        riderName: pendingRide.passengerName,
-        pickupLocation: pendingRide.pickupAddress,
-        dropoffLocation: pendingRide.dropoffAddress,
-        riderPayment: pendingRide.fare,
-        coopFee: pendingRide.coopFee,
-        driverTake: pendingRide.driverTake,
-        estimatedTime: pendingRide.estimatedMinutes,
-        type: pendingRide.type,
-        rideId: pendingRide.id,
-        pickupCoords: pendingRide.pickupLocation
-          ? [pendingRide.pickupLocation.latitude, pendingRide.pickupLocation.longitude] as [number, number]
-          : undefined,
-        dropoffCoords: pendingRide.dropoffLocation
-          ? [pendingRide.dropoffLocation.latitude, pendingRide.dropoffLocation.longitude] as [number, number]
-          : undefined,
-        requestedAt: pendingRide.requestedAt?.getTime() ?? Date.now(),
-      },
-    });
   };
 
   const handleDecline = () => {
@@ -402,7 +415,7 @@ export default function Command() {
                 <span className="text-xs text-muted-foreground">{weeklyDone} / {weeklyGoal} rides</span>
               </div>
               <div className="w-full h-2 bg-muted/30 rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full w-[60%]" />
+                <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, weeklyGoal > 0 ? Math.round((weeklyDone / weeklyGoal) * 100) : 0)}%` }} />
               </div>
               <p className="text-xs text-muted-foreground">{Math.max(weeklyGoal - weeklyDone, 0)} more rides unlocks your <span className="text-primary font-semibold">$25 bonus</span></p>
             </div>
@@ -422,20 +435,27 @@ export default function Command() {
               </button>
             </div>
             <div className="bg-background border border-border rounded-xl p-4">
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Rides</p>
-                  <p className="text-2xl font-bold text-foreground">12</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Gross</p>
-                  <p className={`text-2xl font-bold text-foreground transition-all duration-200 ${!earningsVisible ? "blur-sm select-none" : ""}`}>$420</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Net (88%)</p>
-                  <p className={`text-2xl font-bold text-primary transition-all duration-200 ${!earningsVisible ? "blur-sm select-none" : ""}`}>$369.60</p>
-                </div>
-              </div>
+              {(() => {
+                const todayRides = todayEntries.length;
+                const todayGross = todayEntries.reduce((s, e) => s + e.gross, 0);
+                const todayNet   = todayEntries.reduce((s, e) => s + e.amount, 0);
+                return (
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Rides</p>
+                      <p className="text-2xl font-bold text-foreground">{todayRides}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Gross</p>
+                      <p className={`text-2xl font-bold text-foreground transition-all duration-200 ${!earningsVisible ? "blur-sm select-none" : ""}`}>${todayGross.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Net (88%)</p>
+                      <p className={`text-2xl font-bold text-primary transition-all duration-200 ${!earningsVisible ? "blur-sm select-none" : ""}`}>${todayNet.toFixed(2)}</p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, MapPin, Clock, Check, Calendar, ChevronRight, Shield, Info, AlertCircle } from "lucide-react";
+import { createReservedRide } from "@/lib/db";
+import { useAuth } from "@/context/AuthContext";
 
 // ── Fare constants (mirrors RideRequest) ──────────────────────────────────────
 const WEGO_FEE_PCT  = 0.12;
@@ -132,6 +134,7 @@ const QUICK_DESTINATIONS = [
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ReserveRide() {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   const [selectedDate, setSelectedDate] = useState(DATES[0].value);
   const [selectedHour,   setSelectedHour]   = useState(8);
   const [selectedMinute, setSelectedMinute] = useState(0);
@@ -142,9 +145,11 @@ export default function ReserveRide() {
   const [destFocused,   setDestFocused]   = useState(false);
   const destBlurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmed,     setConfirmed]     = useState(false);
+  const [submitError,   setSubmitError]   = useState<string | null>(null);
+  const [submitting,    setSubmitting]    = useState(false);
   const [timeOpen,      setTimeOpen]      = useState(false);
   const [policyOpen,    setPolicyOpen]    = useState(false);
-  const [bookingRef]    = useState(() => `WG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`);
+  const [bookingRef,    setBookingRef]    = useState("");
 
   // Live geocoding for destination
   useEffect(() => {
@@ -172,7 +177,31 @@ export default function ReserveRide() {
   const uberPriority = Math.round(uberX * tod * 1.04 * 100) / 100;
   const uberSaver    = Math.round(uberX * tod * 0.835 * 100) / 100;
 
-  const handleConfirm = () => { if (destination.trim()) setConfirmed(true); };
+  const handleConfirm = async () => {
+    if (!destination.trim() || !user) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const docRef = await createReservedRide({
+        passengerId: user.uid,
+        passengerName: profile?.name || user.displayName || "Passenger",
+        pickupAddress: pickup,
+        dropoffAddress: destination,
+        fare: adjTotal,
+        scheduledDate: selectedDate,
+        scheduledHour: selectedHour,
+        scheduledMinute: selectedMinute,
+        pickupCoords: LOCATION_COORDS[pickup] ?? null,
+        dropoffCoords: destCoords,
+      });
+      setBookingRef(docRef.id.slice(0, 8).toUpperCase());
+      setConfirmed(true);
+    } catch {
+      setSubmitError("Failed to reserve ride. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // ── Confirmation screen ──────────────────────────────────────────────────────
   if (confirmed) {
@@ -564,9 +593,14 @@ export default function ReserveRide() {
           </div>
         </div>
 
-        <button type="button" onClick={handleConfirm} disabled={!destination.trim()}
+        {submitError && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3 text-sm text-destructive font-medium">
+            {submitError}
+          </div>
+        )}
+        <button type="button" onClick={handleConfirm} disabled={!destination.trim() || submitting}
           className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30 disabled:opacity-40">
-          Book for {selectedDateObj.dayLabel} at {formatTime(selectedHour, selectedMinute)}
+          {submitting ? "Booking…" : `Book for ${selectedDateObj.dayLabel} at ${formatTime(selectedHour, selectedMinute)}`}
         </button>
         <p className="text-xs text-center text-muted-foreground">Free cancellation up to 1 hour before pickup</p>
       </div>

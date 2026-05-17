@@ -1,42 +1,79 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CalendarClock, MapPin, ChevronLeft, Clock, Check, X, User } from "lucide-react";
+import { listenToReservedRides, acceptRide, type Ride } from "@/lib/db";
+import { useAuth } from "@/context/AuthContext";
 
-const MOCK_SCHEDULED = [
-  {
-    id: "s1",
-    riderName: "David K.",
-    pickupAddr: "1200 Old Bayshore Hwy, Burlingame",
-    dropoffAddr: "SFO Airport — Terminal 2",
-    scheduledTime: "Tomorrow, 6:15 AM",
-    fare: 28.00,
-    driverTake: 24.64,
-    coopFee: 3.36,
-    distance: "7.2 mi",
-    estimatedDuration: "18 min",
-    bookingRef: "WG-4RX9KL",
-  },
-  {
-    id: "s2",
-    riderName: "Angela W.",
-    pickupAddr: "Stanford University, Serra Mall",
-    dropoffAddr: "San Jose Diridon Station",
-    scheduledTime: "Today, 4:45 PM",
-    fare: 38.00,
-    driverTake: 33.44,
-    coopFee: 4.56,
-    distance: "18.6 mi",
-    estimatedDuration: "28 min",
-    bookingRef: "WG-7QMVBZ",
-  },
-];
+function formatScheduledTime(ride: Ride): string {
+  if (!ride.scheduledDate) return "Reserved";
+  const today = new Date().toISOString().split("T")[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const dateLabel =
+    ride.scheduledDate === today
+      ? "Today"
+      : ride.scheduledDate === tomorrow
+      ? "Tomorrow"
+      : ride.scheduledDate;
+  const hour = ride.scheduledHour ?? 0;
+  const minute = ride.scheduledMinute ?? 0;
+  const h = hour % 12 || 12;
+  const ampm = hour < 12 ? "AM" : "PM";
+  const m = minute.toString().padStart(2, "0");
+  return `${dateLabel}, ${h}:${m} ${ampm}`;
+}
 
 export default function ScheduledRides() {
   const navigate = useNavigate();
-  const [accepted, setAccepted] = useState<string[]>([]);
+  const { user, profile } = useAuth();
+  const [rides, setRides] = useState<Ride[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
+  const [accepted, setAccepted] = useState<string[]>([]);
+  const [accepting, setAccepting] = useState<string | null>(null);
 
-  const visible = MOCK_SCHEDULED.filter((r) => !dismissed.includes(r.id));
+  useEffect(() => {
+    const unsub = listenToReservedRides(setRides);
+    return unsub;
+  }, []);
+
+  const visible = rides.filter((r) => !dismissed.includes(r.id) && !accepted.includes(r.id));
+
+  const handleAccept = async (ride: Ride) => {
+    if (!user || accepting) return;
+    setAccepting(ride.id);
+    try {
+      await acceptRide(ride.id, user.uid, {
+        name: profile?.name || "Driver",
+        rating: profile?.rating || 5.0,
+        car: profile?.vehicleMake
+          ? `${profile.vehicleYear} ${profile.vehicleMake} ${profile.vehicleModel}`
+          : "Standard Vehicle",
+        plate: profile?.licensePlate || "WEGO-1",
+      });
+      setAccepted((a) => [...a, ride.id]);
+      navigate("/trip", {
+        state: {
+          riderName: ride.passengerName,
+          pickupLocation: ride.pickupAddress,
+          dropoffLocation: ride.dropoffAddress,
+          riderPayment: ride.fare,
+          coopFee: ride.coopFee,
+          driverTake: ride.driverTake,
+          estimatedTime: ride.estimatedMinutes,
+          type: ride.type,
+          rideId: ride.id,
+          isAdvanced: true,
+          pickupCoords: ride.pickupLocation
+            ? [ride.pickupLocation.latitude, ride.pickupLocation.longitude] as [number, number]
+            : undefined,
+          dropoffCoords: ride.dropoffLocation
+            ? [ride.dropoffLocation.latitude, ride.dropoffLocation.longitude] as [number, number]
+            : undefined,
+        },
+      });
+    } catch {
+      setAccepting(null);
+    }
+  };
 
   return (
     <div className="bg-background pt-4 px-4 pb-6 min-h-screen">
@@ -47,6 +84,7 @@ export default function ScheduledRides() {
           <button
             type="button"
             onClick={() => navigate("/")}
+            aria-label="Back to command"
             className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center"
           >
             <ChevronLeft size={18} className="text-foreground" />
@@ -81,8 +119,8 @@ export default function ScheduledRides() {
                   <CalendarClock size={15} className="text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-primary">{ride.scheduledTime}</p>
-                  <p className="text-xs text-muted-foreground">{ride.distance} · ~{ride.estimatedDuration}</p>
+                  <p className="text-xs font-bold text-primary">{formatScheduledTime(ride)}</p>
+                  <p className="text-xs text-muted-foreground">~{ride.estimatedMinutes} min ride</p>
                 </div>
               </div>
               <div className="text-right">
@@ -94,11 +132,11 @@ export default function ScheduledRides() {
             {/* Rider */}
             <div className="flex items-center gap-2 bg-background border border-border/50 rounded-xl px-3 py-2.5">
               <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                {ride.riderName.charAt(0)}
+                {ride.passengerName.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">{ride.riderName}</p>
-                <p className="text-[10px] text-muted-foreground">Ref: {ride.bookingRef}</p>
+                <p className="text-sm font-semibold text-foreground">{ride.passengerName}</p>
+                <p className="text-[10px] text-muted-foreground">Ref: {ride.id.slice(0, 8).toUpperCase()}</p>
               </div>
               <User size={14} className="text-muted-foreground" />
             </div>
@@ -109,7 +147,7 @@ export default function ScheduledRides() {
                 <MapPin size={14} className="text-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Pickup</p>
-                  <p className="text-xs font-semibold text-foreground">{ride.pickupAddr}</p>
+                  <p className="text-xs font-semibold text-foreground">{ride.pickupAddress}</p>
                 </div>
               </div>
               <div className="ml-3.5 h-4 border-l border-dashed border-border/60" />
@@ -117,7 +155,7 @@ export default function ScheduledRides() {
                 <MapPin size={14} className="text-primary/60 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Dropoff</p>
-                  <p className="text-xs font-semibold text-foreground">{ride.dropoffAddr}</p>
+                  <p className="text-xs font-semibold text-foreground">{ride.dropoffAddress}</p>
                 </div>
               </div>
             </div>
@@ -140,10 +178,11 @@ export default function ScheduledRides() {
               </button>
               <button
                 type="button"
-                onClick={() => { setAccepted((a) => [...a, ride.id]); setDismissed((d) => [...d, ride.id]); }}
-                className="flex-[2] py-3 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95 transition-transform shadow-lg shadow-primary/30"
+                disabled={accepting === ride.id}
+                onClick={() => handleAccept(ride)}
+                className="flex-[2] py-3 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95 transition-transform shadow-lg shadow-primary/30 disabled:opacity-60"
               >
-                <Check size={15} /> Confirm Ride
+                <Check size={15} /> {accepting === ride.id ? "Accepting…" : "Confirm Ride"}
               </button>
             </div>
           </div>

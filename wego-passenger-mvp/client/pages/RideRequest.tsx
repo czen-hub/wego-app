@@ -180,6 +180,7 @@ export default function RideRequest() {
   const [pinnedPickupCoords, setPinnedPickupCoords] = useState<[number, number] | null>(routeState.pickupCoords ?? null);
   const [pinnedDestinationCoords, setPinnedDestinationCoords] = useState<[number, number] | null>(routeState.destinationCoords ?? null);
   const [confirming, setConfirming] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
   const [pickupFocused, setPickupFocused] = useState(false);
   const [destFocused, setDestFocused] = useState(!routeState.destination);
 
@@ -236,8 +237,8 @@ export default function RideRequest() {
     [destination, effectiveDestinationCoords, effectivePickupCoords, pickup],
   );
   const tollTotal = bridgeTolls.reduce((sum, t) => sum + t.toll, 0);
-  const driverTake = fare * (1 - WEGO_FEE_PCT);
-  const coopFee = fare * WEGO_FEE_PCT;
+  const driverTake = Math.round(fare * (1 - WEGO_FEE_PCT) * 100) / 100;
+  const coopFee = Math.round(fare * WEGO_FEE_PCT * 100) / 100;
 
   const FALLBACK: [number, number] = currentCoords ?? [37.3541, -121.9552];
   const fromCoords =
@@ -274,6 +275,7 @@ export default function RideRequest() {
   const handleConfirm = async () => {
     if (confirming) return;
     setConfirming(true);
+    setRequestError(null);
     try {
       if (user) {
         await requestRide({
@@ -281,14 +283,19 @@ export default function RideRequest() {
           passengerName: profile?.name || "Passenger",
           pickupAddress: formatPinnedAddress(pickup, pinnedPickupCoords),
           dropoffAddress: formatPinnedAddress(destination, pinnedDestinationCoords),
-          fare,
+          fare: fare + tollTotal,
+          pickupCoords: effectivePickupCoords ?? (pickup === "Current Location" ? currentCoords : null),
+          dropoffCoords: effectiveDestinationCoords ?? LOCATION_COORDS[destination] ?? null,
+          estimatedMinutes: mins,
         });
       }
     } catch {
-      // Firebase not configured — still navigate
+      setConfirming(false);
+      setRequestError("Could not submit ride request. Check your connection and try again.");
+      return;
     }
     navigate("/ride", {
-      state: { destination, fare: fare + tollTotal, driverTake: driverTake + tollTotal, coopFee, fromCoords, toCoords },
+      state: { destination, fare: fare + tollTotal, driverTake: driverTake + tollTotal, coopFee, fromCoords, toCoords, estimatedMinutes: mins },
     });
   };
 
@@ -424,8 +431,8 @@ export default function RideRequest() {
           </div>
         </div>
 
-        {/* Fare card */}
-        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-4">
+        {/* Fare card — only when destination is entered */}
+        {destination.trim() && <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-4">
           <div className="flex items-start justify-between">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Fare</p>
             <div className="flex items-center gap-1 text-xs text-primary">
@@ -496,18 +503,24 @@ export default function RideRequest() {
             </div>
             <p className="text-xs text-muted-foreground">The 12% cooperative fee funds driver pensions, insurance & AV fleet.</p>
           </div>
-        </div>
+        </div>}
 
         {/* ETA */}
-        <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
+        {destination.trim() && <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
             <Clock size={18} className="text-primary" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground">Driver ~6 min away</p>
+            <p className="text-sm font-semibold text-foreground">Ride ~{mins} min · drivers nearby</p>
             <p className="text-xs text-muted-foreground">Nearest WeGo driver is close by</p>
           </div>
-        </div>
+        </div>}
+
+        {requestError && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3 text-sm text-destructive font-medium">
+            {requestError}
+          </div>
+        )}
 
         <button
           type="button"
