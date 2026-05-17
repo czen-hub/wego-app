@@ -1907,17 +1907,21 @@ section { padding: 104px 0; }
   padding: 20px 24px;
   margin-top: 28px;
 }
-.limited-seats-note strong {
+.limited-seats-note > strong {
   display: block;
   font-size: 15px;
   color: var(--primary);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .limited-seats-note p {
   font-size: 14px;
   color: var(--text-soft);
-  line-height: 1.65;
+  line-height: 1.75;
   margin: 0;
+}
+.limited-seats-note p strong {
+  display: inline;
+  color: var(--primary);
 }
 
 /* ── SPOT COUNTER STRIP (index.html founding CTA) ───────────── */
