@@ -6,9 +6,10 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { updatePassword, updateEmail, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 import BottomSheet from "@/components/BottomSheet";
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -210,17 +211,21 @@ export default function Settings() {
   const [insurance, setInsurance] = useState({ company: "", policy: "", expiry: "" });
   const [insuranceDraft, setInsuranceDraft] = useState(insurance);
   const [insuranceDoc, setInsuranceDoc] = useState<string | null>(null);
+  const [insuranceFile, setInsuranceFile] = useState<File | null>(null);
 
   // ── Inspection ──
   const [inspection, setInspection] = useState({ date: "", mileage: "", inspector: "", notes: "" });
   const [inspectionDraft, setInspectionDraft] = useState(inspection);
   const [inspectionDoc, setInspectionDoc] = useState<string | null>(null);
+  const [inspectionFile, setInspectionFile] = useState<File | null>(null);
 
   // ── Account ──
   const [phone, setPhone] = useState("");
   const [phoneDraft, setPhoneDraft] = useState("");
   const [email, setEmail] = useState("");
   const [emailDraft, setEmailDraft] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
   const [pwError, setPwError] = useState("");
@@ -286,17 +291,58 @@ export default function Settings() {
     });
     close();
   };
-  const saveInsurance = () => { setInsurance(insuranceDraft); close(); };
-  const saveInspection = () => { setInspection(inspectionDraft); close(); };
+  const saveInsurance = async () => {
+    setInsurance(insuranceDraft);
+    if (insuranceFile && user) {
+      const storageRef = ref(storage, `drivers/${user.uid}/insurance/${insuranceFile.name}`);
+      const snapshot = await uploadBytes(storageRef, insuranceFile);
+      const url = await getDownloadURL(snapshot.ref);
+      setInsuranceDoc(url);
+      await updateProfile({ insuranceDocUrl: url, insuranceExpiry: insuranceDraft.expiry });
+      setInsuranceFile(null);
+    }
+    close();
+  };
+  const saveInspection = async () => {
+    setInspection(inspectionDraft);
+    if (inspectionFile && user) {
+      const storageRef = ref(storage, `drivers/${user.uid}/inspection/${inspectionFile.name}`);
+      const snapshot = await uploadBytes(storageRef, inspectionFile);
+      const url = await getDownloadURL(snapshot.ref);
+      setInspectionDoc(url);
+      await updateProfile({ inspectionDocUrl: url, inspectionDate: inspectionDraft.date });
+      setInspectionFile(null);
+    }
+    close();
+  };
   const savePhone = async () => {
     setPhone(phoneDraft);
     await updateProfile({ phone: phoneDraft });
     close();
   };
   const saveEmail = async () => {
-    setEmail(emailDraft);
-    await updateProfile({ email: emailDraft });
-    close();
+    if (!emailDraft.trim()) { setEmailError("Enter a new email address."); return; }
+    if (!emailPassword) { setEmailError("Enter your current password to confirm."); return; }
+    if (!user || !user.email) { setEmailError("Not signed in."); return; }
+    setEmailError("");
+    try {
+      const credential = EmailAuthProvider.credential(user.email, emailPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updateEmail(user, emailDraft.trim());
+      await updateProfile({ email: emailDraft.trim() });
+      setEmail(emailDraft.trim());
+      setEmailPassword("");
+      close();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("wrong-password") || msg.includes("invalid-credential")) {
+        setEmailError("Current password is incorrect.");
+      } else if (msg.includes("email-already-in-use")) {
+        setEmailError("That email is already in use.");
+      } else {
+        setEmailError("Failed to update email. Please try again.");
+      }
+    }
   };
   const savePassword = async () => {
     if (!pwForm.current) { setPwError("Enter your current password."); return; }
@@ -564,7 +610,7 @@ export default function Settings() {
             label="Insurance Card / Document"
             preview={insuranceDoc}
             accept="image/*,.pdf"
-            onFile={(_, url) => setInsuranceDoc(url)}
+            onFile={(file, url) => { setInsuranceFile(file); setInsuranceDoc(url); }}
           />
           <SaveButton onClick={saveInsurance} />
         </div>
@@ -590,7 +636,7 @@ export default function Settings() {
             label="Inspection Report"
             preview={inspectionDoc}
             accept="image/*,.pdf"
-            onFile={(_, url) => setInspectionDoc(url)}
+            onFile={(file, url) => { setInspectionFile(file); setInspectionDoc(url); }}
           />
           <SaveButton onClick={saveInspection} />
         </div>
@@ -612,16 +658,24 @@ export default function Settings() {
       </BottomSheet>
 
       {/* Email Address */}
-      <BottomSheet open={modal === "email"} onClose={close} title="Email Address">
+      <BottomSheet open={modal === "email"} onClose={() => { setEmailError(""); setEmailPassword(""); close(); }} title="Email Address">
         <div className="space-y-4">
           <Field
-            label="Email Address"
+            label="New Email Address"
             value={emailDraft}
             onChange={setEmailDraft}
             type="email"
             placeholder="you@email.com"
             hint="Your primary email for statements and notifications."
           />
+          <Field
+            label="Current Password"
+            value={emailPassword}
+            onChange={setEmailPassword}
+            type="password"
+            placeholder="Confirm your password to change email"
+          />
+          {emailError && <p className="text-xs text-destructive">{emailError}</p>}
           <SaveButton onClick={saveEmail} />
         </div>
       </BottomSheet>

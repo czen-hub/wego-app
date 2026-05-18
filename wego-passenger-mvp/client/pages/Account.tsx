@@ -2,6 +2,8 @@
 import { useNavigate } from "react-router-dom";
 import { useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import {
   User, CreditCard, Shield, Building2, ChevronRight,
   Sun, Moon, LogOut, Star, HelpCircle, X, Plus, Trash2, Phone,
@@ -224,9 +226,17 @@ export default function Account() {
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
-  const saveProfile = () => {
-    setName(draftName.trim() || name);
-    setEmail(draftEmail.trim() || email);
+  const saveProfile = async () => {
+    const newName = draftName.trim() || name;
+    const newEmail = draftEmail.trim() || email;
+    setName(newName);
+    setEmail(newEmail);
+    if (user) {
+      await updateDoc(doc(db, "passengers", user.uid), {
+        name: newName,
+        email: newEmail,
+      });
+    }
     setEditProfileOpen(false);
   };
 

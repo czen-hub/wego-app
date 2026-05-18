@@ -13,6 +13,7 @@ import {
   Timestamp,
   GeoPoint,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -182,14 +183,23 @@ export function listenToDriverRide(
 }
 
 export async function acceptRide(rideId: string, driverId: string, driverMetadata: { name: string; rating: number; car: string; plate: string; }) {
-  await updateDoc(doc(db, "rides", rideId), {
-    driverId,
-    driverName: driverMetadata.name,
-    driverRating: driverMetadata.rating,
-    driverCar: driverMetadata.car,
-    driverPlate: driverMetadata.plate,
-    status: "accepted",
-    acceptedAt: serverTimestamp(),
+  const rideRef = doc(db, "rides", rideId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(rideRef);
+    if (!snap.exists()) throw new Error("Ride no longer exists.");
+    const data = snap.data();
+    if (data.status !== "pending" || data.driverId !== null) {
+      throw new Error("Ride already accepted by another driver.");
+    }
+    tx.update(rideRef, {
+      driverId,
+      driverName: driverMetadata.name,
+      driverRating: driverMetadata.rating,
+      driverCar: driverMetadata.car,
+      driverPlate: driverMetadata.plate,
+      status: "accepted",
+      acceptedAt: serverTimestamp(),
+    });
   });
 }
 

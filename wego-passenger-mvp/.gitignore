@@ -24,7 +24,9 @@ dist-ssr
 *.sw?
 
 .config/
-!.env
+.env
+.env.*
+!.env.example
 
 # Local Netlify folder
 .netlify

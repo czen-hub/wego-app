@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth()      { return request.auth != null; }
+    function isSelf(uid)   { return request.auth.uid == uid; }
+
+    // ── Drivers ───────────────────────────────────────────────────────────────
+    // Any authenticated user can read driver docs (passenger app shows driver info).
+    // Only the driver themselves can write their own document.
+    match /drivers/{driverId} {
+      allow read:  if isAuth();
+      allow write: if isAuth() && isSelf(driverId);
+    }
+
+    // ── Passengers ────────────────────────────────────────────────────────────
+    // Drivers need to read passenger name/rating on accepted rides.
+    // Only the passenger themselves can write their own document.
+    match /passengers/{passengerId} {
+      allow read:  if isAuth();
+      allow write: if isAuth() && isSelf(passengerId);
+    }
+
+    // ── Rides ─────────────────────────────────────────────────────────────────
+    match /rides/{rideId} {
+
+      // Read: own ride (as passenger or driver) OR any pending+unclaimed ride
+      // so drivers can see the queue.
+      allow read: if isAuth() && (
+        resource.data.passengerId == request.auth.uid ||
+        resource.data.driverId   == request.auth.uid ||
+        (resource.data.status == 'pending' && resource.data.driverId == null)
+      );
+
+      // Create: passengers only, must set themselves as owner, status must be pending.
+      allow create: if isAuth()
+        && request.resource.data.passengerId == request.auth.uid
+        && request.resource.data.status      == 'pending'
+        && request.resource.data.driverId    == null;
+
+      allow update: if isAuth() && (
+
+        // Passenger cancels their own pending or accepted ride.
+        (resource.data.passengerId == request.auth.uid
+          && resource.data.status in ['pending', 'accepted', 'reserved']
+          && request.resource.data.status == 'cancelled')
+
+        ||
+
+        // Driver claims an unclaimed pending ride (transaction in code prevents races).
+        (resource.data.status == 'pending'
+          && resource.data.driverId == null
+          && request.resource.data.driverId == request.auth.uid
+          && request.resource.data.status   == 'accepted')
+
+        ||
+
+        // Driver updates their own active ride (location, arrived, inProgress, completed).
+        (resource.data.driverId == request.auth.uid
+          && resource.data.status in ['accepted', 'arrived', 'inProgress'])
+
+        ||
+
+        // Either party submits a rating after the ride is completed.
+        (resource.data.status == 'completed'
+          && (resource.data.passengerId == request.auth.uid
+              || resource.data.driverId == request.auth.uid))
+      );
+
+      // No hard deletes — cancelled status is the soft-delete.
+      allow delete: if false;
+    }
+  }
+}
