@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeGo — Driver Pitch Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=DM+Sans:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:      #1a56db;
+    --blue-dark: #0033a0;
+    --dark:      #0f172a;
+    --slate:     #1e293b;
+    --mid:       #475569;
+    --muted:     #94a3b8;
+    --light:     #f1f5f9;
+    --white:     #ffffff;
+    --green:     #059669;
+    --red:       #dc2626;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #000;
+    overflow: hidden;
+  }
+
+  /* DECK */
+  .deck { width: 100%; height: 100%; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 60px 80px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  .slide.active { opacity: 1; pointer-events: all; }
+
+  /* BACKGROUNDS */
+  .bg-dark  { background: var(--dark); color: var(--white); }
+  .bg-blue  { background: linear-gradient(135deg, var(--blue) 0%, var(--blue-dark) 100%); color: var(--white); }
+  .bg-light { background: var(--light); color: var(--dark); }
+  .bg-white { background: var(--white); color: var(--dark); }
+  .bg-slate { background: var(--slate); color: var(--white); }
+
+  /* TYPOGRAPHY */
+  .label {
+    font-size: 13px; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; opacity: 0.6; margin-bottom: 16px;
+  }
+  h1 {
+    font-family: 'DM Sans', sans-serif; font-weight: 900;
+    font-size: clamp(48px, 7vw, 96px); line-height: 1.0;
+    letter-spacing: -3px;
+  }
+  h2 {
+    font-family: 'DM Sans', sans-serif; font-weight: 900;
+    font-size: clamp(36px, 5vw, 64px); line-height: 1.08;
+    letter-spacing: -2px; margin-bottom: 32px;
+  }
+  h3 {
+    font-family: 'DM Sans', sans-serif; font-weight: 800;
+    font-size: clamp(22px, 3vw, 34px); line-height: 1.2;
+    letter-spacing: -0.5px; margin-bottom: 12px;
+  }
+  p { font-size: clamp(15px, 1.8vw, 20px); line-height: 1.6; opacity: 0.85; }
+  .sub {
+    font-size: clamp(18px, 2.2vw, 26px); line-height: 1.5;
+    opacity: 0.75; margin-top: 20px; max-width: 640px; text-align: center;
+  }
+
+  /* LAYOUT HELPERS */
+  .center  { text-align: center; align-items: center; }
+  .left    { align-items: flex-start; }
+  .cols    { display: grid; gap: 40px; width: 100%; max-width: 1000px; }
+  .cols-2  { grid-template-columns: 1fr 1fr; }
+  .cols-3  { grid-template-columns: 1fr 1fr 1fr; }
+
+  /* CARDS */
+  .card {
+    background: rgba(255,255,255,0.08); border-radius: 16px;
+    padding: 32px 28px; border: 1px solid rgba(255,255,255,0.12);
+  }
+  .card-light {
+    background: var(--white); border-radius: 16px;
+    padding: 32px 28px; border: 1px solid #e2e8f0;
+    color: var(--dark);
+  }
+  .card h3 { color: var(--white); }
+  .card-light h3 { color: var(--dark); }
+
+  /* STATS */
+  .stat { text-align: center; }
+  .stat-num {
+    font-family: 'DM Sans', sans-serif; font-weight: 900;
+    font-size: clamp(40px, 6vw, 80px); line-height: 1;
+    letter-spacing: -2px;
+  }
+  .stat-label { font-size: 14px; opacity: 0.65; margin-top: 8px; font-weight: 500; }
+  .green { color: #34d399; }
+  .red   { color: #f87171; }
+  .blue  { color: #60a5fa; }
+  .gold  { color: #fbbf24; }
+
+  /* COMPARISON TABLE */
+  .compare { width: 100%; max-width: 860px; border-collapse: collapse; }
+  .compare th {
+    padding: 14px 20px; font-size: 13px; font-weight: 700;
+    letter-spacing: 1px; text-transform: uppercase; text-align: center;
+    border-bottom: 2px solid rgba(255,255,255,0.15);
+  }
+  .compare th:first-child { text-align: left; }
+  .compare td {
+    padding: 14px 20px; font-size: 16px; font-weight: 500;
+    text-align: center; border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .compare td:first-child { text-align: left; opacity: 0.75; font-weight: 400; }
+  .compare tr:last-child td { border-bottom: none; }
+  .compare .wego-col { background: rgba(255,255,255,0.07); }
+  .win { color: #34d399; font-weight: 700; }
+  .lose { color: #f87171; }
+
+  /* TIMELINE */
+  .timeline { width: 100%; max-width: 900px; }
+  .tl-item {
+    display: flex; gap: 24px; margin-bottom: 28px; align-items: flex-start;
+  }
+  .tl-dot {
+    min-width: 48px; height: 48px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); display: flex;
+    align-items: center; justify-content: center;
+    font-family: 'DM Sans', sans-serif; font-weight: 900;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .tl-dot.highlight { background: var(--blue); }
+  .tl-body h3 { font-size: 20px; margin-bottom: 4px; color: var(--white); }
+  .tl-body p  { font-size: 15px; opacity: 0.65; }
+
+  /* ROW */
+  .row { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; }
+  .row-label { flex: 1; font-size: 16px; opacity: 0.75; }
+  .row-val   { font-size: 18px; font-weight: 700; }
+
+  /* PILL */
+  .pill {
+    display: inline-block; padding: 6px 16px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+    background: rgba(255,255,255,0.12); margin-bottom: 24px;
+  }
+
+  /* NAV */
+  .nav {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px; z-index: 100;
+  }
+  .nav-btn {
+    width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.08); color: #fff; cursor: pointer;
+    font-size: 18px; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; backdrop-filter: blur(8px);
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.5); }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .nav-counter {
+    font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6);
+    min-width: 48px; text-align: center; letter-spacing: 1px;
+  }
+
+  /* DOTS */
+  .dots {
+    position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 100;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(255,255,255,0.25); transition: all 0.3s;
+  }
+  .dot.active { background: #fff; width: 20px; border-radius: 3px; }
+
+  /* SLIDE NUMBER */
+  .slide-num {
+    position: fixed; top: 28px; right: 36px;
+    font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.3);
+    letter-spacing: 1px; z-index: 100;
+  }
+
+  /* LOGO MARK */
+  .logo-mark {
+    font-family: 'DM Sans', sans-serif; font-weight: 900;
+    font-size: 28px; letter-spacing: -1px; margin-bottom: 40px;
+    opacity: 0.9;
+  }
+
+  .divider {
+    width: 60px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.3); margin: 24px auto;
+  }
+  .divider-blue { background: var(--blue); margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- SLIDE 1: TITLE -->
+  <div class="slide bg-dark center active">
+    <div class="logo-mark">WeGo</div>
+    <div class="label">A Driver Cooperative</div>
+    <h1>You Drive It.<br>You Own It.</h1>
+    <p class="sub">The rideshare platform built by drivers, owned by drivers — where 88% of every fare stays in your pocket.</p>
+    <div class="divider"></div>
+    <p style="font-size:14px; opacity:0.4; margin-top:8px;">Press → or click to advance</p>
+  </div>
+
+  <!-- SLIDE 2: THE PROBLEM -->
+  <div class="slide bg-slate center">
+    <div class="label">The Problem</div>
+    <h2>Uber Takes More<br>Than Half Your Money</h2>
+    <div class="cols cols-3" style="max-width:860px; margin-top:16px;">
+      <div class="card stat">
+        <div class="stat-num red">55%</div>
+        <div class="stat-label">Uber's average cut of every fare</div>
+      </div>
+      <div class="card stat">
+        <div class="stat-num red">$0</div>
+        <div class="stat-label">Retirement benefits from Uber or Lyft</div>
+      </div>
+      <div class="card stat">
+        <div class="stat-num red">$0</div>
+        <div class="stat-label">Ownership stake in the platform you built</div>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:32px;">A driver doing $5,000/month in fares pays Uber <strong style="color:#f87171;">$2,750</strong> in platform fees. Every month. Every year. For nothing.</p>
+  </div>
+
+  <!-- SLIDE 3: THE SOLUTION -->
+  <div class="slide bg-blue center">
+    <div class="label">The Solution</div>
+    <h2>WeGo Is Different</h2>
+    <div class="cols cols-3" style="max-width:900px; margin-top:16px;">
+      <div class="card stat">
+        <div class="stat-num green">88%</div>
+        <div class="stat-label">Of every fare goes to you — always</div>
+      </div>
+      <div class="card stat">
+        <div class="stat-num gold">5%</div>
+        <div class="stat-label">Invested into your retirement every month</div>
+      </div>
+      <div class="card stat">
+        <div class="stat-num blue">1</div>
+        <div class="stat-label">Vote in the cooperative — equal to every other member</div>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:32px;">Same app. Same rides. Same streets. You own a piece of the company instead of making someone else rich.</p>
+  </div>
+
+  <!-- SLIDE 4: HOW IT WORKS -->
+  <div class="slide bg-dark left" style="align-items:center;">
+    <div class="label" style="text-align:center;">How It Works</div>
+    <h2 style="text-align:center;">Three Steps to Ownership</h2>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot highlight">1</div>
+        <div class="tl-body">
+          <h3>Pay the $500 founding membership fee</h3>
+          <p>Split over 12 months ($41.67/month). This buys your cooperative share — your ownership stake in WeGo. Not a deposit. Not a subscription. You become a co-owner.</p>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot highlight">2</div>
+        <div class="tl-body">
+          <h3>Drive. Keep 88% of every fare.</h3>
+          <p>WeGo takes 12% only. 5% of that goes directly to your retirement account every month. The rest funds insurance and operations — not executive bonuses.</p>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot highlight">3</div>
+        <div class="tl-body">
+          <h3>Complete 20 years. Retire with everything.</h3>
+          <p>$20,000 equity payout. ~$2,500/month pension for life. Zero platform fee forever. Your years of driving become a real retirement — not just memories.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 5: MONEY COMPARISON -->
+  <div class="slide bg-slate center">
+    <div class="label">The Numbers</div>
+    <h2>Same Hours. Very Different Pay.</h2>
+    <p style="margin-bottom:28px; opacity:0.65;">Driver doing $5,000/month in gross fares</p>
+    <table class="compare">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Uber</th>
+          <th>Lyft</th>
+          <th class="wego-col" style="color:#60a5fa;">WeGo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Platform cut</td>
+          <td class="lose">~55% ($2,750)</td>
+          <td class="lose">~53% ($2,650)</td>
+          <td class="win wego-col">12% ($600)</td>
+        </tr>
+        <tr>
+          <td>Driver takes home</td>
+          <td class="lose">$2,250</td>
+          <td class="lose">$2,350</td>
+          <td class="win wego-col">$4,325 + dues</td>
+        </tr>
+        <tr>
+          <td>Retirement contribution</td>
+          <td class="lose">$0</td>
+          <td class="lose">$0</td>
+          <td class="win wego-col">$250/month (5%)</td>
+        </tr>
+        <tr>
+          <td>Insurance (all periods)</td>
+          <td class="lose">Gaps in Period 1</td>
+          <td class="lose">Gaps in Period 1</td>
+          <td class="win wego-col">Full coverage</td>
+        </tr>
+        <tr>
+          <td>Ownership stake</td>
+          <td class="lose">None</td>
+          <td class="lose">None</td>
+          <td class="win wego-col">Yes — 1 vote</td>
+        </tr>
+        <tr>
+          <td>Pension after 20 years</td>
+          <td class="lose">None</td>
+          <td class="lose">None</td>
+          <td class="win wego-col">~$2,500/month for life</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SLIDE 6: RETIREMENT TRACKS -->
+  <div class="slide bg-dark left" style="align-items:center;">
+    <div class="label" style="text-align:center;">Retirement</div>
+    <h2 style="text-align:center;">Two Tracks. Nobody Left Behind.</h2>
+    <div class="cols cols-2" style="max-width:900px;">
+      <div class="card">
+        <div class="pill">Under 50</div>
+        <h3>SEP-IRA Account</h3>
+        <p style="font-size:15px; margin-bottom:16px;">WeGo deposits 5% of your earnings into a personal retirement account in your name at Vanguard or Fidelity every month.</p>
+        <div class="row"><span class="row-label">You own it</span><span class="row-val green">✓</span></div>
+        <div class="row"><span class="row-label">Portable if you leave</span><span class="row-val green">✓</span></div>
+        <div class="row"><span class="row-label">After 30 years (7% return)</span><span class="row-val">~$1M</span></div>
+        <div class="row"><span class="row-label">Monthly at retirement</span><span class="row-val">~$1,426/mo*</span></div>
+        <p style="font-size:12px; opacity:0.4; margin-top:8px;">*In today's purchasing power</p>
+      </div>
+      <div class="card">
+        <div class="pill">Age 50 and Over</div>
+        <h3>Defined Benefit Pension</h3>
+        <p style="font-size:15px; margin-bottom:16px;">WeGo guarantees a fixed monthly income for life based on years driven — no market risk, no waiting for compound interest.</p>
+        <div class="row"><span class="row-label">5 years driven</span><span class="row-val green">~$750/mo</span></div>
+        <div class="row"><span class="row-label">8 years driven</span><span class="row-val green">~$1,200/mo</span></div>
+        <div class="row"><span class="row-label">10 years driven</span><span class="row-val green">~$1,500/mo</span></div>
+        <div class="row"><span class="row-label">Market risk</span><span class="row-val green">None</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 7: THE 20-YEAR MILESTONE -->
+  <div class="slide bg-blue center">
+    <div class="label">The 20-Year Milestone</div>
+    <h2>What Happens at Year 20</h2>
+    <div class="cols cols-3" style="max-width:960px; margin-top:8px;">
+      <div class="card">
+        <div class="stat-num gold" style="font-size:52px;">$20K</div>
+        <h3 style="margin-top:16px; font-size:18px;">Equity Payout</h3>
+        <p style="font-size:14px;">Your accumulated internal capital account paid as a lump sum on the day you complete 20 years.</p>
+      </div>
+      <div class="card">
+        <div class="stat-num green" style="font-size:52px;">$2,500</div>
+        <div style="font-size:15px; opacity:0.6; margin-bottom:12px;">per month, for life</div>
+        <h3 style="font-size:18px;">Legacy Pension</h3>
+        <p style="font-size:14px;">Starts immediately. Inflation-linked. Funded by the Retirement Trust and AV fleet income.</p>
+      </div>
+      <div class="card">
+        <div class="stat-num blue" style="font-size:52px;">0%</div>
+        <div style="font-size:15px; opacity:0.6; margin-bottom:12px;">platform fee forever</div>
+        <h3 style="font-size:18px;">Free Platform</h3>
+        <p style="font-size:14px;">After Year 20, keep 100% of every fare — alongside your pension — for as long as you drive.</p>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:28px;">A founding member who starts at 30 retires at 50 with $20K cash, $2,500/month for life, and free rides forever.</p>
+  </div>
+
+  <!-- SLIDE 8: INSURANCE -->
+  <div class="slide bg-slate left" style="align-items:center;">
+    <div class="label" style="text-align:center;">Insurance</div>
+    <h2 style="text-align:center;">Covered From the Moment<br>You Turn On the App</h2>
+    <div class="cols cols-3" style="max-width:960px;">
+      <div class="card" style="text-align:center;">
+        <div style="font-size:36px; margin-bottom:12px;">🟡</div>
+        <h3 style="font-size:18px;">Period 1</h3>
+        <p style="font-size:14px; margin-bottom:16px;">App on, waiting for a ride</p>
+        <div style="font-size:13px; margin-bottom:6px;" class="lose">Uber: $50K only</div>
+        <div style="font-size:15px; font-weight:700;" class="green">WeGo: Full primary coverage</div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <div style="font-size:36px; margin-bottom:12px;">🟠</div>
+        <h3 style="font-size:18px;">Period 2</h3>
+        <p style="font-size:14px; margin-bottom:16px;">Ride accepted, en route</p>
+        <div style="font-size:13px; margin-bottom:6px;" class="green">Uber: $1M liability</div>
+        <div style="font-size:15px; font-weight:700;" class="green">WeGo: Full primary coverage</div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <div style="font-size:36px; margin-bottom:12px;">🟢</div>
+        <h3 style="font-size:18px;">Period 3</h3>
+        <p style="font-size:14px; margin-bottom:16px;">Passenger in the car</p>
+        <div style="font-size:13px; margin-bottom:6px;" class="green">Uber: $1M liability</div>
+        <div style="font-size:15px; font-weight:700;" class="green">WeGo: Full primary coverage</div>
+      </div>
+    </div>
+    <p style="margin-top:28px; opacity:0.65; text-align:center; max-width:640px;">Your personal auto insurance excludes commercial driving. The moment the app is on, you need commercial coverage. WeGo provides it — no gaps, no runaround, no "your personal policy first."</p>
+  </div>
+
+  <!-- SLIDE 9: PROTECTIONS -->
+  <div class="slide bg-dark left" style="align-items:center;">
+    <div class="label" style="text-align:center;">Your Protections</div>
+    <h2 style="text-align:center;">Your Money Is Locked Away<br>From Management. By Law.</h2>
+    <div class="cols cols-3" style="max-width:960px;">
+      <div class="card">
+        <h3 style="font-size:18px; margin-bottom:12px;">ERISA Qualified Trust</h3>
+        <p style="font-size:14px;">The pension fund is a separate legal entity. Management cannot touch it. Creditors cannot reach it. Same legal protection as major U.S. pension funds.</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size:18px; margin-bottom:12px;">Joint Board of Trustees</h3>
+        <p style="font-size:14px;">50% elected drivers. 50% independent fiduciaries. Their legal duty is only to you — not to cooperative management. Their appointments survive leadership changes.</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size:18px; margin-bottom:12px;">Supermajority Lock</h3>
+        <p style="font-size:14px;">Pension protections cannot be removed for 10 years. After that, 75% of members must vote to change them. No executive or board majority can take your pension away.</p>
+      </div>
+    </div>
+    <div style="margin-top:28px; padding:20px 32px; background:rgba(255,255,255,0.06); border-radius:12px; text-align:center; max-width:700px;">
+      <p style="font-size:15px;">Your SEP-IRA is in your name at Vanguard or Fidelity. <strong style="color:#34d399;">If WeGo closes tomorrow, your retirement account is completely unaffected.</strong></p>
+    </div>
+  </div>
+
+  <!-- SLIDE 10: CTA -->
+  <div class="slide bg-blue center">
+    <div class="logo-mark">WeGo</div>
+    <div class="label">Founding Member Opportunity</div>
+    <h2>Be Part of the First 1,000</h2>
+    <p class="sub">Founding members lock in the lowest loyalty ladder fees forever. The earlier you join, the less you pay every year — permanently.</p>
+    <div class="cols cols-3" style="max-width:720px; margin-top:28px;">
+      <div class="stat card">
+        <div class="stat-num gold">$500</div>
+        <div class="stat-label">One-time buy-in (over 12 months)</div>
+      </div>
+      <div class="stat card">
+        <div class="stat-num green">88%</div>
+        <div class="stat-label">Your share of every fare</div>
+      </div>
+      <div class="stat card">
+        <div class="stat-num blue">20</div>
+        <div class="stat-label">Years to a full pension for life</div>
+      </div>
+    </div>
+    <div style="margin-top:36px; padding:20px 40px; background:rgba(255,255,255,0.15); border-radius:12px; border: 1px solid rgba(255,255,255,0.3);">
+      <p style="font-size:18px; font-weight:600; text-align:center;">wego-cooperative.com &nbsp;·&nbsp; Drive &amp; Own</p>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- UI CHROME -->
+<div class="slide-num" id="slideNum">1 / 10</div>
+<div class="dots" id="dots"></div>
+<div class="nav">
+  <button class="nav-btn" id="prevBtn" onclick="go(-1)" disabled>&#8592;</button>
+  <span class="nav-counter" id="counter">1 / 10</span>
+  <button class="nav-btn" id="nextBtn" onclick="go(1)">&#8594;</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total  = slides.length;
+  let cur = 0;
+
+  // Build dots
+  const dotsEl = document.getElementById('dots');
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    d.style.cursor = 'pointer';
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n) {
+    slides[cur].classList.remove('active');
+    dotsEl.children[cur].classList.remove('active');
+    cur = Math.max(0, Math.min(total - 1, n));
+    slides[cur].classList.add('active');
+    dotsEl.children[cur].classList.add('active');
+    document.getElementById('prevBtn').disabled = cur === 0;
+    document.getElementById('nextBtn').disabled = cur === total - 1;
+    document.getElementById('counter').textContent  = (cur + 1) + ' / ' + total;
+    document.getElementById('slideNum').textContent = (cur + 1) + ' / ' + total;
+  }
+
+  function go(dir) { goTo(cur + dir); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown'  || e.key === ' ') go(1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                      go(-1);
+    if (e.key === 'f' || e.key === 'F') document.documentElement.requestFullscreen?.();
+  });
+
+  // Swipe support
+  let tx = 0;
+  document.addEventListener('touchstart', e => tx = e.touches[0].clientX);
+  document.addEventListener('touchend',   e => {
+    const dx = tx - e.changedTouches[0].clientX;
+    if (Math.abs(dx) > 50) go(dx > 0 ? 1 : -1);
+  });
+</script>
+</body>
+</html>
