@@ -1,4 +1,4 @@
-import { Wallet, TrendingUp, CheckCircle, Shield, Info } from "lucide-react";
+﻿import { Wallet, TrendingUp, CheckCircle, Shield, Info } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 const TARGET_YEARS = 20;
@@ -202,7 +202,7 @@ export default function Legacy() {
           </div>
           <div className="space-y-2">
             {[
-              { period: "Period 1", desc: "App on, waiting for a ride",      note: "Basic liability — Uber often skips this" },
+              { period: "Period 1", desc: "App on, waiting for a ride",      note: "Basic liability — Corp 1 often skips this" },
               { period: "Period 2", desc: "Ride accepted, heading to pickup", note: "$1M liability" },
               { period: "Period 3", desc: "Passenger in vehicle",             note: "$1M liability" },
             ].map(({ period, desc, note }) => (

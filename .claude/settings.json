@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill /PID 37244 /F)",
+      "PowerShell(Stop-Process -Id 37244 -Force)",
+      "PowerShell(Get-Process -Name \"node\" | Where-Object { $_.Id -ne \\(Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1\\).OwningProcess } | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; netstat -ano | findstr \":8081\")",
+      "PowerShell(Stop-Process -Id 37268 -Force -ErrorAction SilentlyContinue)",
+      "Bash(pnpm run *)",
+      "Bash(firebase deploy *)",
+      "Bash(findstr \":5173\")",
+      "Bash(tasklist /FI \"PID eq 21468\" /FI \"PID eq 37260\")",
+      "PowerShell(Get-Process -Id 21468, 37260 -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8080)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8081)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8082)",
+      "Bash(start \"\" \"http://localhost:8080\")",
+      "Bash(git commit -m ' *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\dingo\\\\Desktop\\\\wego app\\\\wego-driver-mvp-b02\\\\client\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(Sort-Object FullName)",
+      "Bash(firebase use *)",
+      "Bash(firebase hosting:sites:create wego-driver-app)",
+      "Bash(firebase target:apply hosting driver wego-driver-app)",
+      "Bash(git pull *)",
+      "Bash(gh repo *)",
+      "WebFetch(domain:github.com)",
+      "Bash(git commit -m 'fix: correct GitHub Pages path from ./wego-app/wego-website to ./wego-website *)"
+    ]
+  }
+}

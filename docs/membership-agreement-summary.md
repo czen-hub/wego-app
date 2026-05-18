@@ -1,4 +1,4 @@
-# WeGo Cooperative — Membership Agreement Summary
+﻿# WeGo Cooperative — Membership Agreement Summary
 ### Plain-English Version for Prospective Members
 
 > **This is not the legal agreement.** This is a human explanation of what you are agreeing to when you become a WeGo founding member. The full legal membership agreement governs in all cases. If anything in this summary conflicts with the legal agreement, the legal agreement controls.
@@ -54,8 +54,8 @@ You keep **88% of every fare**. No surge deductions, no hidden service fees, no 
 
 | Platform | Driver's Share |
 |---------|--------------|
-| Uber | ~45% |
-| Lyft | ~47% |
+| Corp 1 | ~45% |
+| Corp 2 | ~47% |
 | **WeGo** | **88%** |
 
 ---
@@ -141,7 +141,7 @@ After Year 20, the 12% platform fee drops to $0 permanently. You keep 100% of ev
 
 From Day 1, your membership funds **group commercial liability coverage** through a major carrier (Progressive, Liberty Mutual, or equivalent).
 
-| Coverage Period | Personal Insurance | Uber/Lyft | WeGo |
+| Coverage Period | Personal Insurance | Corp 1/Corp 2 | WeGo |
 |----------------|-------------------|-----------|------|
 | App on, waiting | Excludes you | Minimal ($50K) | Full primary coverage |
 | Ride accepted | Excludes you | $1M liability | Full primary coverage |
@@ -227,7 +227,7 @@ By signing the WeGo Membership Agreement you agree to:
 3. Maintain your vehicle to WeGo's Member Standards (cleanliness, safety, age requirements)
 4. Follow the cooperative's Driver Code of Conduct
 5. Accept the cooperative's formal dispute resolution process before seeking outside legal action
-6. Drive exclusively through the WeGo platform (no simultaneous active Uber/Lyft accounts while on duty)
+6. Drive exclusively through the WeGo platform (no simultaneous active Corp 1/Corp 2 accounts while on duty)
 
 ---
 

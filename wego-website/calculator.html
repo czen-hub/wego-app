@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Earnings Calculator — WeGo Cooperative</title>
-    <meta name="description" content="See exactly how much more you'd earn driving for WeGo vs Uber or Lyft. Adjust your hours, fares, and gas costs — and see a full 20-year lifetime earnings comparison.">
+    <meta name="description" content="See exactly how much more you'd earn driving for WeGo vs Corp 1 or Corp 2. Adjust your hours, fares, and gas costs — and see a full 20-year lifetime earnings comparison.">
     <link rel="dns-prefetch" href="//x.com">
     <link rel="dns-prefetch" href="//www.linkedin.com">
     <link rel="dns-prefetch" href="//www.instagram.com">
@@ -70,17 +70,17 @@
                     <div id="mode-weekly">
                         <div class="input-group">
                             <label>
-                                Your weekly earnings on Uber / Lyft
+                                Your weekly earnings on Corp 1 / Corp 2
                                 <span class="val-display" id="val-earn">$540/wk</span>
                             </label>
                             <input type="range" id="sl-earn" min="90" max="1800" step="10" value="540"
-                                   title="Your weekly Uber/Lyft take-home"
+                                   title="Your weekly Corp 1/Corp 2 take-home"
                                    oninput="syncEarnToFares(); update()">
                             <div class="range-labels"><span>$90/wk</span><span>$1,800/wk</span></div>
                         </div>
                         <div class="input-group">
                             <label>
-                                Passengers pay weekly (Uber keeps 55%)
+                                Passengers pay weekly (Corp 1 keeps 55%)
                                 <span class="val-display" id="val-fares">$1,200/wk</span>
                             </label>
                             <input type="range" id="sl-fares" min="200" max="5000" step="50" value="1200"
@@ -134,7 +134,7 @@
                             </div>
                             <div class="rides-derived-stat">
                                 <div class="rd-val" id="rd-uber-earn">$675</div>
-                                <div class="rd-lbl">Your Uber earn / wk</div>
+                                <div class="rd-lbl">Your Corp 1 earn / wk</div>
                             </div>
                             <div class="rides-derived-stat">
                                 <div class="rd-val" id="rd-wego-earn">$1,303</div>
@@ -147,17 +147,17 @@
                     <div id="mode-exp" class="mode-panel-hidden">
                         <div class="input-group">
                             <label>
-                                Current weekly earnings on Uber / Lyft
+                                Current weekly earnings on Corp 1 / Corp 2
                                 <span class="val-display" id="val-exp-earn">$540/wk</span>
                             </label>
                             <input type="range" id="sl-exp-earn" min="90" max="1800" step="10" value="540"
-                                   title="Your current weekly Uber/Lyft take-home earnings"
+                                   title="Your current weekly Corp 1/Corp 2 take-home earnings"
                                    oninput="syncExpEarnToFares()">
                             <div class="range-labels"><span>$90/wk</span><span>$1,800/wk</span></div>
                         </div>
                         <div class="input-group">
                             <label>
-                                Years professional driving (Uber / Lyft / taxi)
+                                Years professional driving (Corp 1 / Corp 2 / taxi)
                                 <span class="val-display" id="val-exp-years">5 yrs</span>
                             </label>
                             <input type="range" id="sl-exp-years" min="0" max="15" step="1" value="5"
@@ -271,7 +271,7 @@
                     <hr class="divider-thin">
 
                     <p style="font-size:12px; color:var(--text-dim); line-height:1.6;">
-                        Based on verified Uber fare data across 11 Bay Area routes (April 2026). Uber platform cut = 55%. WeGo = 12% tech fee + $75/month membership.
+                        Based on verified Corp 1 fare data across 11 Bay Area routes (April 2026). Corp 1 platform cut = 55%. WeGo = 12% tech fee + $75/month membership.
                     </p>
                 </div>
 
@@ -281,7 +281,7 @@
                     <!-- Monthly take-home comparison -->
                     <div class="compare-row">
                         <div class="earn-card uber">
-                            <div class="platform-label">✕ Uber / Lyft</div>
+                            <div class="platform-label">✕ Corp 1 / Corp 2</div>
                             <div class="earn-amount" id="res-uber-monthly">$0</div>
                             <div class="earn-period">Monthly take-home</div>
                             <div class="earn-breakdown">
@@ -313,14 +313,14 @@
                         <div style="text-align:right;">
                             <div class="adv-label">$/hr active (WeGo)</div>
                             <div class="adv-value" id="res-hourly">$0</div>
-                            <div class="adv-sub">vs <span id="res-hourly-uber">$0</span>/hr Uber</div>
+                            <div class="adv-sub">vs <span id="res-hourly-uber">$0</span>/hr Corp 1</div>
                         </div>
                     </div>
 
                     <!-- Break-even threshold note -->
                     <div class="breakeven-note" id="breakeven-note">
                         <span class="breakeven-icon">⚖️</span>
-                        <span id="breakeven-text">WeGo monthly dues ($75) are covered after approximately <strong>5 rides/month</strong> at average Bay Area fares. Below that threshold, Uber is cheaper. Above it, WeGo wins — permanently.</span>
+                        <span id="breakeven-text">WeGo monthly dues ($75) are covered after approximately <strong>5 rides/month</strong> at average Bay Area fares. Below that threshold, Corp 1 is cheaper. Above it, WeGo wins — permanently.</span>
                     </div>
 
                     <!-- 12-Month Total Compensation -->
@@ -328,7 +328,7 @@
                         <div class="acc-header">12-Month Total Compensation</div>
                         <div class="acc-cards">
                             <div class="acc-card acc-uber">
-                                <div class="acc-platform">✕ Uber / Lyft</div>
+                                <div class="acc-platform">✕ Corp 1 / Corp 2</div>
                                 <div class="acc-amount" id="acc-uber-total">$0</div>
                                 <div class="acc-label">You keep per year</div>
                             </div>
@@ -352,7 +352,7 @@
                             <thead>
                                 <tr>
                                     <th>Item</th>
-                                    <th class="uber-col">Uber / Lyft</th>
+                                    <th class="uber-col">Corp 1 / Corp 2</th>
                                     <th class="wego-col">WeGo</th>
                                     <th class="diff-col">Your Gain</th>
                                 </tr>
@@ -464,11 +464,11 @@
 
                     <!-- 20-year lifetime value -->
                     <div class="lifetime-card">
-                        <h4>🌿 Lifetime Value vs Uber (Over <span id="lt-years-label">20</span> Years)*</h4>
+                        <h4>🌿 Lifetime Value vs Corp 1 (Over <span id="lt-years-label">20</span> Years)*</h4>
                         <div class="lifetime-stats">
                             <div class="lt-stat">
                                 <div class="lt-val" id="lt-uber-total">$0</div>
-                                <div class="lt-lbl">Total take-home<br>on Uber</div>
+                                <div class="lt-lbl">Total take-home<br>on Corp 1</div>
                             </div>
                             <div class="lt-stat">
                                 <div class="lt-val" id="lt-wego-total">$0</div>
@@ -577,7 +577,7 @@
 
 <script>
 // ── CONSTANTS (match your business model exactly) ──────────────
-const UBER_CUT       = 0.55;   // Uber platform take
+const UBER_CUT       = 0.55;   // Corp 1 platform take
 const WEGO_TECH      = 0.12;   // WeGo tech fee
 const WEGO_MONTHLY   = 75;     // Monthly dues
 const FICA_SAVING    = 0.0765; // Employer FICA half (co-op covers this)
@@ -845,9 +845,9 @@ function update() {
     const ltYears = driveYears;
     document.getElementById('lt-years-label').textContent = ltYears;
 
-    const ltUberTotal  = uberWeekly * 52 * ltYears;
+    const ltCorp 1Total  = uberWeekly * 52 * ltYears;
     const ltWegoTotal  = wegoWeekly * 52 * ltYears;
-    const ltDiff       = ltWegoTotal - ltUberTotal;
+    const ltDiff       = ltWegoTotal - ltCorp 1Total;
     const ltPension    = pensionAmt * 12 * 20; // 20 years of pension payout
     const grossAnnual  = adjustedGross * 52;
     const ltDividend   = grossAnnual * DIVIDEND_RATE * ltYears; // patronage dividends over career
@@ -857,14 +857,14 @@ function update() {
     const diffEl   = document.getElementById('lt-diff');
     const penEl    = document.getElementById('lt-pension-total');
 
-    uberEl.textContent  = fmtK(ltUberTotal);
+    uberEl.textContent  = fmtK(ltCorp 1Total);
     uberEl.dataset.tip  = `$${Math.round(uberWeekly).toLocaleString()}/wk × 52 wks × ${ltYears} yrs`;
 
     wegoEl.textContent  = fmtK(ltWegoTotal);
     wegoEl.dataset.tip  = `$${Math.round(wegoWeekly).toLocaleString()}/wk × 52 wks × ${ltYears} yrs`;
 
     diffEl.textContent  = sign(ltDiff) + fmtK(ltDiff);
-    diffEl.dataset.tip  = `WeGo ${fmtK(ltWegoTotal)} − Uber ${fmtK(ltUberTotal)}`;
+    diffEl.dataset.tip  = `WeGo ${fmtK(ltWegoTotal)} − Corp 1 ${fmtK(ltCorp 1Total)}`;
 
     penEl.textContent   = fmtK(ltPension);
     penEl.dataset.tip   = `~$${Math.round(pensionAmt).toLocaleString()}/mo × 12 mo × 20 post-retire yrs`;
@@ -934,8 +934,8 @@ function updateExpDerived() {
 }
 
 // ── BIDIRECTIONAL EARN ↔ FARES SYNC ───────────────────────────
-// Slider 1 = Uber/Lyft driver earnings (45% of passenger fares)
-// Slider 2 = passenger total fares (≈ 2.2× driver's Uber earnings)
+// Slider 1 = Corp 1/Corp 2 driver earnings (45% of passenger fares)
+// Slider 2 = passenger total fares (≈ 2.2× driver's Corp 1 earnings)
 function syncFaresToEarn(gross) {
     const uberEarn = Math.round(gross * (1 - UBER_CUT));
     const sl = document.getElementById('sl-earn');

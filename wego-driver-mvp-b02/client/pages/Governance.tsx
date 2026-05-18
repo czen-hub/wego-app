@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Award, CheckCircle, XCircle, Shield, Settings } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -266,7 +266,7 @@ export default function Governance() {
             </p>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Unlike Uber or Lyft, WeGo cannot remove you by algorithm alone. Every deactivation requires:
+            Unlike Corp 1 or Corp 2, WeGo cannot remove you by algorithm alone. Every deactivation requires:
           </p>
           <ul className="space-y-2">
             {[

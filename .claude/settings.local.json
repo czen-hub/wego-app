@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\dingo\\\\Desktop\\\\wego app\" -Directory)",
+      "Bash(Test-Path \"c:\\\\Users\\\\dingo\\\\Desktop\\\\wego app\\\\wego-passenger-mvp\\\\node_modules\\\\leaflet\")",
+      "WebSearch",
+      "WebFetch(domain:help.uber.com)",
+      "WebFetch(domain:www.yahoo.com)",
+      "WebFetch(domain:www.ridesharingdriver.com)",
+      "WebFetch(domain:travelpander.com)",
+      "WebFetch(domain:www.ridester.com)",
+      "Bash(npx firebase *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}

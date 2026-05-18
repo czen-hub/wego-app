@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -82,7 +82,7 @@ const INITIAL_MESSAGES: InboxMessage[] = [
   { id: "m2", type: "promo", title: "Invite friends, earn $10", body: "Share your code SARAH-WEGO and get $10 credit when a friend completes their first ride.", time: "2 days ago", read: false },
   { id: "m3", type: "ride", title: "Receipt: Apr 27 ride", body: "Your $52.00 ride to 555 California St. Driver earned $45.76 (88%).", time: "Apr 27", read: false },
   { id: "m4", type: "safety", title: "Trip sharing updated", body: "Your emergency contact settings have been saved.", time: "Apr 23", read: true },
-  { id: "m5", type: "promo", title: "No surge — ever", body: "Unlike Uber and Lyft, WeGo never applies surge pricing. Your fare is always fair.", time: "Apr 19", read: true },
+  { id: "m5", type: "promo", title: "No surge — ever", body: "Unlike Corp 1 and Corp 2, WeGo never applies surge pricing. Your fare is always fair.", time: "Apr 19", read: true },
 ];
 
 const REFERRAL_CODE = "SARAH-WEGO";
@@ -114,7 +114,7 @@ const HOW_IT_WORKS_STEPS = [
 
 const COOP_FAQS = [
   { q: "What is the WeGo Cooperative?", a: "WeGo is a driver-owned cooperative, not a venture-backed corporation. Drivers democratically govern the platform, vote on policies, and share in the platform's growth. Every driver holds one seat with one vote — no outside investors, no board override." },
-  { q: "Why 88% to drivers?", a: "Traditional ride-hail apps take ~55% of every fare in effective commission. WeGo takes only 12% — just enough to run operations, fund driver benefits, and build the shared AV fleet. That means drivers keep roughly 69% more of each fare compared to Uber or Lyft." },
+  { q: "Why 88% to drivers?", a: "Traditional ride-hail apps take ~55% of every fare in effective commission. WeGo takes only 12% — just enough to run operations, fund driver benefits, and build the shared AV fleet. That means drivers keep roughly 69% more of each fare compared to Corp 1 or Corp 2." },
   { q: "What is the cooperative fund used for?", a: "The 12% cooperative fee funds: driver pension plans, group commercial insurance, app infrastructure, and the shared autonomous vehicle fleet that drivers will own collectively by Year 6. A real-time Member Transparency Dashboard lets every driver track exactly where every dollar goes." },
   { q: "Why is there no surge pricing?", a: "Surge pricing extracts money from passengers during high-demand moments to maximise corporate profit. WeGo's cooperative model doesn't need to do that — our fares stay fair at all times. The fare shown at booking is the fare you pay, always." },
   { q: "Do drivers earn a pension?", a: "Yes. WeGo drivers who complete 20 years of active cooperative membership become eligible for a projected ~$2,500/month pension for life — funded by a legally separate ERISA trust that management cannot touch. Partial vesting starts at 3 years. It's modeled after the military's 20-year retirement." },
@@ -124,7 +124,7 @@ const COOP_FAQS = [
 const DRIVER_FACTS = [
   { icon: <Check size={14} className="text-primary" />, text: "Background-checked and licensed before joining" },
   { icon: <Check size={14} className="text-primary" />, text: "Verified cooperative member with seat ownership" },
-  { icon: <Check size={14} className="text-primary" />, text: "Earns 88% of every fare — vs. ~45% effective pay on Uber/Lyft" },
+  { icon: <Check size={14} className="text-primary" />, text: "Earns 88% of every fare — vs. ~45% effective pay on Corp 1/Corp 2" },
   { icon: <Check size={14} className="text-primary" />, text: "Enrolled in cooperative 20-year pension plan" },
   { icon: <Check size={14} className="text-primary" />, text: "Covered by group commercial insurance through the coop" },
   { icon: <Check size={14} className="text-primary" />, text: "Votes on platform policy — 1 driver, 1 vote" },
@@ -135,8 +135,8 @@ const HELP_FAQS = [
   { q: "How do I cancel a ride?", a: "Open the ride screen and tap 'Cancel Ride'. You'll see the exact fee before confirming — no surprises. Cancelling within 5 minutes of booking is always free." },
   { q: "What are the cancellation fees?", a: "Free: within 5 minutes of booking.\n\n$5.00: driver nearby (< 5 miles) — +$3 if already arrived = $8.00.\n\n$9.00: driver 5–10 miles en route — +$3 if already arrived = $12.00.\n\n$14.00: driver drove 10+ miles — +$3 if already arrived = $17.00.\n\nThe $3.00 arrived fee covers up to 5 minutes of free wait time at your pickup (8 minutes for advance bookings). After that, a $0.50/min meter runs for up to 2 more minutes before the driver is eligible to leave.\n\n100% goes directly to your driver — WeGo keeps none of it." },
   { q: "What if my driver doesn't show?", a: "If your driver hasn't arrived within 10 minutes of the expected time, use the chat or call button on the ride screen to reach them. If the driver is significantly late, the app automatically waives the cancellation fee — you can cancel penalty-free." },
-  { q: "How are fares calculated?", a: "Fares are based on distance, estimated trip time, a base rate, and a booking fee. There is never surge pricing on WeGo — the fare shown at booking is the fare you pay, always.\n\nCompared to Uber X on-demand, WeGo fares are typically 10–20% lower. On advance bookings, the gap is larger — WeGo Reserve runs $15–25 cheaper than Uber Reserve on the same route, because Uber adds a hidden variable reservation fee that can reach $15–35+ depending on demand." },
-  { q: "Can I schedule a ride in advance?", a: "Yes — tap 'Reserve' on the home screen to book up to 7 days ahead. A flat $8.00 advance booking fee applies — 100% of it goes directly to your driver as a scheduling commitment bonus, not to WeGo.\n\nFree cancellation up to 1 hour before your pickup. Even with the advance fee, WeGo Reserve is typically $15–25 cheaper than Uber Reserve on the same route." },
+  { q: "How are fares calculated?", a: "Fares are based on distance, estimated trip time, a base rate, and a booking fee. There is never surge pricing on WeGo — the fare shown at booking is the fare you pay, always.\n\nCompared to Corp 1 X on-demand, WeGo fares are typically 10–20% lower. On advance bookings, the gap is larger — WeGo Reserve runs $15–25 cheaper than Corp 1 Reserve on the same route, because Corp 1 adds a hidden variable reservation fee that can reach $15–35+ depending on demand." },
+  { q: "Can I schedule a ride in advance?", a: "Yes — tap 'Reserve' on the home screen to book up to 7 days ahead. A flat $8.00 advance booking fee applies — 100% of it goes directly to your driver as a scheduling commitment bonus, not to WeGo.\n\nFree cancellation up to 1 hour before your pickup. Even with the advance fee, WeGo Reserve is typically $15–25 cheaper than Corp 1 Reserve on the same route." },
   { q: "Can I ask my driver to make a stop?", a: "Yes — tap 'Request a Stop' during your ride. A flat $2.00 stop fee is added to your fare. 100% of it goes directly to your driver for the extra wait time. You can make multiple stops; each adds $2.00.\n\nBoth the stop fee and any wait meter charges appear as separate line items on your final receipt so everything is transparent." },
   { q: "Can I tip my driver?", a: "Yes — you can tip after your ride is complete. 100% of tips go directly to your driver. WeGo never takes a cut of tips. You'll be prompted to tip on the post-ride screen; you can also tip from your Ride History at any time within 24 hours." },
   { q: "How do I message or call my driver?", a: "Once a driver is matched, tap the phone or chat icon on the ride screen. You can send quick messages or type your own. All communication is in-app — your personal phone number is never shared with the driver." },
@@ -812,7 +812,7 @@ export default function Account() {
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Uber / Lyft driver</span>
+                  <span className="text-sm text-muted-foreground">Corp 1 / Corp 2 driver</span>
                   <div className="flex items-center gap-2">
                     <div className="w-24 h-2 bg-muted/30 rounded-full overflow-hidden">
                       <div className="h-full w-[45%] bg-muted-foreground/40 rounded-full" />

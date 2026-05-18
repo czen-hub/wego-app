@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    WEGO COOPERATIVE — styles.css
    Covers: index, about, features, services, faq, contact, calculator
    ============================================================ */
@@ -1564,7 +1564,7 @@ section { padding: 104px 0; }
   .compare-table td:nth-child(2) { font-size: 12px; background: #fff; }
   .compare-table td:nth-child(3) { font-size: 12px; background: #fff; border-left: 1px solid #e0e6ed; }
   .compare-table .hl td:nth-child(2), .compare-table .hl td:nth-child(3) { background: var(--primary-muted); }
-  .compare-table td:nth-child(2)::before { content: "Uber / Lyft"; display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 4px; }
+  .compare-table td:nth-child(2)::before { content: "Corp 1 / Corp 2"; display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 4px; }
   .compare-table td:nth-child(3)::before { content: "WeGo"; display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary); margin-bottom: 4px; }
 
   /* Typography scale */

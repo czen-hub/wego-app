@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+﻿import { useState, useRef, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, ChevronLeft, Clock, Shield, Info, Navigation, ExternalLink } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
@@ -446,7 +446,7 @@ export default function RideRequest() {
                 <>
                   <span className="text-sm text-muted-foreground line-through">${(uberX + tollTotal).toFixed(2)}</span>
                   <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    Save ${(uberX - fare).toFixed(2)} vs Uber X
+                    Save ${(uberX - fare).toFixed(2)} vs Corp 1 X
                   </span>
                 </>
               ) : (

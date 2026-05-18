@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { MapPin, Star, Package, X, Send, Check, MessageSquare, Clock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { listenToRideHistory, sendRideMessage, type Ride } from "@/lib/db";
@@ -157,10 +157,10 @@ export default function RideHistory() {
                   </div>
                 </div>
                 <div className="bg-card border border-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">Saved vs. Uber / Lyft</p>
+                  <p className="text-xs text-muted-foreground">Saved vs. Corp 1 / Corp 2</p>
                   <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Uber / Lyft estimate</span>
+                      <span className="text-muted-foreground">Corp 1 / Corp 2 estimate</span>
                       <span className="line-through text-muted-foreground">${uberEstimate.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
@@ -173,7 +173,7 @@ export default function RideHistory() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    No surge pricing, ever. Based on Uber/Lyft averaging 50% more.
+                    No surge pricing, ever. Based on Corp 1/Corp 2 averaging 50% more.
                   </p>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { TrendingUp, Zap, Cpu, Shield, History } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -25,7 +25,7 @@ export default function Earnings() {
   const yourTake = entries.reduce((s, e) => s + e.amount, 0);
   const totalRides = entries.length;
 
-  const standardPayout = grossEarnings * 0.52; // what they'd keep at Uber/Lyft (48% cut)
+  const standardPayout = grossEarnings * 0.52; // what they'd keep at Corp 1/Corp 2 (48% cut)
   const wegoAdvantage = yourTake - standardPayout;
 
   const hardwareReserve = coopFee * 0.5;
@@ -112,7 +112,7 @@ export default function Earnings() {
               <p className="text-xs font-semibold text-primary uppercase tracking-wide">The WeGo Advantage — This Week</p>
               <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Uber / Lyft (~48% cut)</p>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Corp 1 / Corp 2 (~48% cut)</p>
                   <p className="text-xl font-bold text-muted-foreground line-through decoration-red-400">${standardPayout.toFixed(2)}</p>
                 </div>
                 <div className="h-8 w-px bg-border flex-shrink-0" />
