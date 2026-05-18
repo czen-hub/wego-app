@@ -203,6 +203,7 @@
     background: rgba(255,255,255,0.3); margin: 24px auto;
   }
   .divider-blue { background: var(--blue); margin: 24px 0; }
+  .cta-link { color: #fff; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -472,7 +473,7 @@
       </div>
     </div>
     <div style="margin-top:36px; padding:20px 40px; background:rgba(255,255,255,0.15); border-radius:12px; border: 1px solid rgba(255,255,255,0.3);">
-      <p style="font-size:18px; font-weight:600; text-align:center;">wego-cooperative.com &nbsp;·&nbsp; Drive &amp; Own</p>
+      <p style="font-size:18px; font-weight:600; text-align:center;"><a href="https://czen-hub.github.io/wego-app/" target="_blank" rel="noopener" class="cta-link">czen-hub.github.io/wego-app</a> &nbsp;·&nbsp; Drive &amp; Own</p>
     </div>
   </div>
 
@@ -482,23 +483,27 @@
 <div class="slide-num" id="slideNum">1 / 10</div>
 <div class="dots" id="dots"></div>
 <div class="nav">
-  <button class="nav-btn" id="prevBtn" onclick="go(-1)" disabled>&#8592;</button>
+  <button type="button" class="nav-btn" id="prevBtn" disabled>&#8592;</button>
   <span class="nav-counter" id="counter">1 / 10</span>
-  <button class="nav-btn" id="nextBtn" onclick="go(1)">&#8594;</button>
+  <button type="button" class="nav-btn" id="nextBtn">&#8594;</button>
 </div>
 
 <script>
-  const slides = document.querySelectorAll('.slide');
-  const total  = slides.length;
+  const slides  = document.querySelectorAll('.slide');
+  const total   = slides.length;
+  const dotsEl  = document.getElementById('dots');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const counter = document.getElementById('counter');
+  const slideNum = document.getElementById('slideNum');
   let cur = 0;
 
   // Build dots
-  const dotsEl = document.getElementById('dots');
   slides.forEach((_, i) => {
     const d = document.createElement('div');
     d.className = 'dot' + (i === 0 ? ' active' : '');
-    d.onclick = () => goTo(i);
     d.style.cursor = 'pointer';
+    d.addEventListener('click', () => goTo(i));
     dotsEl.appendChild(d);
   });
 
@@ -508,26 +513,26 @@
     cur = Math.max(0, Math.min(total - 1, n));
     slides[cur].classList.add('active');
     dotsEl.children[cur].classList.add('active');
-    document.getElementById('prevBtn').disabled = cur === 0;
-    document.getElementById('nextBtn').disabled = cur === total - 1;
-    document.getElementById('counter').textContent  = (cur + 1) + ' / ' + total;
-    document.getElementById('slideNum').textContent = (cur + 1) + ' / ' + total;
+    prevBtn.disabled = cur === 0;
+    nextBtn.disabled = cur === total - 1;
+    counter.textContent  = (cur + 1) + ' / ' + total;
+    slideNum.textContent = (cur + 1) + ' / ' + total;
   }
 
-  function go(dir) { goTo(cur + dir); }
+  prevBtn.addEventListener('click', () => goTo(cur - 1));
+  nextBtn.addEventListener('click', () => goTo(cur + 1));
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown'  || e.key === ' ') go(1);
-    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                      go(-1);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') goTo(cur + 1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                    goTo(cur - 1);
     if (e.key === 'f' || e.key === 'F') document.documentElement.requestFullscreen?.();
   });
 
-  // Swipe support
   let tx = 0;
-  document.addEventListener('touchstart', e => tx = e.touches[0].clientX);
+  document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; });
   document.addEventListener('touchend',   e => {
     const dx = tx - e.changedTouches[0].clientX;
-    if (Math.abs(dx) > 50) go(dx > 0 ? 1 : -1);
+    if (Math.abs(dx) > 50) goTo(cur + (dx > 0 ? 1 : -1));
   });
 </script>
 </body>
