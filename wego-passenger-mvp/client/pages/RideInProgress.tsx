@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 
-import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStop, logStopWithDetails, type Ride, type ChatMessage } from "@/lib/db";
+import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStopWithDetails, updateStopDetails, type Ride, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -89,6 +89,7 @@ export default function RideInProgress() {
   const [stopSuggestions, setStopSuggestions] = useState<{ name: string; sub: string; lat: number; lng: number }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedStopCoords, setSelectedStopCoords] = useState<[number, number] | null>(null);
+  const [stopIsEditing, setStopIsEditing] = useState(false);
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelled, setCancelled] = useState(false);
@@ -379,6 +380,7 @@ export default function RideInProgress() {
     setShowSuggestions(false);
     setSelectedStopCoords(null);
     setStopCalculating(false);
+    setStopIsEditing(false);
   };
 
   const confirmStop = async () => {
@@ -404,28 +406,40 @@ export default function RideInProgress() {
       fareDelta = parseFloat(Math.max(2.00, extraMiles * 1.85).toFixed(2));
     }
 
-    // Update local state
-    setStopCount((c) => c + 1);
-    setStopFeeTotal((t) => parseFloat((t + fareDelta).toFixed(2)));
-    if (stopLatLng) setStopCoords(stopLatLng);
-    closeStopModal();
-
-    if (liveRide?.id) {
-      try {
-        // Always write pendingStop so driver is notified even when geocoding fails
-        await logStopWithDetails(liveRide.id, {
-          feeAmount: fareDelta,
-          address: addr,
-          lat: stopLatLng?.[0] ?? 0,
-          lng: stopLatLng?.[1] ?? 0,
-        });
-      } catch {
-        showError("Stop logged locally — will sync when connection restores");
-      }
-      if (addr && user) {
+    if (stopIsEditing) {
+      const oldDelta = liveRide?.pendingStop?.fareDelta ?? 0;
+      setStopFeeTotal((t) => parseFloat((t - oldDelta + fareDelta).toFixed(2)));
+      if (stopLatLng) setStopCoords(stopLatLng);
+      closeStopModal();
+      if (liveRide?.id) {
         try {
-          await sendRideMessage(liveRide.id, user.uid, "passenger", `Stop requested: ${addr}`);
-        } catch {}
+          await updateStopDetails(liveRide.id, {
+            oldFeeAmount: oldDelta,
+            newFeeAmount: fareDelta,
+            address: addr,
+            lat: stopLatLng?.[0] ?? 0,
+            lng: stopLatLng?.[1] ?? 0,
+          });
+        } catch { showError("Couldn't update stop — check your connection"); }
+        try { await sendRideMessage(liveRide.id, user!.uid, "passenger", `Stop updated to: ${addr}`); } catch {}
+      }
+    } else {
+      setStopCount((c) => c + 1);
+      setStopFeeTotal((t) => parseFloat((t + fareDelta).toFixed(2)));
+      if (stopLatLng) setStopCoords(stopLatLng);
+      closeStopModal();
+      if (liveRide?.id) {
+        try {
+          await logStopWithDetails(liveRide.id, {
+            feeAmount: fareDelta,
+            address: addr,
+            lat: stopLatLng?.[0] ?? 0,
+            lng: stopLatLng?.[1] ?? 0,
+          });
+        } catch { showError("Stop logged locally — will sync when connection restores"); }
+        if (addr && user) {
+          try { await sendRideMessage(liveRide.id, user.uid, "passenger", `Stop requested: ${addr}`); } catch {}
+        }
       }
     }
   };
@@ -918,9 +932,18 @@ export default function RideInProgress() {
                 <span className="text-sm font-bold text-foreground">+${stopFeeTotal.toFixed(2)}</span>
               </div>
             )}
-            <button type="button" onClick={() => setStopModalOpen(true)}
+            <button type="button" onClick={() => {
+                if (stopCoords && liveRide?.pendingStop) {
+                  setStopAddress(liveRide.pendingStop.address);
+                  setSelectedStopCoords([liveRide.pendingStop.lat, liveRide.pendingStop.lng]);
+                  setStopIsEditing(true);
+                } else {
+                  setStopIsEditing(false);
+                }
+                setStopModalOpen(true);
+              }}
               className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-foreground active:scale-95 transition-transform">
-              Request a Stop (+$2 min)
+              {stopCoords && liveRide?.pendingStop ? "Edit Stop" : "Request a Stop (+$2 min)"}
             </button>
             {/* Show for first 5 min when PIN is disabled and passenger is not near driver */}
             {!liveRide?.pinRequired && elapsed < 300 && !hasPickupIssueReport && (
@@ -964,7 +987,7 @@ export default function RideInProgress() {
           <div className="absolute inset-0 bg-black/50" onClick={closeStopModal} />
           <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl px-4 pt-4 pb-8 space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-base font-bold text-foreground">Request a Stop</p>
+              <p className="text-base font-bold text-foreground">{stopIsEditing ? "Edit Stop" : "Request a Stop"}</p>
               <button type="button" aria-label="Close" onClick={closeStopModal}
                 className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
                 <X size={15} className="text-muted-foreground" />
@@ -1034,7 +1057,7 @@ export default function RideInProgress() {
               </button>
               <button type="button" onClick={confirmStop} disabled={!stopAddress.trim() || stopCalculating}
                 className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed">
-                {stopCalculating ? "Calculating…" : "Confirm Stop"}
+                {stopCalculating ? (stopIsEditing ? "Updating…" : "Calculating…") : stopIsEditing ? "Update Stop" : "Confirm Stop"}
               </button>
             </div>
           </div>

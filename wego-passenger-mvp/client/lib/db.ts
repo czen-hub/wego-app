@@ -370,6 +370,19 @@ export async function logStopWithDetails(rideId: string, opts: {
   });
 }
 
+export async function updateStopDetails(rideId: string, opts: {
+  oldFeeAmount: number;
+  newFeeAmount: number;
+  address: string;
+  lat: number;
+  lng: number;
+}): Promise<void> {
+  await updateDoc(doc(db, "rides", rideId), {
+    stopFeeTotal: increment(opts.newFeeAmount - opts.oldFeeAmount),
+    pendingStop: { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.newFeeAmount },
+  });
+}
+
 // ── Fare estimate ──────────────────────────────────────────────────────────
 
 export function estimateFare(distanceMiles: number, type: RideType = "ride"): number {

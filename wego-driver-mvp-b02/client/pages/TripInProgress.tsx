@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign, CornerUpRight, Star } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
-import { updateRideStatus, sendRideMessage, listenToRideMessages, submitRating, logStop, acknowledgeRideDispute, acknowledgeStop, type ChatMessage } from "@/lib/db";
+import { updateRideStatus, sendRideMessage, listenToRideMessages, submitRating, acknowledgeRideDispute, acknowledgeStop, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -719,24 +719,6 @@ export default function TripInProgress() {
                 <span className="text-sm font-bold text-primary">+${stopEarnings.toFixed(2)}</span>
               </div>
             )}
-            <button type="button" onClick={async () => {
-                setStopEarnings((e) => parseFloat((e + 2.00).toFixed(2)));
-                if (trip.rideId) {
-                  try {
-                    await logStop(trip.rideId, 2.00);
-                  } catch {
-                    showError("Couldn't log stop — will retry on connection restore");
-                  }
-                }
-              }}
-              disabled={pickupIssueNeedsAcknowledgement}
-              className={`w-full py-3 rounded-xl border text-sm font-semibold active:scale-95 transition-transform ${
-                pickupIssueNeedsAcknowledgement
-                  ? "border-amber-500/25 text-amber-600 dark:text-amber-400 bg-amber-500/5 opacity-80 cursor-not-allowed"
-                  : "border-border text-muted-foreground"
-              }`}>
-              {pickupIssueNeedsAcknowledgement ? "Acknowledge Alert Before Logging Stop" : "Log Passenger Stop (+$2.00)"}
-            </button>
             <button type="button" onClick={() => {
                 setPhase("complete");
                 if (trip.rideId) updateRideStatus(trip.rideId, "completed").catch(() => {});
