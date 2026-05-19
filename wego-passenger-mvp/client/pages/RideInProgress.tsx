@@ -86,6 +86,10 @@ export default function RideInProgress() {
   const [stopCalculating, setStopCalculating] = useState(false);
   const [stopModalOpen, setStopModalOpen] = useState(false);
   const [stopAddress, setStopAddress] = useState("");
+  const [stopSuggestions, setStopSuggestions] = useState<{ name: string; sub: string; lat: number; lng: number }[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedStopCoords, setSelectedStopCoords] = useState<[number, number] | null>(null);
+  const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const [cancelledFromDispute, setCancelledFromDispute] = useState(false);
@@ -350,19 +354,46 @@ export default function RideInProgress() {
   const waitMeterCharge = parseFloat(Math.min((waitMeterSecs / 60) * 0.50, 1.00).toFixed(2));
   const driverCanLeave = waitElapsed >= freeWaitSecs;
 
+  const fetchSuggestions = (query: string) => {
+    if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current);
+    if (query.trim().length < 2) { setStopSuggestions([]); setShowSuggestions(false); return; }
+    suggestionTimerRef.current = setTimeout(async () => {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=us`;
+        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+        const data: Record<string, unknown>[] = await res.json();
+        const suggestions = data.map(item => {
+          const parts = (item.display_name as string).split(",").map((p: string) => p.trim());
+          return { name: parts[0] ?? query, sub: parts.slice(1, 3).filter(Boolean).join(", "), lat: parseFloat(item.lat as string), lng: parseFloat(item.lon as string) };
+        });
+        setStopSuggestions(suggestions);
+        setShowSuggestions(suggestions.length > 0);
+      } catch { setShowSuggestions(false); }
+    }, 350);
+  };
+
+  const closeStopModal = () => {
+    setStopModalOpen(false);
+    setStopAddress("");
+    setStopSuggestions([]);
+    setShowSuggestions(false);
+    setSelectedStopCoords(null);
+    setStopCalculating(false);
+  };
+
   const confirmStop = async () => {
     const addr = stopAddress.trim();
     if (!addr) return;
 
     setStopCalculating(true);
 
-    // Geocode the stop address
-    let stopLatLng: [number, number] | null = null;
-    try {
-      stopLatLng = await geocodeAddress(addr);
-    } catch {}
+    // Use autocomplete-selected coords first; fall back to Nominatim geocode if typed manually
+    let stopLatLng: [number, number] | null = selectedStopCoords;
+    if (!stopLatLng) {
+      try { stopLatLng = await geocodeAddress(addr); } catch {}
+    }
 
-    // Calculate detour distance to determine fare delta
+    // Calculate detour fare delta
     let fareDelta = 2.00;
     if (stopLatLng && pickupCoords && dropoffCoords) {
       const directM = haversineMeters(pickupCoords[0], pickupCoords[1], dropoffCoords[0], dropoffCoords[1]);
@@ -373,26 +404,21 @@ export default function RideInProgress() {
       fareDelta = parseFloat(Math.max(2.00, extraMiles * 1.85).toFixed(2));
     }
 
-    // Update local state immediately
+    // Update local state
     setStopCount((c) => c + 1);
     setStopFeeTotal((t) => parseFloat((t + fareDelta).toFixed(2)));
     if (stopLatLng) setStopCoords(stopLatLng);
-    setStopModalOpen(false);
-    setStopAddress("");
-    setStopCalculating(false);
+    closeStopModal();
 
     if (liveRide?.id) {
       try {
-        if (stopLatLng) {
-          await logStopWithDetails(liveRide.id, {
-            feeAmount: fareDelta,
-            address: addr,
-            lat: stopLatLng[0],
-            lng: stopLatLng[1],
-          });
-        } else {
-          await logStop(liveRide.id, fareDelta);
-        }
+        // Always write pendingStop so driver is notified even when geocoding fails
+        await logStopWithDetails(liveRide.id, {
+          feeAmount: fareDelta,
+          address: addr,
+          lat: stopLatLng?.[0] ?? 0,
+          lng: stopLatLng?.[1] ?? 0,
+        });
       } catch {
         showError("Stop logged locally — will sync when connection restores");
       }
@@ -935,36 +961,65 @@ export default function RideInProgress() {
       {/* Stop request modal */}
       {stopModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { setStopModalOpen(false); setStopAddress(""); }} />
+          <div className="absolute inset-0 bg-black/50" onClick={closeStopModal} />
           <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl px-4 pt-4 pb-8 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-base font-bold text-foreground">Request a Stop</p>
-              <button type="button" aria-label="Close" onClick={() => { setStopModalOpen(false); setStopAddress(""); }}
+              <button type="button" aria-label="Close" onClick={closeStopModal}
                 className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
                 <X size={15} className="text-muted-foreground" />
               </button>
             </div>
 
-            {/* Address input */}
-            <div className="space-y-1.5">
+            {/* Address input with autocomplete */}
+            <div className="space-y-1.5 relative">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stop address or landmark</label>
               <div className="flex items-center gap-2 bg-background border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
                 <MapPin size={15} className="text-muted-foreground flex-shrink-0" />
                 <input
                   type="text"
                   value={stopAddress}
-                  onChange={(e) => setStopAddress(e.target.value)}
-                  placeholder="e.g. 7-Eleven on Main St"
+                  onChange={(e) => {
+                    setStopAddress(e.target.value);
+                    setSelectedStopCoords(null);
+                    fetchSuggestions(e.target.value);
+                  }}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  onFocus={() => stopSuggestions.length > 0 && setShowSuggestions(true)}
+                  placeholder="e.g. SFO Airport, 7-Eleven on Main St"
                   className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
                   autoFocus
                 />
               </div>
+              {showSuggestions && stopSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-20 bg-card border border-border rounded-xl overflow-hidden shadow-xl">
+                  {stopSuggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setStopAddress(s.name);
+                        setSelectedStopCoords([s.lat, s.lng]);
+                        setShowSuggestions(false);
+                        setStopSuggestions([]);
+                      }}
+                      className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 hover:bg-muted/30 border-b border-border/50 last:border-b-0 active:bg-muted/50 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-foreground truncate">{s.name}</span>
+                      {s.sub && <span className="text-xs text-muted-foreground truncate">{s.sub}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="bg-background border border-border rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Stop fee</span>
-                <span className="text-sm text-muted-foreground">Calculated on route (+$2.00 min)</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {selectedStopCoords ? "Calculated on confirm" : "+$2.00 min"}
+                </span>
               </div>
               {stopCount > 0 && (
                 <p className="text-xs text-muted-foreground">You've already made {stopCount} stop{stopCount > 1 ? "s" : ""} (+${stopFeeTotal.toFixed(2)} total).</p>
@@ -972,7 +1027,7 @@ export default function RideInProgress() {
               <p className="text-xs text-muted-foreground">Stop fee is based on your detour distance. 100% goes directly to your driver.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => { setStopModalOpen(false); setStopAddress(""); setStopCalculating(false); }}
+              <button type="button" onClick={closeStopModal}
                 disabled={stopCalculating}
                 className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform disabled:opacity-50">
                 Cancel

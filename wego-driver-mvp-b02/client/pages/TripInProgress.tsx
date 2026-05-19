@@ -165,7 +165,9 @@ export default function TripInProgress() {
       if (newPendingStop && newPendingStop.address !== lastPendingStopAddressRef.current) {
         lastPendingStopAddressRef.current = newPendingStop.address;
         setStopNotif(newPendingStop);
-        setStopViaCoords([newPendingStop.lat, newPendingStop.lng]);
+        if (newPendingStop.lat !== 0 || newPendingStop.lng !== 0) {
+          setStopViaCoords([newPendingStop.lat, newPendingStop.lng]);
+        }
         setStopNotifOpen(true);
       }
       if (!newPendingStop) {
