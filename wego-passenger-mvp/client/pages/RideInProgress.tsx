@@ -662,7 +662,7 @@ export default function RideInProgress() {
       {/* Map — fills remaining space above the cards */}
       <div className="relative z-0 flex-1 min-h-[240px]">
         {(() => {
-          const mapFrom = phase === "in_progress" ? pickupCoords : (driverCoords ?? pickupCoords);
+          const mapFrom = phase === "in_progress" ? pickupCoords : (driverCoords ?? undefined);
           const mapTo = phase === "in_progress" ? dropoffCoords : pickupCoords;
           const mapCenter = mapFrom ?? pickupCoords ?? [37.7749, -122.4194];
           return (
