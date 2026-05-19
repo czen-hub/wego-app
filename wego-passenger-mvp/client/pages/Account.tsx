@@ -80,26 +80,12 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 interface InboxMessage { id: string; type: "promo" | "ride" | "safety" | "reward"; title: string; body: string; time: string; read: boolean }
 const INITIAL_MESSAGES: InboxMessage[] = [
-  { id: "m1", type: "reward", title: "You earned 10 points!", body: "Thanks for completing your ride with Marcus T. Keep riding to unlock discounts.", time: "Just now", read: false },
-  { id: "m2", type: "promo", title: "Invite friends, earn $10", body: "Share your code SARAH-WEGO and get $10 credit when a friend completes their first ride.", time: "2 days ago", read: false },
-  { id: "m3", type: "ride", title: "Receipt: Apr 27 ride", body: "Your $52.00 ride to 555 California St. Driver earned $45.76 (88%).", time: "Apr 27", read: false },
-  { id: "m4", type: "safety", title: "Trip sharing updated", body: "Your emergency contact settings have been saved.", time: "Apr 23", read: true },
-  { id: "m5", type: "promo", title: "No surge — ever", body: "Unlike Corp 1 and Corp 2, WeGo never applies surge pricing. Your fare is always fair.", time: "Apr 19", read: true },
+  { id: "m1", type: "promo", title: "Invite friends, earn $10", body: "Share your referral code and get $10 credit when a friend completes their first ride.", time: "Just now", read: false },
+  { id: "m2", type: "promo", title: "No surge — ever", body: "Unlike Corp 1 and Corp 2, WeGo never applies surge pricing. Your fare is always fair.", time: "Just now", read: true },
 ];
 
-const REFERRAL_CODE = "SARAH-WEGO";
-
-const REWARDS_HISTORY = [
-  { id: "rh1", label: "Completed ride with Marcus T.", pts: +10, date: "Today" },
-  { id: "rh2", label: "Completed ride with Priya S.", pts: +10, date: "Apr 27" },
-  { id: "rh3", label: "5-star rating given", pts: +5, date: "Apr 27" },
-  { id: "rh4", label: "Completed ride with James W.", pts: +10, date: "Apr 23" },
-  { id: "rh5", label: "Completed ride with Aisha K.", pts: +10, date: "Apr 19" },
-  { id: "rh6", label: "Completed ride with Carlos M.", pts: +10, date: "Apr 14" },
-  { id: "rh7", label: "5-star rating given", pts: +5, date: "Apr 14" },
-  { id: "rh8", label: "Joined WeGo", pts: +15, date: "Apr 14" },
-];
-const REWARDS_TOTAL = REWARDS_HISTORY.reduce((s, r) => s + r.pts, 0);
+const REWARDS_HISTORY: { id: string; label: string; pts: number; date: string }[] = [];
+const REWARDS_TOTAL = 0;
 
 const REDEEM_OPTIONS = [
   { id: "rd1", label: "$5 off next ride", cost: 500 },
@@ -177,6 +163,10 @@ export default function Account() {
     setDraftEmail(profile.email || "");
   }, [profile]);
 
+  const referralCode = profile?.name
+    ? `${profile.name.split(" ")[0].toUpperCase().replace(/[^A-Z0-9]/g, "")}-WEGO`
+    : "WEGO";
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -253,7 +243,7 @@ export default function Account() {
   };
 
   const copyCode = () => {
-    navigator.clipboard.writeText(REFERRAL_CODE).catch(() => {});
+    navigator.clipboard.writeText(referralCode).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -613,15 +603,19 @@ export default function Account() {
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">History</p>
               <div className="space-y-1.5">
-                {REWARDS_HISTORY.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between px-1">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-foreground truncate">{r.label}</p>
-                      <p className="text-[10px] text-muted-foreground">{r.date}</p>
+                {REWARDS_HISTORY.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-3">No points earned yet. Complete a ride to start earning!</p>
+                ) : (
+                  REWARDS_HISTORY.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between px-1">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-foreground truncate">{r.label}</p>
+                        <p className="text-[10px] text-muted-foreground">{r.date}</p>
+                      </div>
+                      <span className="text-xs font-bold text-primary ml-3">+{r.pts} pts</span>
                     </div>
-                    <span className="text-xs font-bold text-primary ml-3">+{r.pts} pts</span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -634,7 +628,7 @@ export default function Account() {
           <div className="space-y-4">
             <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 text-center space-y-1">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your referral code</p>
-              <p className="text-3xl font-bold text-primary tracking-widest">{REFERRAL_CODE}</p>
+              <p className="text-3xl font-bold text-primary tracking-widest">{referralCode}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -651,7 +645,7 @@ export default function Account() {
             <div className="space-y-2 text-xs text-muted-foreground bg-background border border-border rounded-xl p-3">
               <p className="font-semibold text-foreground text-sm">How it works</p>
               <p>1. Share your code with a friend.</p>
-              <p>2. They sign up and enter <span className="font-semibold text-foreground">{REFERRAL_CODE}</span> at checkout.</p>
+              <p>2. They sign up and enter <span className="font-semibold text-foreground">{referralCode}</span> at checkout.</p>
               <p>3. They get $10 off their first WeGo ride.</p>
               <p>4. You earn 200 points once they complete that ride.</p>
             </div>
