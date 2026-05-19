@@ -38,6 +38,10 @@ export interface Ride {
   isAdvanced: boolean;
   stopCount: number;
   stopFeeTotal: number;
+  pendingStop: { address: string; lat: number; lng: number; fareDelta: number } | null;
+  scheduledDate: string | null;
+  scheduledHour: number | null;
+  scheduledMinute: number | null;
   pin: string | null;
   pinRequired: boolean;
   startedAt: Date | null;
@@ -93,6 +97,10 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     isAdvanced: (data.isAdvanced as boolean) ?? false,
     stopCount: (data.stopCount as number) ?? 0,
     stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
+    pendingStop: (data.pendingStop as { address: string; lat: number; lng: number; fareDelta: number } | null) ?? null,
+    scheduledDate: (data.scheduledDate as string | null) ?? null,
+    scheduledHour: (data.scheduledHour as number | null) ?? null,
+    scheduledMinute: (data.scheduledMinute as number | null) ?? null,
     pin: (data.pin as string | null) ?? null,
     pinRequired: (data.pinRequired as boolean) ?? false,
     startedAt: toDate(data.startedAt),
@@ -347,6 +355,19 @@ export async function logStop(rideId: string, feeAmount: number): Promise<void> 
   } catch (err) {
     console.error("logStop failed:", err);
   }
+}
+
+export async function logStopWithDetails(rideId: string, opts: {
+  feeAmount: number;
+  address: string;
+  lat: number;
+  lng: number;
+}): Promise<void> {
+  await updateDoc(doc(db, "rides", rideId), {
+    stopCount: increment(1),
+    stopFeeTotal: increment(opts.feeAmount),
+    pendingStop: { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.feeAmount },
+  });
 }
 
 // ── Fare estimate ──────────────────────────────────────────────────────────

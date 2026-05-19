@@ -43,6 +43,7 @@ export interface Ride {
   estimatedMinutes: number;
   stopCount: number;
   stopFeeTotal: number;
+  pendingStop: { address: string; lat: number; lng: number; fareDelta: number } | null;
   pin: string | null;
   pinRequired: boolean;
   scheduledDate: string | null;
@@ -120,6 +121,7 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     estimatedMinutes: (data.estimatedMinutes as number) ?? 10,
     stopCount: (data.stopCount as number) ?? 0,
     stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
+    pendingStop: (data.pendingStop as { address: string; lat: number; lng: number; fareDelta: number } | null) ?? null,
     pin: (data.pin as string | null) ?? null,
     pinRequired: (data.pinRequired as boolean) ?? false,
     scheduledDate: (data.scheduledDate as string | null) ?? null,
@@ -388,6 +390,10 @@ export async function logStop(rideId: string, feeAmount: number): Promise<void> 
     stopCount: increment(1),
     stopFeeTotal: increment(feeAmount),
   });
+}
+
+export async function acknowledgeStop(rideId: string): Promise<void> {
+  await updateDoc(doc(db, "rides", rideId), { pendingStop: null });
 }
 
 // ── Ride request (passenger side, used for testing) ────────────────────────

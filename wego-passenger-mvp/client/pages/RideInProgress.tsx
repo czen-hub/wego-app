@@ -3,10 +3,20 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 
-import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStop, type Ride, type ChatMessage } from "@/lib/db";
+import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStop, logStopWithDetails, type Ride, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+
+async function geocodeAddress(address: string): Promise<[number, number] | null> {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=us`;
+    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const data = await res.json();
+    if (data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+  } catch {}
+  return null;
+}
 
 type RidePhase = "matching" | "en_route" | "arrived" | "in_progress" | "complete";
 
@@ -72,6 +82,8 @@ export default function RideInProgress() {
   const [waitFeeCharged, setWaitFeeCharged] = useState(0);
   const [stopCount, setStopCount] = useState(0);
   const [stopFeeTotal, setStopFeeTotal] = useState(0);
+  const [stopCoords, setStopCoords] = useState<[number, number] | null>(null);
+  const [stopCalculating, setStopCalculating] = useState(false);
   const [stopModalOpen, setStopModalOpen] = useState(false);
   const [stopAddress, setStopAddress] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -327,23 +339,54 @@ export default function RideInProgress() {
 
   const confirmStop = async () => {
     const addr = stopAddress.trim();
+    if (!addr) return;
+
+    setStopCalculating(true);
+
+    // Geocode the stop address
+    let stopLatLng: [number, number] | null = null;
+    try {
+      stopLatLng = await geocodeAddress(addr);
+    } catch {}
+
+    // Calculate detour distance to determine fare delta
+    let fareDelta = 2.00;
+    if (stopLatLng && pickupCoords && dropoffCoords) {
+      const directM = haversineMeters(pickupCoords[0], pickupCoords[1], dropoffCoords[0], dropoffCoords[1]);
+      const viaM =
+        haversineMeters(pickupCoords[0], pickupCoords[1], stopLatLng[0], stopLatLng[1]) +
+        haversineMeters(stopLatLng[0], stopLatLng[1], dropoffCoords[0], dropoffCoords[1]);
+      const extraMiles = Math.max(0, viaM - directM) / 1609.34;
+      fareDelta = parseFloat(Math.max(2.00, extraMiles * 1.85).toFixed(2));
+    }
+
+    // Update local state immediately
     setStopCount((c) => c + 1);
-    setStopFeeTotal((t) => parseFloat((t + STOP_FEE).toFixed(2)));
+    setStopFeeTotal((t) => parseFloat((t + fareDelta).toFixed(2)));
+    if (stopLatLng) setStopCoords(stopLatLng);
     setStopModalOpen(false);
     setStopAddress("");
+    setStopCalculating(false);
+
     if (liveRide?.id) {
       try {
-        await logStop(liveRide.id, STOP_FEE);
+        if (stopLatLng) {
+          await logStopWithDetails(liveRide.id, {
+            feeAmount: fareDelta,
+            address: addr,
+            lat: stopLatLng[0],
+            lng: stopLatLng[1],
+          });
+        } else {
+          await logStop(liveRide.id, fareDelta);
+        }
       } catch {
         showError("Stop logged locally — will sync when connection restores");
       }
-      // Notify driver of the stop address via chat
       if (addr && user) {
         try {
-          await sendRideMessage(liveRide.id, user.uid, "passenger", `Stop requested at: ${addr}`);
-        } catch {
-          // chat message best-effort
-        }
+          await sendRideMessage(liveRide.id, user.uid, "passenger", `Stop requested: ${addr}`);
+        } catch {}
       }
     }
   };
@@ -596,6 +639,13 @@ export default function RideInProgress() {
   }
 
   // ── ACTIVE TRIP VIEW ───────────────────────────────────────────────────────
+  const pickupCoords: [number, number] | undefined = liveRide?.pickupLocation
+    ? [liveRide.pickupLocation.latitude, liveRide.pickupLocation.longitude]
+    : rideMock.fromCoords;
+  const dropoffCoords: [number, number] | undefined = liveRide?.dropoffLocation
+    ? [liveRide.dropoffLocation.latitude, liveRide.dropoffLocation.longitude]
+    : rideMock.toCoords;
+
   const pickupAddressDisplay = (() => {
     const raw = (liveRide?.pickupAddress ?? "").replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim();
     return raw && raw !== "Current Location" ? raw : "Your Current Location";
@@ -612,12 +662,6 @@ export default function RideInProgress() {
       {/* Map — fills remaining space above the cards */}
       <div className="relative z-0 flex-1 min-h-[240px]">
         {(() => {
-          const pickupCoords = liveRide?.pickupLocation
-            ? [liveRide.pickupLocation.latitude, liveRide.pickupLocation.longitude] as [number, number]
-            : rideMock.fromCoords;
-          const dropoffCoords = liveRide?.dropoffLocation
-            ? [liveRide.dropoffLocation.latitude, liveRide.dropoffLocation.longitude] as [number, number]
-            : rideMock.toCoords;
           const mapFrom = phase === "in_progress" ? pickupCoords : (driverCoords ?? pickupCoords);
           const mapTo = phase === "in_progress" ? dropoffCoords : pickupCoords;
           const mapCenter = mapFrom ?? pickupCoords ?? [37.7749, -122.4194];
@@ -625,6 +669,7 @@ export default function RideInProgress() {
             <ClientMap
               from={mapFrom}
               to={mapTo}
+              via={phase === "in_progress" ? (stopCoords ?? undefined) : undefined}
               driverPos={driverCoords ?? undefined}
               center={mapCenter}
               className="absolute inset-0"
@@ -836,7 +881,7 @@ export default function RideInProgress() {
             )}
             <button type="button" onClick={() => setStopModalOpen(true)}
               className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-foreground active:scale-95 transition-transform">
-              Request a Stop (+${STOP_FEE.toFixed(2)})
+              Request a Stop (+$2 min)
             </button>
             {/* Show for first 5 min when PIN is disabled and passenger is not near driver */}
             {!liveRide?.pinRequired && elapsed < 300 && !hasPickupIssueReport && (
@@ -906,21 +951,22 @@ export default function RideInProgress() {
             <div className="bg-background border border-border rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Stop fee</span>
-                <span className="text-lg font-bold text-foreground">${STOP_FEE.toFixed(2)}</span>
+                <span className="text-sm text-muted-foreground">Calculated on route (+$2.00 min)</span>
               </div>
               {stopCount > 0 && (
                 <p className="text-xs text-muted-foreground">You've already made {stopCount} stop{stopCount > 1 ? "s" : ""} (+${stopFeeTotal.toFixed(2)} total).</p>
               )}
-              <p className="text-xs text-muted-foreground">100% of the stop fee goes directly to your driver for the extra wait time.</p>
+              <p className="text-xs text-muted-foreground">Stop fee is based on your detour distance. 100% goes directly to your driver.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => { setStopModalOpen(false); setStopAddress(""); }}
-                className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
+              <button type="button" onClick={() => { setStopModalOpen(false); setStopAddress(""); setStopCalculating(false); }}
+                disabled={stopCalculating}
+                className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform disabled:opacity-50">
                 Cancel
               </button>
-              <button type="button" onClick={confirmStop} disabled={!stopAddress.trim()}
+              <button type="button" onClick={confirmStop} disabled={!stopAddress.trim() || stopCalculating}
                 className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed">
-                Confirm Stop
+                {stopCalculating ? "Calculating…" : "Confirm Stop"}
               </button>
             </div>
           </div>

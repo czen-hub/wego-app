@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign, CornerUpRight, Star } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
-import { updateRideStatus, sendRideMessage, listenToRideMessages, submitRating, logStop, acknowledgeRideDispute, type ChatMessage } from "@/lib/db";
+import { updateRideStatus, sendRideMessage, listenToRideMessages, submitRating, logStop, acknowledgeRideDispute, acknowledgeStop, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -115,6 +115,10 @@ export default function TripInProgress() {
     chargeBlocked: false,
     driverAlertSeen: false,
   });
+  const [stopNotifOpen, setStopNotifOpen] = useState(false);
+  const [stopNotif, setStopNotif] = useState<{ address: string; lat: number; lng: number; fareDelta: number } | null>(null);
+  const [stopViaCoords, setStopViaCoords] = useState<[number, number] | null>(null);
+  const lastPendingStopAddressRef = useRef<string | null>(null);
   const [toastError, setToastError] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showError = (msg: string) => {
@@ -156,6 +160,18 @@ export default function TripInProgress() {
       const pending = docSnap.metadata.hasPendingWrites;
       setRidePin((data.pin as string | null) ?? null);
       setPinRequired((data.pinRequired as boolean) ?? false);
+      // Detect new passenger stop request
+      const newPendingStop = data.pendingStop as { address: string; lat: number; lng: number; fareDelta: number } | null | undefined;
+      if (newPendingStop && newPendingStop.address !== lastPendingStopAddressRef.current) {
+        lastPendingStopAddressRef.current = newPendingStop.address;
+        setStopNotif(newPendingStop);
+        setStopViaCoords([newPendingStop.lat, newPendingStop.lng]);
+        setStopNotifOpen(true);
+      }
+      if (!newPendingStop) {
+        lastPendingStopAddressRef.current = null;
+      }
+
       const status = data.status;
       const pickupIssueReported =
         (data.disputed as boolean) === true &&
@@ -436,6 +452,7 @@ export default function TripInProgress() {
         <ClientMap
           from={mapFrom}
           to={mapTo}
+          via={phase === "in-progress" ? (stopViaCoords ?? undefined) : undefined}
           driverPos={driverCoords ?? undefined}
           center={mapCenter}
           className="absolute inset-0"
@@ -651,6 +668,22 @@ export default function TripInProgress() {
               {canLeave ? "Cancel — No Show" : `Cancel & Leave unlocks in ${formatTime(waitRemaining)}`}
             </button>
           </>
+        )}
+
+        {phase === "in-progress" && stopViaCoords && (
+          <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">En route to stop</p>
+              <p className="text-xs text-muted-foreground truncate">{stopNotif?.address ?? "Passenger stop"}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStopViaCoords(null)}
+              className="px-3 py-2 rounded-lg bg-amber-500 text-white text-xs font-bold active:scale-95 transition-transform flex-shrink-0"
+            >
+              Arrived
+            </button>
+          </div>
         )}
 
         {phase === "in-progress" && (
@@ -971,6 +1004,56 @@ export default function TripInProgress() {
                 className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40"
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Passenger stop notification */}
+      {stopNotifOpen && stopNotif && (
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+          <div className="w-full max-w-sm bg-card border border-amber-500/35 rounded-2xl p-6 space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+                <MapPin size={22} className="text-amber-500" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Passenger Added a Stop</h2>
+                <p className="text-sm text-muted-foreground truncate">{stopNotif.address}</p>
+              </div>
+            </div>
+
+            <div className="bg-background border border-border rounded-xl p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Stop fee added</span>
+                <span className="font-bold text-amber-500">+${stopNotif.fareDelta.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Your new take</span>
+                <span className="font-bold text-primary">${(trip.driverTake + stopEarnings + stopNotif.fareDelta).toFixed(2)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">100% of the stop fee goes to you. Route updated on the map.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform"
+              >
+                Message
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setStopNotifOpen(false);
+                  setStopEarnings((e) => parseFloat((e + stopNotif.fareDelta).toFixed(2)));
+                  if (trip.rideId) acknowledgeStop(trip.rideId).catch(() => {});
+                }}
+                className="py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-95 transition-transform"
+              >
+                Got it
               </button>
             </div>
           </div>

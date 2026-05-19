@@ -23,6 +23,7 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
 interface ClientMapProps {
   from?: [number, number];
   to?: [number, number];
+  via?: [number, number];
   driverPos?: [number, number];
   center?: [number, number];
   zoom?: number;
@@ -38,6 +39,7 @@ export default function ClientMap({
   className = "",
   from,
   to,
+  via,
   driverPos,
   center = [37.7749, -122.4194],
   zoom = 13,
@@ -52,10 +54,12 @@ export default function ClientMap({
   const leafletRef = useRef<any>(null);
   const fromMarkerRef = useRef<LeafletMarker | null>(null);
   const toMarkerRef = useRef<LeafletMarker | null>(null);
+  const viaMarkerRef = useRef<LeafletMarker | null>(null);
   const driverPosMarkerRef = useRef<LeafletMarker | null>(null);
   const routeLineRef = useRef<LeafletPolyline | null>(null);
   const routeFetchAbortRef = useRef<AbortController | null>(null);
   const lastFetchFromRef = useRef<[number, number] | null>(null);
+  const lastFetchViaRef = useRef<string>("");
   const hasSolidRouteRef = useRef(false);
   const fetchInProgressRef = useRef(false);
   const baseZoomRef = useRef<number>(zoom);
@@ -108,11 +112,13 @@ export default function ClientMap({
       routeLineRef.current?.remove();
       fromMarkerRef.current?.remove();
       toMarkerRef.current?.remove();
+      viaMarkerRef.current?.remove();
       driverPosMarkerRef.current?.remove();
       mapRef.current?.remove();
       routeLineRef.current = null;
       fromMarkerRef.current = null;
       toMarkerRef.current = null;
+      viaMarkerRef.current = null;
       driverPosMarkerRef.current = null;
       mapRef.current = null;
       leafletRef.current = null;
@@ -183,19 +189,21 @@ export default function ClientMap({
   // Stable string keys — route effect only fires when coords actually change
   const fromKey = from ? `${from[0].toFixed(5)},${from[1].toFixed(5)}` : "";
   const toKey = to ? `${to[0].toFixed(5)},${to[1].toFixed(5)}` : "";
+  const viaKey = via ? `${via[0].toFixed(5)},${via[1].toFixed(5)}` : "";
   const centerKey = `${center[0].toFixed(5)},${center[1].toFixed(5)}`;
   const driverPosKey = driverPos ? `${driverPos[0].toFixed(5)},${driverPos[1].toFixed(5)}` : "";
 
-  // Route + static markers — only re-fetches OSRM when driver moves >150 m
+  // Route + static markers — only re-fetches OSRM when driver moves >150 m or via changes
   useEffect(() => {
     const map = mapRef.current;
     const L = leafletRef.current;
     if (!mapReady || !map || !L) return;
 
-    // Decide whether an OSRM re-fetch is warranted
     const movedFarEnough = !!(from && lastFetchFromRef.current &&
       haversineM(from[0], from[1], lastFetchFromRef.current[0], lastFetchFromRef.current[1]) > ROUTE_REFETCH_METERS);
+    const viaChanged = viaKey !== lastFetchViaRef.current;
     const needsRefetch =
+      viaChanged ||
       movedFarEnough ||
       (!hasSolidRouteRef.current && !fetchInProgressRef.current);
 
@@ -207,6 +215,20 @@ export default function ClientMap({
         icon: L.divIcon({
           className: "",
           html: '<div style="width:14px;height:14px;border-radius:50%;background:white;border:3px solid #1e293b;box-shadow:0 2px 8px rgba(0,0,0,0.4)"></div>',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        }),
+      }).addTo(map);
+    }
+
+    // Via (stop) marker
+    viaMarkerRef.current?.remove();
+    viaMarkerRef.current = null;
+    if (via) {
+      viaMarkerRef.current = L.marker(via, {
+        icon: L.divIcon({
+          className: "",
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:#f59e0b;border:3px solid white;box-shadow:0 2px 8px rgba(245,158,11,0.6)"></div>',
           iconSize: [14, 14],
           iconAnchor: [7, 7],
         }),
@@ -232,6 +254,7 @@ export default function ClientMap({
     if (from && to) {
       if (needsRefetch) {
         lastFetchFromRef.current = [from[0], from[1]];
+        lastFetchViaRef.current = viaKey;
         hasSolidRouteRef.current = false;
         fetchInProgressRef.current = true;
 
@@ -241,7 +264,8 @@ export default function ClientMap({
         const same =
           Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
 
-        routeLineRef.current = L.polyline([from, to], {
+        const placeholderPoints: [number, number][] = via ? [from, via, to] : [from, to];
+        routeLineRef.current = L.polyline(placeholderPoints, {
           color: "#0047ff",
           weight: 3,
           opacity: 0.35,
@@ -256,15 +280,20 @@ export default function ClientMap({
             map.getZoom() !== zoom;
           if (needsMove) map.setView(from, zoom, { animate: false });
         } else {
-          map.fitBounds([from, to], { padding: [48, 48], maxZoom: 14, animate: false });
+          const boundsPoints: [number, number][] = via ? [from, via, to] : [from, to];
+          map.fitBounds(boundsPoints, { padding: [48, 48], maxZoom: 14, animate: false });
         }
 
         routeFetchAbortRef.current?.abort();
         const controller = new AbortController();
         routeFetchAbortRef.current = controller;
 
+        const waypoints = via
+          ? `${from[1]},${from[0]};${via[1]},${via[0]};${to[1]},${to[0]}`
+          : `${from[1]},${from[0]};${to[1]},${to[0]}`;
+
         fetch(
-          `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`,
+          `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`,
           { signal: controller.signal }
         )
           .then((r) => r.json())
@@ -294,13 +323,13 @@ export default function ClientMap({
             }
           });
       }
-      // else: fetch in progress or route solid and driver hasn't moved far — keep as-is
     } else {
       routeLineRef.current?.remove();
       routeLineRef.current = null;
       hasSolidRouteRef.current = false;
       fetchInProgressRef.current = false;
       lastFetchFromRef.current = null;
+      lastFetchViaRef.current = "";
 
       const cur = map.getCenter();
       const needsMove =
@@ -314,7 +343,7 @@ export default function ClientMap({
     setTimeout(() => map.invalidateSize({ animate: false }), 0);
 
     return () => { routeFetchAbortRef.current?.abort(); };
-  }, [centerKey, fromKey, mapReady, toKey, zoom]);
+  }, [centerKey, fromKey, mapReady, toKey, viaKey, zoom]);
 
   // Driver dot — updates smoothly on every GPS tick via setLatLng (no map redraw)
   useEffect(() => {
