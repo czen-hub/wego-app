@@ -223,6 +223,7 @@ export async function updateRideStatus(rideId: string, status: RideStatus) {
   const updates: Record<string, any> = { status };
   if (status === "inProgress") updates.startedAt = serverTimestamp();
   if (status === "completed") updates.completedAt = serverTimestamp();
+  if (status === "cancelled") updates.cancelledAt = serverTimestamp();
   await updateDoc(doc(db, "rides", rideId), updates);
 }
 

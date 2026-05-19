@@ -106,6 +106,9 @@ export default function RideInProgress() {
   const effectiveRideIdRef = useRef<string | null>(null);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
   const STOP_FEE = 2.00;
+  const pendingStopKey = liveRide?.pendingStop
+    ? `${liveRide.pendingStop.lat.toFixed(5)},${liveRide.pendingStop.lng.toFixed(5)}`
+    : null;
   const [toastError, setToastError] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showError = (msg: string) => {
@@ -202,6 +205,16 @@ export default function RideInProgress() {
     });
     return unsub;
   }, [liveRide?.driverId, phase]);
+
+  // Sync stopCoords with Firestore pendingStop — clears amber waypoint when driver acknowledges stop
+  useEffect(() => {
+    if (!liveRide) return;
+    if (liveRide.pendingStop) {
+      setStopCoords([liveRide.pendingStop.lat, liveRide.pendingStop.lng]);
+    } else {
+      setStopCoords(null);
+    }
+  }, [pendingStopKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Watch passenger GPS during in_progress to verify proximity to driver
   useEffect(() => {
