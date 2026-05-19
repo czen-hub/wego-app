@@ -618,15 +618,14 @@ export default function RideInProgress() {
           const dropoffCoords = liveRide?.dropoffLocation
             ? [liveRide.dropoffLocation.latitude, liveRide.dropoffLocation.longitude] as [number, number]
             : rideMock.toCoords;
-          const mapFrom = (phase === "en_route" || phase === "arrived")
-            ? (driverCoords ?? pickupCoords)
-            : pickupCoords;
+          const mapFrom = phase === "in_progress" ? pickupCoords : (driverCoords ?? pickupCoords);
           const mapTo = phase === "in_progress" ? dropoffCoords : pickupCoords;
           const mapCenter = mapFrom ?? pickupCoords ?? [37.7749, -122.4194];
           return (
             <ClientMap
               from={mapFrom}
               to={mapTo}
+              driverPos={driverCoords ?? undefined}
               center={mapCenter}
               className="absolute inset-0"
             />

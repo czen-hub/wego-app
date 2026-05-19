@@ -7,9 +7,23 @@ import type {
   Polyline as LeafletPolyline,
 } from "leaflet";
 
+const ROUTE_REFETCH_METERS = 150;
+
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 interface ClientMapProps {
   from?: [number, number];
   to?: [number, number];
+  driverPos?: [number, number];
   center?: [number, number];
   zoom?: number;
   className?: string;
@@ -24,6 +38,7 @@ export default function ClientMap({
   className = "",
   from,
   to,
+  driverPos,
   center = [37.7749, -122.4194],
   zoom = 13,
   interactive = false,
@@ -37,11 +52,13 @@ export default function ClientMap({
   const leafletRef = useRef<any>(null);
   const fromMarkerRef = useRef<LeafletMarker | null>(null);
   const toMarkerRef = useRef<LeafletMarker | null>(null);
+  const driverPosMarkerRef = useRef<LeafletMarker | null>(null);
   const routeLineRef = useRef<LeafletPolyline | null>(null);
   const routeFetchAbortRef = useRef<AbortController | null>(null);
+  const lastFetchFromRef = useRef<[number, number] | null>(null);
+  const hasSolidRouteRef = useRef(false);
   const baseZoomRef = useRef<number>(zoom);
   const [mapReady, setMapReady] = useState(false);
-  // Refs so auto-reset timer always has the latest center/zoom without stale closure
   const centerRef = useRef<[number, number]>(center);
   const zoomRef = useRef<number>(zoom);
 
@@ -86,13 +103,16 @@ export default function ClientMap({
 
     return () => {
       cancelled = true;
+      routeFetchAbortRef.current?.abort();
       routeLineRef.current?.remove();
       fromMarkerRef.current?.remove();
       toMarkerRef.current?.remove();
+      driverPosMarkerRef.current?.remove();
       mapRef.current?.remove();
       routeLineRef.current = null;
       fromMarkerRef.current = null;
       toMarkerRef.current = null;
+      driverPosMarkerRef.current = null;
       mapRef.current = null;
       leafletRef.current = null;
     };
@@ -129,18 +149,13 @@ export default function ClientMap({
       const next = map.getCenter();
       const dist = Math.abs(next.lat - centerRef.current[0]) + Math.abs(next.lng - centerRef.current[1]);
       const zoomDiff = Math.abs(map.getZoom() - zoomRef.current);
-      
-      // Only emit if the map moved away from the target center (i.e. user interaction)
       if (dist > 0.0001 || zoomDiff > 0) {
         onCenterChangeRef.current([next.lat, next.lng]);
       }
     };
 
     map.on("moveend", emitCenter);
-
-    return () => {
-      map.off("moveend", emitCenter);
-    };
+    return () => { map.off("moveend", emitCenter); };
   }, [mapReady]);
 
   useEffect(() => {
@@ -152,46 +167,37 @@ export default function ClientMap({
     };
 
     map.on("click", handleClick);
-
-    return () => {
-      map.off("click", handleClick);
-    };
+    return () => { map.off("click", handleClick); };
   }, [mapReady, onClickLocation]);
 
-  // Keep center/zoom refs fresh for the force-reset flyTo
   useEffect(() => { centerRef.current = center; }, [center]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
-  // Force-reset: when token increments, fly back to current GPS center + zoom
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map || !forceResetToken) return;
     map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 3.0 });
   }, [forceResetToken, mapReady]);
 
+  const fromKey = from ? `${from[0].toFixed(5)},${from[1].toFixed(5)}` : "";
+  const toKey = to ? `${to[0].toFixed(5)},${to[1].toFixed(5)}` : "";
+  const centerKey = `${center[0].toFixed(5)},${center[1].toFixed(5)}`;
+  const driverPosKey = driverPos ? `${driverPos[0].toFixed(5)},${driverPos[1].toFixed(5)}` : "";
+
+  // Route + static markers — only re-fetches OSRM when driver moves >150 m
   useEffect(() => {
     const map = mapRef.current;
     const L = leafletRef.current;
     if (!mapReady || !map || !L) return;
 
-    routeLineRef.current?.remove();
-    fromMarkerRef.current?.remove();
+    const needsRefetch =
+      !hasSolidRouteRef.current ||
+      !lastFetchFromRef.current ||
+      !from ||
+      haversineM(from[0], from[1], lastFetchFromRef.current[0], lastFetchFromRef.current[1]) > ROUTE_REFETCH_METERS;
+
     toMarkerRef.current?.remove();
-    routeLineRef.current = null;
-    fromMarkerRef.current = null;
     toMarkerRef.current = null;
-
-    if (from) {
-      fromMarkerRef.current = L.marker(from, {
-        icon: L.divIcon({
-          className: "",
-          html: '<div style="width:14px;height:14px;border-radius:50%;background:#0047ff;border:3px solid white;box-shadow:0 2px 8px rgba(0,71,255,0.6)"></div>',
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-        }),
-      }).addTo(map);
-    }
-
     if (to) {
       toMarkerRef.current = L.marker(to, {
         icon: L.divIcon({
@@ -203,79 +209,129 @@ export default function ClientMap({
       }).addTo(map);
     }
 
-    if (from && to) {
-      const same =
-        Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
-
-      // Placeholder straight line while road route loads
-      routeLineRef.current = L.polyline([from, to], {
-        color: "#0047ff",
-        weight: 3,
-        opacity: 0.35,
-        dashArray: "8,6",
-      }).addTo(map);
-
-      if (same) {
-        const current = map.getCenter();
-        const needsMove =
-          Math.abs(current.lat - from[0]) > 0.00001 ||
-          Math.abs(current.lng - from[1]) > 0.00001 ||
-          map.getZoom() !== zoom;
-        if (needsMove) map.setView(from, zoom, { animate: false });
-      } else {
-        map.fitBounds([from, to], { padding: [48, 48], maxZoom: 14, animate: false });
+    if (!driverPos) {
+      fromMarkerRef.current?.remove();
+      fromMarkerRef.current = null;
+      if (from) {
+        fromMarkerRef.current = L.marker(from, {
+          icon: L.divIcon({
+            className: "",
+            html: '<div style="width:14px;height:14px;border-radius:50%;background:#0047ff;border:3px solid white;box-shadow:0 2px 8px rgba(0,71,255,0.6)"></div>',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
+          }),
+        }).addTo(map);
       }
+    }
 
-      // Fetch real road route from OSRM
-      routeFetchAbortRef.current?.abort();
-      const controller = new AbortController();
-      routeFetchAbortRef.current = controller;
-      fetch(
-        `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`,
-        { signal: controller.signal }
-      )
-        .then((r) => r.json())
-        .then((data) => {
-          const coords = data.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
-          if (!coords || !mapRef.current || !leafletRef.current) return;
-          routeLineRef.current?.remove();
-          const LL = leafletRef.current;
-          const latLngs: [number, number][] = coords.map(([lng, lat]) => [lat, lng]);
-          routeLineRef.current = LL.polyline(latLngs, {
-            color: "#0047ff",
-            weight: 4,
-            opacity: 0.9,
-          }).addTo(mapRef.current);
-          mapRef.current.fitBounds(routeLineRef.current.getBounds(), {
-            padding: [48, 48],
-            maxZoom: 14,
-            animate: false,
+    if (from && to) {
+      if (needsRefetch) {
+        lastFetchFromRef.current = [from[0], from[1]];
+        hasSolidRouteRef.current = false;
+
+        routeLineRef.current?.remove();
+        routeLineRef.current = null;
+
+        const same =
+          Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
+
+        routeLineRef.current = L.polyline([from, to], {
+          color: "#0047ff",
+          weight: 3,
+          opacity: 0.35,
+          dashArray: "8,6",
+        }).addTo(map);
+
+        if (same) {
+          const cur = map.getCenter();
+          const needsMove =
+            Math.abs(cur.lat - from[0]) > 0.00001 ||
+            Math.abs(cur.lng - from[1]) > 0.00001 ||
+            map.getZoom() !== zoom;
+          if (needsMove) map.setView(from, zoom, { animate: false });
+        } else {
+          map.fitBounds([from, to], { padding: [48, 48], maxZoom: 14, animate: false });
+        }
+
+        routeFetchAbortRef.current?.abort();
+        const controller = new AbortController();
+        routeFetchAbortRef.current = controller;
+
+        fetch(
+          `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`,
+          { signal: controller.signal }
+        )
+          .then((r) => r.json())
+          .then((data) => {
+            const coords = data.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
+            if (!coords || !mapRef.current || !leafletRef.current) return;
+            routeLineRef.current?.remove();
+            const LL = leafletRef.current;
+            const latLngs: [number, number][] = coords.map(([lng, lat]) => [lat, lng]);
+            routeLineRef.current = LL.polyline(latLngs, {
+              color: "#0047ff",
+              weight: 4,
+              opacity: 0.9,
+            }).addTo(mapRef.current);
+            mapRef.current.fitBounds(routeLineRef.current.getBounds(), {
+              padding: [48, 48],
+              maxZoom: 14,
+              animate: false,
+            });
+            hasSolidRouteRef.current = true;
+          })
+          .catch((err) => {
+            if (err.name !== "AbortError") {
+              // OSRM unavailable — placeholder dashed line stays
+            }
           });
-        })
-        .catch((err) => {
-          if (err.name !== "AbortError") {
-            // OSRM unavailable — the placeholder dashed line stays visible
-          }
-        });
+      }
     } else {
-      const current = map.getCenter();
-      const needsMove =
-        Math.abs(current.lat - center[0]) > 0.0001 ||
-        Math.abs(current.lng - center[1]) > 0.0001 ||
-        map.getZoom() !== zoom;
+      routeLineRef.current?.remove();
+      routeLineRef.current = null;
+      hasSolidRouteRef.current = false;
+      lastFetchFromRef.current = null;
 
+      const cur = map.getCenter();
+      const needsMove =
+        Math.abs(cur.lat - center[0]) > 0.0001 ||
+        Math.abs(cur.lng - center[1]) > 0.0001 ||
+        map.getZoom() !== zoom;
       if (needsMove) map.setView(center, zoom, { animate: true });
     }
 
-    // Store base zoom so scroll-driven adjustments can reference it
     baseZoomRef.current = map.getZoom();
-
     setTimeout(() => map.invalidateSize({ animate: false }), 0);
 
     return () => { routeFetchAbortRef.current?.abort(); };
-  }, [center, from, mapReady, to, zoom]);
+  }, [centerKey, fromKey, mapReady, toKey, zoom]);
 
-  // Scroll-driven zoom: zoomAdjust 0 = full route view, positive = zoom in
+  // Driver dot — smooth movement via setLatLng, no route redraw
+  useEffect(() => {
+    const map = mapRef.current;
+    const L = leafletRef.current;
+    if (!mapReady || !map || !L) return;
+
+    if (!driverPos) {
+      driverPosMarkerRef.current?.remove();
+      driverPosMarkerRef.current = null;
+      return;
+    }
+
+    if (driverPosMarkerRef.current) {
+      driverPosMarkerRef.current.setLatLng(driverPos);
+    } else {
+      driverPosMarkerRef.current = L.marker(driverPos, {
+        icon: L.divIcon({
+          className: "",
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:#0047ff;border:3px solid white;box-shadow:0 2px 8px rgba(0,71,255,0.6)"></div>',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        }),
+      }).addTo(map);
+    }
+  }, [driverPosKey, mapReady]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;

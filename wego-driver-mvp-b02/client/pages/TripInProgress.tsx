@@ -436,6 +436,7 @@ export default function TripInProgress() {
         <ClientMap
           from={mapFrom}
           to={mapTo}
+          driverPos={driverCoords ?? undefined}
           center={mapCenter}
           className="absolute inset-0"
           interactive={false}
