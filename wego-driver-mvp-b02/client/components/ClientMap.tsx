@@ -38,6 +38,7 @@ export default function ClientMap({
   const fromMarkerRef = useRef<LeafletMarker | null>(null);
   const toMarkerRef = useRef<LeafletMarker | null>(null);
   const routeLineRef = useRef<LeafletPolyline | null>(null);
+  const routeFetchAbortRef = useRef<AbortController | null>(null);
   const baseZoomRef = useRef<number>(zoom);
   const [mapReady, setMapReady] = useState(false);
   // Refs so auto-reset timer always has the latest center/zoom without stale closure
@@ -203,15 +204,16 @@ export default function ClientMap({
     }
 
     if (from && to) {
+      const same =
+        Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
+
+      // Placeholder straight line while road route loads
       routeLineRef.current = L.polyline([from, to], {
         color: "#0047ff",
         weight: 3,
-        opacity: 0.75,
+        opacity: 0.35,
         dashArray: "8,6",
       }).addTo(map);
-
-      const same =
-        Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
 
       if (same) {
         const current = map.getCenter();
@@ -219,15 +221,42 @@ export default function ClientMap({
           Math.abs(current.lat - from[0]) > 0.00001 ||
           Math.abs(current.lng - from[1]) > 0.00001 ||
           map.getZoom() !== zoom;
-
         if (needsMove) map.setView(from, zoom, { animate: false });
       } else {
-        map.fitBounds([from, to], {
-          padding: [48, 48],
-          maxZoom: 14,
-          animate: false,
-        });
+        map.fitBounds([from, to], { padding: [48, 48], maxZoom: 14, animate: false });
       }
+
+      // Fetch real road route from OSRM
+      routeFetchAbortRef.current?.abort();
+      const controller = new AbortController();
+      routeFetchAbortRef.current = controller;
+      fetch(
+        `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`,
+        { signal: controller.signal }
+      )
+        .then((r) => r.json())
+        .then((data) => {
+          const coords = data.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
+          if (!coords || !mapRef.current || !leafletRef.current) return;
+          routeLineRef.current?.remove();
+          const LL = leafletRef.current;
+          const latLngs: [number, number][] = coords.map(([lng, lat]) => [lat, lng]);
+          routeLineRef.current = LL.polyline(latLngs, {
+            color: "#0047ff",
+            weight: 4,
+            opacity: 0.9,
+          }).addTo(mapRef.current);
+          mapRef.current.fitBounds(routeLineRef.current.getBounds(), {
+            padding: [48, 48],
+            maxZoom: 14,
+            animate: false,
+          });
+        })
+        .catch((err) => {
+          if (err.name !== "AbortError") {
+            // OSRM unavailable — the placeholder dashed line stays visible
+          }
+        });
     } else {
       const current = map.getCenter();
       const needsMove =
@@ -242,6 +271,8 @@ export default function ClientMap({
     baseZoomRef.current = map.getZoom();
 
     setTimeout(() => map.invalidateSize({ animate: false }), 0);
+
+    return () => { routeFetchAbortRef.current?.abort(); };
   }, [center, from, mapReady, to, zoom]);
 
   // Scroll-driven zoom: zoomAdjust 0 = full route view, positive = zoom in

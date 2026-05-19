@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign, CornerUpRight, Star } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
-import { updateRideStatus, sendRideMessage, listenToRideMessages, submitRating, logStop, type ChatMessage } from "@/lib/db";
+import { updateRideStatus, sendRideMessage, listenToRideMessages, submitRating, logStop, acknowledgeRideDispute, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -80,6 +80,38 @@ export default function TripInProgress() {
   const [cancellationFee, setCancellationFee] = useState(0);
   const { coords: driverCoords } = useCurrentLocation();
 
+  // Auto-open navigation picker the moment the driver accepts the ride
+  useEffect(() => {
+    setNavModalOpen(true);
+  }, []);
+
+  // Re-open navigation picker when trip goes in-progress (passenger confirmed, heading to dropoff)
+  const prevPhaseRef = useRef<TripPhase | null>(null);
+  useEffect(() => {
+    if (prevPhaseRef.current === "waiting" && phase === "in-progress") {
+      setNavModalOpen(true);
+    }
+    prevPhaseRef.current = phase;
+  }, [phase]);
+  const [ridePin, setRidePin] = useState<string | null>(null);
+  const [pinRequired, setPinRequired] = useState(false);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [pinEntry, setPinEntry] = useState(["", "", "", ""]);
+  const [pinError, setPinError] = useState(false);
+  const [pickupIssueAlertOpen, setPickupIssueAlertOpen] = useState(false);
+  const [pickupIssueAlert, setPickupIssueAlert] = useState({
+    active: false,
+    chargeBlocked: false,
+    driverAlertSeen: false,
+  });
+  const [toastError, setToastError] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showError = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastError(msg);
+    toastTimerRef.current = setTimeout(() => setToastError(null), 3500);
+  };
+
   const phaseRef = useRef(phase);
   const waitElapsedRef = useRef(waitElapsed);
 
@@ -101,12 +133,31 @@ export default function TripInProgress() {
     return unsub;
   }, [trip.rideId]);
 
-  // Listen for passenger cancellation
+  // Listen for passenger cancellation + read pin fields
   useEffect(() => {
     if (!trip.rideId) return;
     const unsub = onSnapshot(doc(db, "rides", trip.rideId), (docSnap) => {
       if (!docSnap.exists()) return;
-      const status = docSnap.data().status;
+      const data = docSnap.data();
+      // hasPendingWrites is true when our own local write (e.g. serverTimestamp()) hasn't been
+      // confirmed yet — driverAlertSeenAt will be undefined during that window, causing a false
+      // re-open of the modal. Keep the previous driverAlertSeen value until the server confirms.
+      const pending = docSnap.metadata.hasPendingWrites;
+      setRidePin((data.pin as string | null) ?? null);
+      setPinRequired((data.pinRequired as boolean) ?? false);
+      const status = data.status;
+      const pickupIssueReported =
+        (data.disputed as boolean) === true &&
+        (data.disputeReason as string | null) === "passenger_not_picked_up";
+      const driverAlertSeen = Boolean(data.driverAlertSeenAt);
+      setPickupIssueAlert(prev => ({
+        active: pickupIssueReported,
+        chargeBlocked: (data.chargeBlocked as boolean) ?? false,
+        driverAlertSeen: pending ? prev.driverAlertSeen : driverAlertSeen,
+      }));
+      if (pickupIssueReported && !driverAlertSeen && !pending) {
+        setPickupIssueAlertOpen(true);
+      }
       if (status === "cancelled") {
         let fee = 0;
         const currentPhase = phaseRef.current;
@@ -176,6 +227,8 @@ export default function TripInProgress() {
   const pickupLabel = trip.type === "food" ? "Restaurant" : "Pickup";
   const arrivedLabel = trip.type === "food" ? "Arrived at Restaurant" : "Arrived at Pickup";
   const completeLabel = isDelivery ? "Delivery Complete" : "Complete Trip";
+  const hasPickupIssueAlert = pickupIssueAlert.active;
+  const pickupIssueNeedsAcknowledgement = hasPickupIssueAlert && !pickupIssueAlert.driverAlertSeen;
 
   if (phase === "complete") {
     return (
@@ -193,30 +246,47 @@ export default function TripInProgress() {
           </div>
 
           {/* Earnings Card */}
-          <div className="glass-card p-5 border border-primary/20 rounded-2xl space-y-4 bg-gradient-to-br from-primary/8 to-transparent">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Your Earnings</p>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{isDelivery ? "Customer Paid" : "Rider Paid"}</span>
-                <span className="text-foreground font-medium">${trip.riderPayment.toFixed(2)}</span>
+          {pickupIssueAlert.chargeBlocked ? (
+            <div className="glass-card p-5 border border-amber-500/30 rounded-2xl space-y-3 bg-amber-500/5">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-amber-500 flex-shrink-0" />
+                <p className="text-sm font-semibold text-foreground">Payout Under Review</p>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">WeGo Fee (12%)</span>
-                <span className="text-destructive font-medium">-${trip.coopFee.toFixed(2)}</span>
-              </div>
-              {stopEarnings > 0 && (
+              <p className="text-sm text-muted-foreground">
+                The passenger reported a pickup issue. Your payout of{" "}
+                <span className="text-foreground font-medium">${trip.driverTake.toFixed(2)}</span> is on hold
+                while the WeGo team reviews this trip.
+              </p>
+              <p className="text-xs text-muted-foreground bg-muted/20 border border-border rounded-lg px-3 py-2">
+                You'll be notified via Messages once the review is complete. This usually takes 1–2 business days.
+              </p>
+            </div>
+          ) : (
+            <div className="glass-card p-5 border border-primary/20 rounded-2xl space-y-4 bg-gradient-to-br from-primary/8 to-transparent">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Your Earnings</p>
+              <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Stop fees (100% yours)</span>
-                  <span className="text-primary font-medium">+${stopEarnings.toFixed(2)}</span>
+                  <span className="text-muted-foreground">{isDelivery ? "Customer Paid" : "Rider Paid"}</span>
+                  <span className="text-foreground font-medium">${trip.riderPayment.toFixed(2)}</span>
                 </div>
-              )}
-              <div className="h-px bg-border/50" />
-              <div className="flex justify-between">
-                <span className="text-primary font-semibold">Your Take</span>
-                <span className="text-2xl font-bold text-primary">${(trip.driverTake + stopEarnings).toFixed(2)}</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">WeGo Fee (12%)</span>
+                  <span className="text-destructive font-medium">-${trip.coopFee.toFixed(2)}</span>
+                </div>
+                {stopEarnings > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Stop fees (100% yours)</span>
+                    <span className="text-primary font-medium">+${stopEarnings.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="h-px bg-border/50" />
+                <div className="flex justify-between">
+                  <span className="text-primary font-semibold">Your Take</span>
+                  <span className="text-2xl font-bold text-primary">${(trip.driverTake + stopEarnings).toFixed(2)}</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Trip Summary */}
           <div className="glass-card p-4 border border-border rounded-xl space-y-3">
@@ -278,8 +348,15 @@ export default function TripInProgress() {
                     <button
                       type="button"
                       onClick={async () => {
+                        if (trip.rideId) {
+                          try {
+                            await submitRating(trip.rideId, passengerRating, "driver");
+                          } catch {
+                            showError("Couldn't save rating — please try again");
+                            return;
+                          }
+                        }
                         setRatingSubmitted(true);
-                        if (trip.rideId) await submitRating(trip.rideId, passengerRating, "driver");
                       }}
                       className="w-full py-2.5 rounded-xl bg-primary/10 border border-primary/25 text-primary font-semibold text-sm active:scale-95 transition-transform"
                     >
@@ -315,22 +392,30 @@ export default function TripInProgress() {
     ? trip.pickupCoords
     : trip.dropoffCoords;
   const mapCenter: [number, number] = driverCoords ?? trip.pickupCoords ?? [37.3541, -121.9552];
+  const mapPanelClassName = "flex-1 min-h-[200px]";
 
   const handleNavigate = (app: "google" | "waze") => {
-    const lat = mapTo?.[0] || mapCenter[0];
-    const lng = mapTo?.[1] || mapCenter[1];
+    const lat = mapTo?.[0];
+    const lng = mapTo?.[1];
+    const address = phase === "to-pickup" ? trip.pickupLocation : trip.dropoffLocation;
+    const coordDest = (lat && lng) ? `${lat},${lng}` : null;
     if (app === "google") {
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, "_blank");
+      const dest = coordDest ?? encodeURIComponent(address);
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`, "_blank");
     } else if (app === "waze") {
-      window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, "_blank");
+      if (coordDest) {
+        window.open(`https://waze.com/ul?ll=${coordDest}&navigate=yes`, "_blank");
+      } else {
+        window.open(`https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`, "_blank");
+      }
     }
     setNavModalOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-6">
+    <div className="relative max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden">
       {/* Live Map */}
-      <div className="relative flex-1 min-h-64">
+      <div className={`relative ${mapPanelClassName}`}>
         <ClientMap
           from={mapFrom}
           to={mapTo}
@@ -430,6 +515,21 @@ export default function TripInProgress() {
           </div>
         </div>
 
+        {hasPickupIssueAlert && (
+          <div className="glass-card p-4 border border-amber-500/35 rounded-xl bg-amber-500/5 space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} className="text-amber-500" />
+              <p className="text-sm font-semibold text-foreground">Passenger pickup issue reported</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The passenger says they are not in the vehicle or the wrong rider may be onboard. Pull over safely and verify before continuing.
+            </p>
+            <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+              {pickupIssueAlert.chargeBlocked ? "Trip payout is on hold pending review." : "Review pending."}
+            </p>
+          </div>
+        )}
+
         {/* Destination Card */}
         <div className="glass-card p-4 border border-border rounded-xl space-y-3">
           {phase === "to-pickup" ? (
@@ -503,12 +603,24 @@ export default function TripInProgress() {
             </div>
 
             <button type="button" onClick={() => {
-                setPhase("in-progress");
-                if (trip.rideId) updateRideStatus(trip.rideId, "inProgress").catch(() => {});
+                if (pinRequired) {
+                  setPinModalOpen(true);
+                } else {
+                  setPhase("in-progress");
+                  if (trip.rideId) updateRideStatus(trip.rideId, "inProgress").catch(() => {});
+                  // Open navigation to dropoff immediately — inside click handler so browsers allow it
+                  const lat = trip.dropoffCoords?.[0];
+                  const lng = trip.dropoffCoords?.[1];
+                  const dest = (lat && lng)
+                    ? `${lat},${lng}`
+                    : encodeURIComponent(trip.dropoffLocation);
+                  window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`, "_blank");
+                }
               }}
-              className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
+              disabled={pickupIssueNeedsAcknowledgement}
+              className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl ${pickupIssueNeedsAcknowledgement ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-none cursor-not-allowed" : "bg-primary text-foreground shadow-primary/30"}`}>
               <CheckCircle size={22} />
-              Passenger is Here
+              {pickupIssueNeedsAcknowledgement ? "Acknowledge Safety Alert First" : "Passenger is Here"}
             </button>
 
             <button type="button" onClick={simulatePassengerCancel}
@@ -525,30 +637,76 @@ export default function TripInProgress() {
 
         {phase === "in-progress" && (
           <>
+            {hasPickupIssueAlert && (
+              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Verify passenger before continuing</p>
+                  <p className="text-xs text-muted-foreground">
+                    {pickupIssueAlert.driverAlertSeen ? "Alert acknowledged." : "Acknowledgement required."}
+                  </p>
+                </div>
+                {!pickupIssueAlert.driverAlertSeen && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setPickupIssueAlert(prev => ({ ...prev, driverAlertSeen: true }));
+                      setPickupIssueAlertOpen(false);
+                      if (trip.rideId) acknowledgeRideDispute(trip.rideId).catch(() => {});
+                    }}
+                    className="px-3 py-2 rounded-lg bg-amber-500 text-white text-xs font-bold active:scale-95 transition-transform"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+              </div>
+            )}
             {stopEarnings > 0 && (
               <div className="flex items-center justify-between bg-card border border-border rounded-xl px-4 py-2.5">
                 <span className="text-xs text-muted-foreground">Stop fees earned</span>
                 <span className="text-sm font-bold text-primary">+${stopEarnings.toFixed(2)}</span>
               </div>
             )}
-            <button type="button" onClick={() => {
+            <button type="button" onClick={async () => {
                 setStopEarnings((e) => parseFloat((e + 2.00).toFixed(2)));
-                if (trip.rideId) logStop(trip.rideId, 2.00).catch(() => {});
+                if (trip.rideId) {
+                  try {
+                    await logStop(trip.rideId, 2.00);
+                  } catch {
+                    showError("Couldn't log stop — will retry on connection restore");
+                  }
+                }
               }}
-              className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-muted-foreground active:scale-95 transition-transform">
-              Log Passenger Stop (+$2.00)
+              disabled={pickupIssueNeedsAcknowledgement}
+              className={`w-full py-3 rounded-xl border text-sm font-semibold active:scale-95 transition-transform ${
+                pickupIssueNeedsAcknowledgement
+                  ? "border-amber-500/25 text-amber-600 dark:text-amber-400 bg-amber-500/5 opacity-80 cursor-not-allowed"
+                  : "border-border text-muted-foreground"
+              }`}>
+              {pickupIssueNeedsAcknowledgement ? "Acknowledge Alert Before Logging Stop" : "Log Passenger Stop (+$2.00)"}
             </button>
             <button type="button" onClick={() => {
                 setPhase("complete");
                 if (trip.rideId) updateRideStatus(trip.rideId, "completed").catch(() => {});
               }}
-              className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
+              disabled={pickupIssueNeedsAcknowledgement}
+              className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl ${
+                pickupIssueNeedsAcknowledgement
+                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-none cursor-not-allowed"
+                  : "bg-primary text-white shadow-primary/30"
+              }`}>
               <CheckCircle size={22} />
-              {completeLabel}
+              {pickupIssueNeedsAcknowledgement ? "Acknowledge Safety Alert First" : completeLabel}
             </button>
           </>
         )}
       </div>
+
+      {/* Error toast */}
+      {toastError && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-2 bg-destructive text-destructive-foreground text-sm font-semibold px-4 py-3 rounded-2xl shadow-xl pointer-events-none max-w-[90vw] text-center">
+          {toastError}
+        </div>
+      )}
 
       {/* Calling toast */}
       {calling && (
@@ -558,9 +716,68 @@ export default function TripInProgress() {
         </div>
       )}
 
+      {pickupIssueAlertOpen && (
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+          <div className="w-full max-w-sm bg-card border border-amber-500/35 rounded-2xl p-6 space-y-5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle size={22} className="text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-foreground">Passenger Issue Reported</h2>
+                  <p className="text-sm text-muted-foreground">Verify the passenger in your car now</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close alert"
+                onClick={() => setPickupIssueAlertOpen(false)}
+                className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center"
+              >
+                <X size={15} className="text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="bg-muted/20 border border-border rounded-xl p-4 space-y-2 text-sm text-muted-foreground">
+              <p>The passenger reported that this trip may have started without them in the vehicle.</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Trip payout is blocked pending review</li>
+                <li>Safely pull over and verify rider identity</li>
+                <li>Use chat or call before continuing the trip</li>
+              </ul>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPickupIssueAlertOpen(false);
+                  setChatOpen(true);
+                }}
+                className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform"
+              >
+                Message Rider
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setPickupIssueAlert(prev => ({ ...prev, driverAlertSeen: true }));
+                  setPickupIssueAlertOpen(false);
+                  if (trip.rideId) acknowledgeRideDispute(trip.rideId).catch(() => {});
+                }}
+                className="py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-95 transition-transform"
+              >
+                Acknowledge Alert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Passenger cancelled overlay */}
       {passengerCancelled && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
           <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-4">
             <div className="flex flex-col items-center gap-2 text-center">
               <button type="button" onClick={() => navigate("/", { state: { tripCompleted: true } })} aria-label="Dismiss"
@@ -605,9 +822,9 @@ export default function TripInProgress() {
 
       {/* Chat modal */}
       {chatOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+        <div className="absolute inset-0 z-50 flex flex-col justify-end items-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setChatOpen(false)} />
-          <div className="relative bg-card border-t border-border rounded-t-2xl flex flex-col max-h-[70vh]">
+          <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl flex flex-col max-h-[70vh]">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">
@@ -658,9 +875,93 @@ export default function TripInProgress() {
         </div>
       )}
 
+      {/* PIN entry modal */}
+      {pinModalOpen && (
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={0} className="hidden" />
+                <span className="text-2xl">🔒</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Passenger PIN Required</h2>
+                <p className="text-sm text-muted-foreground">Ask the passenger for their 4-digit code</p>
+              </div>
+            </div>
+
+            <div className="flex justify-center gap-3">
+              {[0, 1, 2, 3].map((i) => (
+                <input
+                  key={i}
+                  id={`pin-driver-${i}`}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  aria-label={`PIN digit ${i + 1}`}
+                  value={pinEntry[i]}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(-1);
+                    const next = [...pinEntry];
+                    next[i] = val;
+                    setPinEntry(next);
+                    setPinError(false);
+                    if (val && i < 3) {
+                      document.getElementById(`pin-driver-${i + 1}`)?.focus();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Backspace" && !pinEntry[i] && i > 0) {
+                      document.getElementById(`pin-driver-${i - 1}`)?.focus();
+                    }
+                  }}
+                  className="w-14 h-16 text-center text-2xl font-bold bg-background border-2 border-border rounded-xl focus:outline-none focus:border-primary text-foreground transition-colors"
+                />
+              ))}
+            </div>
+
+            {pinError && (
+              <p className="text-sm text-destructive text-center font-medium">Incorrect PIN — ask the passenger again</p>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => { setPinModalOpen(false); setPinEntry(["", "", "", ""]); setPinError(false); }}
+                className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={pinEntry.some((d) => d === "")}
+                onClick={() => {
+                  const entered = pinEntry.join("");
+                  if (entered === ridePin) {
+                    setPinModalOpen(false);
+                    setPinEntry(["", "", "", ""]);
+                    setPinError(false);
+                    setPhase("in-progress");
+                    if (trip.rideId) updateRideStatus(trip.rideId, "inProgress").catch(() => {});
+                    const lat = trip.dropoffCoords?.[0];
+                    const lng = trip.dropoffCoords?.[1];
+                    const dest = (lat && lng)
+                      ? `${lat},${lng}`
+                      : encodeURIComponent(trip.dropoffLocation);
+                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`, "_blank");
+                  } else {
+                    setPinError(true);
+                  }
+                }}
+                className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SOS Modal */}
       {sosModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/70">
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/70">
           <div className="w-full max-w-sm bg-card border border-destructive/40 rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -692,7 +993,7 @@ export default function TripInProgress() {
 
       {/* Cancel Trip Modal */}
       {cancelModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
           <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-4">
             <h2 className="text-lg font-bold text-foreground">Cancel Trip?</h2>
             <p className="text-sm text-muted-foreground">
@@ -720,11 +1021,16 @@ export default function TripInProgress() {
 
       {/* External Navigation Modal */}
       {navModalOpen && (
-        <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center p-4">
+        <div className="absolute inset-0 z-[2000] flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setNavModalOpen(false)} />
           <div className="relative w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-4 animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:fade-in zoom-in-95">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-foreground">Open in Maps</h2>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Open Navigation</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {phase === "to-pickup" ? `Pickup · ${trip.pickupLocation}` : `Dropoff · ${trip.dropoffLocation}`}
+                </p>
+              </div>
               <button type="button" aria-label="Close" onClick={() => setNavModalOpen(false)} className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center">
                 <X size={16} />
               </button>

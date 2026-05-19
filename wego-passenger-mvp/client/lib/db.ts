@@ -38,6 +38,8 @@ export interface Ride {
   isAdvanced: boolean;
   stopCount: number;
   stopFeeTotal: number;
+  pin: string | null;
+  pinRequired: boolean;
   startedAt: Date | null;
   requestedAt: Date | null;
   acceptedAt: Date | null;
@@ -46,6 +48,11 @@ export interface Ride {
   riderRating: number;
   passengerRatingGiven: number;
   driverRatingGiven: number;
+  disputed: boolean;
+  disputeReason: string | null;
+  disputedAt: Date | null;
+  chargeBlocked: boolean;
+  driverAlertSeenAt: Date | null;
 }
 
 export interface ChatMessage {
@@ -86,6 +93,8 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     isAdvanced: (data.isAdvanced as boolean) ?? false,
     stopCount: (data.stopCount as number) ?? 0,
     stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
+    pin: (data.pin as string | null) ?? null,
+    pinRequired: (data.pinRequired as boolean) ?? false,
     startedAt: toDate(data.startedAt),
     requestedAt: toDate(data.requestedAt),
     acceptedAt: toDate(data.acceptedAt),
@@ -94,6 +103,11 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     riderRating: (data.riderRating as number) ?? 0,
     passengerRatingGiven: (data.passengerRatingGiven as number) ?? 0,
     driverRatingGiven: (data.driverRatingGiven as number) ?? 0,
+    disputed: (data.disputed as boolean) ?? false,
+    disputeReason: (data.disputeReason as string | null) ?? null,
+    disputedAt: toDate(data.disputedAt),
+    chargeBlocked: (data.chargeBlocked as boolean) ?? false,
+    driverAlertSeenAt: toDate(data.driverAlertSeenAt),
   };
 }
 
@@ -110,9 +124,11 @@ export async function requestRide(opts: {
   dropoffCoords?: [number, number] | null;
   estimatedMinutes?: number;
   isAdvanced?: boolean;
+  pinEnabled?: boolean;
 }) {
   const coopFee = Math.round(opts.fare * 0.12 * 100) / 100;
   const driverTake = Math.round((opts.fare - coopFee) * 100) / 100;
+  const pin = String(Math.floor(1000 + Math.random() * 9000));
   return addDoc(collection(db, "rides"), {
     status: "pending",
     type: opts.type ?? "ride",
@@ -132,11 +148,46 @@ export async function requestRide(opts: {
     coopFee,
     estimatedMinutes: opts.estimatedMinutes ?? 8,
     isAdvanced: opts.isAdvanced ?? false,
+    pin,
+    pinRequired: opts.pinEnabled ?? false,
+    stopCount: 0,
+    stopFeeTotal: 0,
+    riderRating: 0,
+    passengerRatingGiven: 0,
+    driverRatingGiven: 0,
+    disputed: false,
+    disputeReason: null,
+    chargeBlocked: false,
+    driverAlertSeenAt: null,
     requestedAt: serverTimestamp(),
     acceptedAt: null,
     completedAt: null,
     cancelledAt: null,
   });
+}
+
+// ── Dispute a ride ─────────────────────────────────────────────────────────
+
+export async function disputeRide(rideId: string, reason: string): Promise<void> {
+  try {
+    await addDoc(collection(db, "disputes"), {
+      rideId,
+      reason,
+      reportedAt: serverTimestamp(),
+      reportedBy: "passenger",
+      reviewStatus: "open",
+    });
+    await updateDoc(doc(db, "rides", rideId), {
+      disputed: true,
+      disputeReason: reason,
+      disputedAt: serverTimestamp(),
+      chargeBlocked: true,
+      driverAlertSeenAt: null,
+    });
+  } catch (err) {
+    console.error("disputeRide failed:", err);
+    throw err;
+  }
 }
 
 // ── Reserve a ride ─────────────────────────────────────────────────────────
@@ -155,6 +206,7 @@ export async function createReservedRide(opts: {
 }) {
   const coopFee = Math.round(opts.fare * 0.12 * 100) / 100;
   const driverTake = Math.round((opts.fare - coopFee) * 100) / 100;
+  const pin = String(Math.floor(1000 + Math.random() * 9000));
   return addDoc(collection(db, "rides"), {
     status: "reserved",
     type: "ride",
@@ -174,6 +226,17 @@ export async function createReservedRide(opts: {
     coopFee,
     estimatedMinutes: 8,
     isAdvanced: true,
+    pin,
+    pinRequired: false,
+    stopCount: 0,
+    stopFeeTotal: 0,
+    riderRating: 0,
+    passengerRatingGiven: 0,
+    driverRatingGiven: 0,
+    disputed: false,
+    disputeReason: null,
+    chargeBlocked: false,
+    driverAlertSeenAt: null,
     scheduledDate: opts.scheduledDate,
     scheduledHour: opts.scheduledHour,
     scheduledMinute: opts.scheduledMinute,
@@ -202,11 +265,7 @@ export async function cancelRide(rideId: string): Promise<void> {
 
 export async function submitRating(rideId: string, rating: number, raterType: "passenger" | "driver"): Promise<void> {
   const field = raterType === "passenger" ? "passengerRatingGiven" : "driverRatingGiven";
-  try {
-    await updateDoc(doc(db, "rides", rideId), { [field]: rating });
-  } catch (err) {
-    console.error("submitRating failed:", err);
-  }
+  await updateDoc(doc(db, "rides", rideId), { [field]: rating });
 }
 
 // ── Listen to active ride ──────────────────────────────────────────────────
@@ -221,7 +280,7 @@ export function listenToPassengerRide(
   );
   return onSnapshot(q, (snap) => {
     let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
-    rides = rides.filter(r => ["pending", "accepted", "arrived", "inProgress"].includes(r.status));
+    rides = rides.filter(r => ["pending", "accepted", "arrived", "inProgress", "reserved"].includes(r.status));
     rides.sort((a, b) => (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0));
     callback(rides.length === 0 ? null : rides[0]);
   }, (err) => console.error("listenToPassengerRide:", err));

@@ -43,6 +43,8 @@ export interface Ride {
   estimatedMinutes: number;
   stopCount: number;
   stopFeeTotal: number;
+  pin: string | null;
+  pinRequired: boolean;
   scheduledDate: string | null;
   scheduledHour: number | null;
   scheduledMinute: number | null;
@@ -52,6 +54,11 @@ export interface Ride {
   completedAt: Date | null;
   riderRating: number;
   driverRatingGiven: number;
+  disputed: boolean;
+  disputeReason: string | null;
+  disputedAt: Date | null;
+  chargeBlocked: boolean;
+  driverAlertSeenAt: Date | null;
 }
 
 export interface ChatMessage {
@@ -113,6 +120,8 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     estimatedMinutes: (data.estimatedMinutes as number) ?? 10,
     stopCount: (data.stopCount as number) ?? 0,
     stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
+    pin: (data.pin as string | null) ?? null,
+    pinRequired: (data.pinRequired as boolean) ?? false,
     scheduledDate: (data.scheduledDate as string | null) ?? null,
     scheduledHour: (data.scheduledHour as number | null) ?? null,
     scheduledMinute: (data.scheduledMinute as number | null) ?? null,
@@ -122,6 +131,11 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     completedAt: toDate(data.completedAt),
     riderRating: (data.riderRating as number) ?? 4.87,
     driverRatingGiven: (data.driverRatingGiven as number) ?? 0,
+    disputed: (data.disputed as boolean) ?? false,
+    disputeReason: (data.disputeReason as string | null) ?? null,
+    disputedAt: toDate(data.disputedAt),
+    chargeBlocked: (data.chargeBlocked as boolean) ?? false,
+    driverAlertSeenAt: toDate(data.driverAlertSeenAt),
   };
 }
 
@@ -210,6 +224,12 @@ export async function updateRideStatus(rideId: string, status: RideStatus) {
   await updateDoc(doc(db, "rides", rideId), updates);
 }
 
+export async function acknowledgeRideDispute(rideId: string) {
+  await updateDoc(doc(db, "rides", rideId), {
+    driverAlertSeenAt: serverTimestamp(),
+  });
+}
+
 export async function startRide(rideId: string) {
   await updateRideStatus(rideId, "inProgress");
 }
@@ -220,11 +240,7 @@ export async function completeRide(rideId: string) {
 
 export async function submitRating(rideId: string, rating: number, raterType: "passenger" | "driver"): Promise<void> {
   const field = raterType === "driver" ? "driverRatingGiven" : "passengerRatingGiven";
-  try {
-    await updateDoc(doc(db, "rides", rideId), { [field]: rating });
-  } catch (err) {
-    console.error("submitRating failed:", err);
-  }
+  await updateDoc(doc(db, "rides", rideId), { [field]: rating });
 }
 
 // ── Messages ───────────────────────────────────────────────────────────────
@@ -368,14 +384,10 @@ export function listenToReservedRides(
 }
 
 export async function logStop(rideId: string, feeAmount: number): Promise<void> {
-  try {
-    await updateDoc(doc(db, "rides", rideId), {
-      stopCount: increment(1),
-      stopFeeTotal: increment(feeAmount),
-    });
-  } catch (err) {
-    console.error("logStop failed:", err);
-  }
+  await updateDoc(doc(db, "rides", rideId), {
+    stopCount: increment(1),
+    stopFeeTotal: increment(feeAmount),
+  });
 }
 
 // ── Ride request (passenger side, used for testing) ────────────────────────

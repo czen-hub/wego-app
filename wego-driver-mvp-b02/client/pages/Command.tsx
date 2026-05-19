@@ -132,6 +132,8 @@ export default function Command() {
 
   const [declinedRideId, setDeclinedRideId] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [offlineBlockOpen, setOfflineBlockOpen] = useState(false);
   const pendingRide = incomingRides.find((r) => r.id !== declinedRideId) ?? null;
   const hasRequest = pendingRide !== null;
 
@@ -174,6 +176,7 @@ export default function Command() {
           coopFee: activeRide.coopFee,
           driverTake: activeRide.driverTake,
           estimatedTime: activeRide.estimatedMinutes,
+          isAdvanced: activeRide.isAdvanced,
           type: activeRide.type,
           rideId: activeRide.id,
           pickupCoords: activeRide.pickupLocation
@@ -201,6 +204,8 @@ export default function Command() {
   }, [hasRequest]);
 
   const handleToggleOnline = async () => {
+    // Prevent going offline while mid-trip — driver must complete or cancel the ride first
+    if (isOnline && activeRide) { setOfflineBlockOpen(true); return; }
     await setOnline(!isOnline);
     if (isOnline) setDeclinedRideId(null);
   };
@@ -228,6 +233,7 @@ export default function Command() {
           coopFee: pendingRide.coopFee,
           driverTake: pendingRide.driverTake,
           estimatedTime: pendingRide.estimatedMinutes,
+          isAdvanced: pendingRide.isAdvanced,
           type: pendingRide.type,
           rideId: pendingRide.id,
           pickupCoords: pendingRide.pickupLocation
@@ -242,6 +248,8 @@ export default function Command() {
     } catch (e) {
       console.error("Accept ride failed:", e);
       setAccepting(false);
+      setAcceptError("Ride was already taken by another driver");
+      setTimeout(() => setAcceptError(null), 3500);
     }
   };
 
@@ -460,6 +468,33 @@ export default function Command() {
           </div>
         </div>
       </div>
+
+      {/* ── ACCEPT ERROR TOAST ── */}
+      {acceptError && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-2 bg-destructive text-destructive-foreground text-sm font-semibold px-4 py-3 rounded-2xl shadow-xl pointer-events-none max-w-[90vw] text-center">
+          {acceptError}
+        </div>
+      )}
+
+      {/* ── OFFLINE BLOCK MODAL ── */}
+      {offlineBlockOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-4">
+            <h2 className="text-base font-bold text-foreground">Complete your active trip first</h2>
+            <p className="text-sm text-muted-foreground">You can't go offline while a ride is in progress. Complete or cancel the current trip before going offline.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setOfflineBlockOpen(false)}
+                className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
+                Stay Online
+              </button>
+              <button type="button" onClick={() => { setOfflineBlockOpen(false); navigate("/trip", { replace: true, state: { riderName: activeRide?.passengerName, pickupLocation: activeRide?.pickupAddress, dropoffLocation: activeRide?.dropoffAddress, riderPayment: activeRide?.fare, coopFee: activeRide?.coopFee, driverTake: activeRide?.driverTake, estimatedTime: activeRide?.estimatedMinutes, isAdvanced: activeRide?.isAdvanced, type: activeRide?.type, rideId: activeRide?.id, pickupCoords: activeRide?.pickupLocation ? [activeRide.pickupLocation.latitude, activeRide.pickupLocation.longitude] as [number,number] : undefined, dropoffCoords: activeRide?.dropoffLocation ? [activeRide.dropoffLocation.latitude, activeRide.dropoffLocation.longitude] as [number,number] : undefined } }); }}
+                className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform">
+                Back to Trip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── PREFERENCES PANEL ── */}
       {prefsOpen && (
