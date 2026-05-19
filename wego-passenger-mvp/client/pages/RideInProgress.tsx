@@ -73,6 +73,7 @@ export default function RideInProgress() {
   const [stopCount, setStopCount] = useState(0);
   const [stopFeeTotal, setStopFeeTotal] = useState(0);
   const [stopModalOpen, setStopModalOpen] = useState(false);
+  const [stopAddress, setStopAddress] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const [cancelledFromDispute, setCancelledFromDispute] = useState(false);
@@ -325,14 +326,24 @@ export default function RideInProgress() {
   const driverCanLeave = waitElapsed >= freeWaitSecs;
 
   const confirmStop = async () => {
+    const addr = stopAddress.trim();
     setStopCount((c) => c + 1);
     setStopFeeTotal((t) => parseFloat((t + STOP_FEE).toFixed(2)));
     setStopModalOpen(false);
+    setStopAddress("");
     if (liveRide?.id) {
       try {
         await logStop(liveRide.id, STOP_FEE);
       } catch {
         showError("Stop logged locally — will sync when connection restores");
+      }
+      // Notify driver of the stop address via chat
+      if (addr && user) {
+        try {
+          await sendRideMessage(liveRide.id, user.uid, "passenger", `Stop requested at: ${addr}`);
+        } catch {
+          // chat message best-effort
+        }
       }
     }
   };
@@ -585,6 +596,17 @@ export default function RideInProgress() {
   }
 
   // ── ACTIVE TRIP VIEW ───────────────────────────────────────────────────────
+  const pickupAddressDisplay = (() => {
+    const raw = (liveRide?.pickupAddress ?? "").replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim();
+    return raw && raw !== "Current Location" ? raw : "Your Current Location";
+  })();
+
+  const pickupEtaMinutes = (() => {
+    if (!driverCoords || !liveRide?.pickupLocation) return liveRide?.estimatedMinutes ?? rideMock.estimatedMinutes ?? 6;
+    const dm = haversineMeters(driverCoords[0], driverCoords[1], liveRide.pickupLocation.latitude, liveRide.pickupLocation.longitude);
+    return Math.max(1, Math.round((dm / 1609.34 / 30) * 60));
+  })();
+
   return (
     <div className="max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden">
       {/* Map — fills remaining space above the cards */}
@@ -735,13 +757,13 @@ export default function RideInProgress() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
-                  {phase === "in_progress" ? "Dropoff" : phase === "arrived" ? "Pickup — Driver Here" : "Heading to you"}
+                  {phase === "in_progress" ? "Dropoff" : phase === "arrived" ? "Pickup — Driver Here" : "Heading to Pickup"}
                 </p>
                 <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
-                  {phase === "in_progress" ? rideMock.destination : "Your Current Location"}
+                  {phase === "in_progress" ? rideMock.destination : pickupAddressDisplay}
                 </p>
                 {phase === "en_route" && (
-                  <p className="text-xs text-muted-foreground mt-1">{liveRide?.estimatedMinutes ?? rideMock.estimatedMinutes ?? 6} min away</p>
+                  <p className="text-xs text-muted-foreground mt-1">{pickupEtaMinutes} min away</p>
                 )}
               </div>
             </div>
@@ -856,15 +878,32 @@ export default function RideInProgress() {
       {/* Stop request modal */}
       {stopModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setStopModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setStopModalOpen(false); setStopAddress(""); }} />
           <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl px-4 pt-4 pb-8 space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-base font-bold text-foreground">Request a Stop?</p>
-              <button type="button" aria-label="Close" onClick={() => setStopModalOpen(false)}
+              <p className="text-base font-bold text-foreground">Request a Stop</p>
+              <button type="button" aria-label="Close" onClick={() => { setStopModalOpen(false); setStopAddress(""); }}
                 className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
                 <X size={15} className="text-muted-foreground" />
               </button>
             </div>
+
+            {/* Address input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stop address or landmark</label>
+              <div className="flex items-center gap-2 bg-background border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
+                <MapPin size={15} className="text-muted-foreground flex-shrink-0" />
+                <input
+                  type="text"
+                  value={stopAddress}
+                  onChange={(e) => setStopAddress(e.target.value)}
+                  placeholder="e.g. 7-Eleven on Main St"
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+
             <div className="bg-background border border-border rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Stop fee</span>
@@ -876,12 +915,12 @@ export default function RideInProgress() {
               <p className="text-xs text-muted-foreground">100% of the stop fee goes directly to your driver for the extra wait time.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => setStopModalOpen(false)}
+              <button type="button" onClick={() => { setStopModalOpen(false); setStopAddress(""); }}
                 className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
                 Cancel
               </button>
-              <button type="button" onClick={confirmStop}
-                className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform">
+              <button type="button" onClick={confirmStop} disabled={!stopAddress.trim()}
+                className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed">
                 Confirm Stop
               </button>
             </div>

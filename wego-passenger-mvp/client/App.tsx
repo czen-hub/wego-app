@@ -31,14 +31,22 @@ const queryClient = new QueryClient({
   },
 });
 
-const AppLayout = ({ children }: { children: React.ReactNode }) => (
-  <div className="w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden">
-    <div className="flex-1 overflow-y-auto">
-      <ErrorBoundary>{children}</ErrorBoundary>
+function AppLayout({
+  children,
+  contentClassName = "overflow-y-auto",
+}: {
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
+  return (
+    <div className="w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden">
+      <div className={`flex-1 min-h-0 ${contentClassName}`}>
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </div>
+      <BottomNav />
     </div>
-    <BottomNav />
-  </div>
-);
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -94,9 +102,9 @@ const App = () => (
                   path="/request"
                   element={
                     <ProtectedRoute>
-                      <div className="w-full max-w-[430px] mx-auto h-screen bg-background overflow-hidden">
+                      <AppLayout contentClassName="overflow-hidden">
                         <RideRequest />
-                      </div>
+                      </AppLayout>
                     </ProtectedRoute>
                   }
                 />

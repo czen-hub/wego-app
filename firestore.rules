@@ -40,10 +40,17 @@ service cloud.firestore {
 
       allow update: if isAuth() && (
 
-        // Passenger cancels their own pending or accepted ride.
+        // Passenger cancels their own pending, accepted, reserved, or in-progress ride.
         (resource.data.passengerId == request.auth.uid
-          && resource.data.status in ['pending', 'accepted', 'reserved']
+          && resource.data.status in ['pending', 'accepted', 'reserved', 'inProgress']
           && request.resource.data.status == 'cancelled')
+
+        ||
+
+        // Passenger files a dispute on an in-progress ride (ghost ride / not picked up).
+        (resource.data.passengerId == request.auth.uid
+          && resource.data.status == 'inProgress'
+          && request.resource.data.disputed == true)
 
         ||
 
@@ -61,6 +68,13 @@ service cloud.firestore {
 
         ||
 
+        // Driver acknowledges a dispute alert.
+        (resource.data.driverId == request.auth.uid
+          && resource.data.disputed == true
+          && request.resource.data.driverAlertSeenAt != null)
+
+        ||
+
         // Either party submits a rating after the ride is completed.
         (resource.data.status == 'completed'
           && (resource.data.passengerId == request.auth.uid
@@ -69,6 +83,20 @@ service cloud.firestore {
 
       // No hard deletes — cancelled status is the soft-delete.
       allow delete: if false;
+    }
+
+    // ── Disputes ──────────────────────────────────────────────────────────────
+    // Passengers can file disputes; support staff read them externally.
+    match /disputes/{disputeId} {
+      allow create: if isAuth();
+      allow read:   if isAuth();
+      allow update, delete: if false;
+    }
+
+    // ── Ride Chat ─────────────────────────────────────────────────────────────
+    match /ride_chats/{msgId} {
+      allow read, create: if isAuth();
+      allow update, delete: if false;
     }
   }
 }

@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, MapPin, ChevronUp, ChevronDown, Clock, Building2, X, Home as HomeIcon, Briefcase } from "lucide-react";
+import { Search, MapPin, ChevronUp, ChevronDown, Clock, Building2, X, Home as HomeIcon, Briefcase, Navigation } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
-import { listenToRideHistory, type Ride } from "@/lib/db";
+import { listenToRideHistory, listenToPassengerRide, type Ride } from "@/lib/db";
 
 function formatRelativeDate(d: Date): string {
   const diff = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
@@ -74,6 +74,7 @@ export default function Home() {
   const { coords: currentCoords, loading: locationLoading } = useCurrentLocation();
   const [recentRides, setRecentRides] = useState<Ride[]>([]);
   const [ridesLoaded, setRidesLoaded] = useState(false);
+  const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [mapResetToken, setMapResetToken] = useState(0);
   const lastMapMoveRef = useRef<number>(0);
 
@@ -83,6 +84,12 @@ export default function Home() {
       setRecentRides(rides.slice(0, 3));
       setRidesLoaded(true);
     });
+    return unsub;
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = listenToPassengerRide(user.uid, (ride) => setActiveRide(ride));
     return unsub;
   }, [user]);
 
@@ -228,12 +235,35 @@ const handleTouchStart = (e: React.TouchEvent) => {
       </div>
 
       {/* ── TOP BRAND BAR ── */}
-      <div className="relative z-20 pt-4 px-4">
+      <div className="relative z-20 pt-4 px-4 space-y-2">
         <div className="flex justify-center">
           <div className="glass-card px-6 py-2.5 inline-flex items-center justify-center">
             <p className="text-sm font-bold text-primary tracking-widest uppercase">WeGo</p>
           </div>
         </div>
+
+        {/* Active ride banner */}
+        {activeRide && (
+          <button
+            type="button"
+            onClick={() => navigate("/ride")}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary text-white shadow-lg shadow-primary/30 active:scale-95 transition-transform"
+          >
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+              <Navigation size={16} className="text-white" />
+            </div>
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-sm font-bold leading-tight">Ride in Progress</p>
+              <p className="text-xs text-white/80 truncate">
+                {activeRide.status === "pending" ? "Finding driver…" :
+                 activeRide.status === "accepted" ? `${activeRide.driverName || "Driver"} is on the way` :
+                 activeRide.status === "arrived" ? "Driver has arrived" :
+                 "Trip in progress"}
+              </p>
+            </div>
+            <p className="text-xs font-semibold text-white/90 flex-shrink-0">Track →</p>
+          </button>
+        )}
       </div>
 
       {/* ── BOTTOM SHEET ── */}

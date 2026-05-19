@@ -5,16 +5,31 @@ export default function BottomNav() {
   const { pathname } = useLocation();
 
   const navItems = [
-    { path: "/",        icon: MapPin, label: "Home"    },
-    { path: "/rides",   icon: Clock,  label: "Rides"   },
-    { path: "/account", icon: User,   label: "Account" },
+    {
+      path: "/",
+      icon: MapPin,
+      label: "Home",
+      matchPaths: ["/", "/request", "/courier", "/food", "/reserve"],
+    },
+    {
+      path: "/rides",
+      icon: Clock,
+      label: "Rides",
+      matchPaths: ["/rides"],
+    },
+    {
+      path: "/account",
+      icon: User,
+      label: "Account",
+      matchPaths: ["/account"],
+    },
   ];
 
   return (
     <nav className="bg-card border-t border-border bottom-nav-safe">
       <div className="flex justify-around items-stretch pt-1.5">
-        {navItems.map(({ path, icon: Icon, label }) => {
-          const active = pathname === path;
+        {navItems.map(({ path, icon: Icon, label, matchPaths }) => {
+          const active = matchPaths.includes(pathname);
           return (
             <Link
               key={path}

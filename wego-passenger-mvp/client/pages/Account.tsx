@@ -214,6 +214,7 @@ export default function Account() {
   const [newContactPhone, setNewContactPhone] = useState("");
   const [shareTrip, setShareTrip] = useState(false);
   const [rideCheck, setRideCheck] = useState(false);
+  const [pinRequired, setPinRequired] = useState(() => localStorage.getItem("wego_pin_required") === "true");
 
   // About
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
@@ -403,6 +404,12 @@ export default function Account() {
               label="RideCheck"
               sublabel={rideCheck ? "Check-ins enabled on long rides" : "Periodic check-ins during long rides"}
               right={<Toggle on={rideCheck} onToggle={() => setRideCheck((v) => !v)} label="Toggle RideCheck" />}
+            />
+            <Row
+              icon={<Shield size={18} />}
+              label="Trip PIN"
+              sublabel={pinRequired ? "Driver must enter your 4-digit code to start the ride" : "No PIN — 'Wasn't picked up?' button shown if driver ghosts"}
+              right={<Toggle on={pinRequired} onToggle={() => { const n = !pinRequired; setPinRequired(n); localStorage.setItem("wego_pin_required", n ? "true" : "false"); }} label="Toggle Trip PIN" />}
             />
           </Section>
 

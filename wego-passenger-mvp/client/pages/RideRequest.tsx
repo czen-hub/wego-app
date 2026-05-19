@@ -207,6 +207,17 @@ export default function RideRequest() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [destination]);
 
+  useEffect(() => {
+    if (!pickup.trim() || pickup === "Current Location" || LOCATION_COORDS[pickup]) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      geocode(pickup).then((coords) => {
+        if (!cancelled && coords) setPinnedPickupCoords(coords);
+      });
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [pickup]);
+
   const destSuggestions = destination.trim().length >= 1
     ? LOCATION_SUGGESTIONS.filter((s) =>
         s.label.toLowerCase().includes(destination.toLowerCase()) ||
@@ -257,7 +268,7 @@ export default function RideRequest() {
 
   const selectPickup = (label: string) => {
     setPickup(label);
-    setPinnedPickupCoords(null);
+    setPinnedPickupCoords(LOCATION_COORDS[label] ?? null);
     setPickupFocused(false);
     pickupRef.current?.blur();
   };
@@ -284,9 +295,10 @@ export default function RideRequest() {
           pickupAddress: formatPinnedAddress(pickup, pinnedPickupCoords),
           dropoffAddress: formatPinnedAddress(destination, pinnedDestinationCoords),
           fare: fare + tollTotal,
-          pickupCoords: effectivePickupCoords ?? (pickup === "Current Location" ? currentCoords : null),
+          pickupCoords: effectivePickupCoords ?? LOCATION_COORDS[pickup] ?? null,
           dropoffCoords: effectiveDestinationCoords ?? LOCATION_COORDS[destination] ?? null,
           estimatedMinutes: mins,
+          pinEnabled: localStorage.getItem("wego_pin_required") === "true",
         });
       }
     } catch {
@@ -300,7 +312,7 @@ export default function RideRequest() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background">
+    <div className="h-full flex flex-col overflow-hidden bg-background">
 
       {/* ── MAP — top 40% ── */}
       <div className="relative flex-none" style={{ height: "40%" }}>
@@ -533,19 +545,6 @@ export default function RideRequest() {
         <p className="text-xs text-center text-muted-foreground pb-2">No cancellation fee if cancelled within 2 minutes</p>
       </div>
 
-      {/* Centered home button */}
-      <div className="flex-shrink-0 flex justify-center items-center py-2 border-t border-border bg-card">
-        <button
-          type="button"
-          onClick={() => navigate("/")}
-          className="flex flex-col items-center gap-0.5 px-6 py-1.5 rounded-full bg-primary/10 border border-primary/20 active:scale-95 transition-transform"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-          </svg>
-          <span className="text-[10px] font-semibold text-primary">Home</span>
-        </button>
-      </div>
     </div>
   );
 }

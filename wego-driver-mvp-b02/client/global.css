@@ -175,4 +175,14 @@
   .leaflet-container {
     isolation: isolate;
   }
+
+  .page-dvh {
+    min-height: 100dvh;
+  }
+
+  .ride-map-panel {
+    height: 45vh;
+    min-height: 240px;
+    flex-shrink: 0;
+  }
 }

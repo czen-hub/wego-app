@@ -10,6 +10,17 @@ import { db } from "@/lib/firebase";
 
 type TripPhase = "to-pickup" | "waiting" | "in-progress" | "complete";
 
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 interface TripData {
   riderName: string;
   pickupLocation: string;
@@ -392,6 +403,12 @@ export default function TripInProgress() {
     ? trip.pickupCoords
     : trip.dropoffCoords;
   const mapCenter: [number, number] = driverCoords ?? trip.pickupCoords ?? [37.3541, -121.9552];
+
+  const pickupEtaMinutes = (() => {
+    if (!driverCoords || !trip.pickupCoords) return trip.estimatedTime;
+    const dm = haversineMeters(driverCoords[0], driverCoords[1], trip.pickupCoords[0], trip.pickupCoords[1]);
+    return Math.max(1, Math.round((dm / 1609.34 / 30) * 60));
+  })();
   const mapPanelClassName = "flex-1 min-h-[200px]";
 
   const handleNavigate = (app: "google" | "waze") => {
@@ -540,7 +557,7 @@ export default function TripInProgress() {
               <div>
                 <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">{pickupLabel} Location</p>
                 <p className="text-base font-semibold text-foreground mt-0.5">{trip.pickupLocation}</p>
-                <p className="text-xs text-muted-foreground mt-1">{trip.estimatedTime} min away</p>
+                <p className="text-xs text-muted-foreground mt-1">{pickupEtaMinutes} min away</p>
               </div>
             </div>
           ) : phase === "waiting" ? (

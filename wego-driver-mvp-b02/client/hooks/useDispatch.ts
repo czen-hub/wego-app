@@ -25,7 +25,7 @@ interface UseDispatchReturn {
 }
 
 export function useDispatch(): UseDispatchReturn {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [isOnline, setIsOnline] = useState(false);
   const [incomingRides, setIncomingRides] = useState<Ride[]>([]);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
@@ -139,7 +139,12 @@ export function useDispatch(): UseDispatchReturn {
 
   const accept = async (rideId: string) => {
     if (!user) return;
-    await acceptRide(rideId, user.uid, { name: "Driver", rating: 5.0, car: "", plate: "" });
+    await acceptRide(rideId, user.uid, {
+      name: profile?.name || "Driver",
+      rating: profile?.rating || 5.0,
+      car: profile?.vehicleMake ? `${profile.vehicleYear} ${profile.vehicleMake} ${profile.vehicleModel}` : "Standard Vehicle",
+      plate: profile?.licensePlate || "WEGO-1",
+    });
     setIncomingRides([]);
   };
 
