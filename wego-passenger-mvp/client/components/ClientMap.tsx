@@ -57,6 +57,7 @@ export default function ClientMap({
   const routeFetchAbortRef = useRef<AbortController | null>(null);
   const lastFetchFromRef = useRef<[number, number] | null>(null);
   const hasSolidRouteRef = useRef(false);
+  const fetchInProgressRef = useRef(false);
   const baseZoomRef = useRef<number>(zoom);
   const [mapReady, setMapReady] = useState(false);
   const centerRef = useRef<[number, number]>(center);
@@ -192,11 +193,11 @@ export default function ClientMap({
     if (!mapReady || !map || !L) return;
 
     // Decide whether an OSRM re-fetch is warranted
+    const movedFarEnough = !!(from && lastFetchFromRef.current &&
+      haversineM(from[0], from[1], lastFetchFromRef.current[0], lastFetchFromRef.current[1]) > ROUTE_REFETCH_METERS);
     const needsRefetch =
-      !hasSolidRouteRef.current ||
-      !lastFetchFromRef.current ||
-      !from ||
-      haversineM(from[0], from[1], lastFetchFromRef.current[0], lastFetchFromRef.current[1]) > ROUTE_REFETCH_METERS;
+      movedFarEnough ||
+      (!hasSolidRouteRef.current && !fetchInProgressRef.current);
 
     // Update static destination marker (always)
     toMarkerRef.current?.remove();
@@ -232,6 +233,7 @@ export default function ClientMap({
       if (needsRefetch) {
         lastFetchFromRef.current = [from[0], from[1]];
         hasSolidRouteRef.current = false;
+        fetchInProgressRef.current = true;
 
         routeLineRef.current?.remove();
         routeLineRef.current = null;
@@ -267,6 +269,7 @@ export default function ClientMap({
         )
           .then((r) => r.json())
           .then((data) => {
+            fetchInProgressRef.current = false;
             const coords = data.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
             if (!coords || !mapRef.current || !leafletRef.current) return;
             routeLineRef.current?.remove();
@@ -285,16 +288,18 @@ export default function ClientMap({
             hasSolidRouteRef.current = true;
           })
           .catch((err) => {
+            fetchInProgressRef.current = false;
             if (err.name !== "AbortError") {
               // OSRM unavailable — placeholder dashed line stays
             }
           });
       }
-      // else: driver hasn't moved far enough — keep existing route as-is
+      // else: fetch in progress or route solid and driver hasn't moved far — keep as-is
     } else {
       routeLineRef.current?.remove();
       routeLineRef.current = null;
       hasSolidRouteRef.current = false;
+      fetchInProgressRef.current = false;
       lastFetchFromRef.current = null;
 
       const cur = map.getCenter();
