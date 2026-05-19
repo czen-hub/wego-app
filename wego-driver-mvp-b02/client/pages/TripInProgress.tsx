@@ -414,7 +414,7 @@ export default function TripInProgress() {
 
   const mapFrom = phase === "to-pickup"
     ? (driverCoords ?? undefined)
-    : trip.pickupCoords;
+    : (driverCoords ?? trip.pickupCoords);
   const mapTo = phase === "to-pickup"
     ? trip.pickupCoords
     : trip.dropoffCoords;

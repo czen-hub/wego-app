@@ -60,6 +60,7 @@ export default function ClientMap({
   const routeFetchAbortRef = useRef<AbortController | null>(null);
   const lastFetchFromRef = useRef<[number, number] | null>(null);
   const lastFetchViaRef = useRef<string>("");
+  const lastFetchToRef = useRef<string>("");
   const hasSolidRouteRef = useRef(false);
   const fetchInProgressRef = useRef(false);
   const baseZoomRef = useRef<number>(zoom);
@@ -201,7 +202,9 @@ export default function ClientMap({
     const movedFarEnough = !!(from && lastFetchFromRef.current &&
       haversineM(from[0], from[1], lastFetchFromRef.current[0], lastFetchFromRef.current[1]) > ROUTE_REFETCH_METERS);
     const viaChanged = viaKey !== lastFetchViaRef.current;
+    const toChanged = toKey !== lastFetchToRef.current;
     const needsRefetch =
+      toChanged ||
       viaChanged ||
       movedFarEnough ||
       (!hasSolidRouteRef.current && !fetchInProgressRef.current);
@@ -252,6 +255,7 @@ export default function ClientMap({
       if (needsRefetch) {
         lastFetchFromRef.current = [from[0], from[1]];
         lastFetchViaRef.current = viaKey;
+        lastFetchToRef.current = toKey;
         hasSolidRouteRef.current = false;
         fetchInProgressRef.current = true;
 
@@ -327,6 +331,7 @@ export default function ClientMap({
       fetchInProgressRef.current = false;
       lastFetchFromRef.current = null;
       lastFetchViaRef.current = "";
+      lastFetchToRef.current = "";
 
       const cur = map.getCenter();
       const needsMove =
