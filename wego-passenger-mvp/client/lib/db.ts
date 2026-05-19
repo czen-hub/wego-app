@@ -6,10 +6,12 @@ import {
   where,
   addDoc,
   updateDoc,
+  getDoc,
   serverTimestamp,
   Timestamp,
   GeoPoint,
   increment,
+  arrayUnion,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -39,6 +41,7 @@ export interface Ride {
   stopCount: number;
   stopFeeTotal: number;
   pendingStop: { address: string; lat: number; lng: number; fareDelta: number } | null;
+  stops: Array<{ address: string; lat: number; lng: number; fareDelta: number }>;
   scheduledDate: string | null;
   scheduledHour: number | null;
   scheduledMinute: number | null;
@@ -98,6 +101,7 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     stopCount: (data.stopCount as number) ?? 0,
     stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
     pendingStop: (data.pendingStop as { address: string; lat: number; lng: number; fareDelta: number } | null) ?? null,
+    stops: (data.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>) ?? [],
     scheduledDate: (data.scheduledDate as string | null) ?? null,
     scheduledHour: (data.scheduledHour as number | null) ?? null,
     scheduledMinute: (data.scheduledMinute as number | null) ?? null,
@@ -367,6 +371,7 @@ export async function logStopWithDetails(rideId: string, opts: {
     stopCount: increment(1),
     stopFeeTotal: increment(opts.feeAmount),
     pendingStop: { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.feeAmount },
+    stops: arrayUnion({ address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.feeAmount }),
   });
 }
 
@@ -377,9 +382,43 @@ export async function updateStopDetails(rideId: string, opts: {
   lat: number;
   lng: number;
 }): Promise<void> {
+  const snap = await getDoc(doc(db, "rides", rideId));
+  type StopEntry = { address: string; lat: number; lng: number; fareDelta: number };
+  const existing: StopEntry[] = (snap.data()?.stops ?? []) as StopEntry[];
+  const newEntry = { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.newFeeAmount };
+  const updatedStops = existing.length > 0
+    ? [...existing.slice(0, -1), newEntry]
+    : [newEntry];
   await updateDoc(doc(db, "rides", rideId), {
+    stops: updatedStops,
     stopFeeTotal: increment(opts.newFeeAmount - opts.oldFeeAmount),
-    pendingStop: { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.newFeeAmount },
+    pendingStop: newEntry,
+  });
+}
+
+// ── Swap stop ↔ dropoff ────────────────────────────────────────────────────
+
+export async function swapStopAndDropoff(rideId: string, opts: {
+  newDropoffAddress: string;
+  newDropoffLat: number;
+  newDropoffLng: number;
+  newStopAddress: string;
+  newStopLat: number;
+  newStopLng: number;
+  fareDelta: number;
+}): Promise<void> {
+  const snap = await getDoc(doc(db, "rides", rideId));
+  type StopEntry = { address: string; lat: number; lng: number; fareDelta: number };
+  const existing: StopEntry[] = (snap.data()?.stops ?? []) as StopEntry[];
+  const newStopEntry = { address: opts.newStopAddress, lat: opts.newStopLat, lng: opts.newStopLng, fareDelta: opts.fareDelta };
+  const updatedStops = existing.length > 0
+    ? [...existing.slice(0, -1), newStopEntry]
+    : [newStopEntry];
+  await updateDoc(doc(db, "rides", rideId), {
+    dropoffAddress: opts.newDropoffAddress,
+    dropoffLocation: new GeoPoint(opts.newDropoffLat, opts.newDropoffLng),
+    pendingStop: newStopEntry,
+    stops: updatedStops,
   });
 }
 

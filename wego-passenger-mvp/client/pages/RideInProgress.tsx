@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield } from "lucide-react";
+import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield, ArrowUpDown } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 
-import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStopWithDetails, updateStopDetails, type Ride, type ChatMessage } from "@/lib/db";
+import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStopWithDetails, updateStopDetails, swapStopAndDropoff, type Ride, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -90,6 +90,7 @@ export default function RideInProgress() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedStopCoords, setSelectedStopCoords] = useState<[number, number] | null>(null);
   const [stopIsEditing, setStopIsEditing] = useState(false);
+  const [swapping, setSwapping] = useState(false);
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelled, setCancelled] = useState(false);
@@ -107,6 +108,7 @@ export default function RideInProgress() {
     driverName: string; driverCar: string; driverPlate: string;
     pickupAddress: string; dropoffAddress: string;
     fare: number; driverTake: number; coopFee: number;
+    stops: Array<{ address: string; lat: number; lng: number; fareDelta: number }>;
   } | null>(null);
   const effectiveRideIdRef = useRef<string | null>(null);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
@@ -336,6 +338,7 @@ export default function RideInProgress() {
         fare:       (d.fare       as number) || 0,
         driverTake: (d.driverTake as number) || 0,
         coopFee:    (d.coopFee    as number) || 0,
+        stops: (d.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>) || [],
       });
     }).catch(() => {
       // Falls back to displayRide / driverProfile already cached in state
@@ -383,6 +386,26 @@ export default function RideInProgress() {
     setStopIsEditing(false);
   };
 
+  const handleSwap = async () => {
+    if (!liveRide?.id || !liveRide.pendingStop || !liveRide.dropoffLocation) return;
+    setSwapping(true);
+    try {
+      await swapStopAndDropoff(liveRide.id, {
+        newDropoffAddress: liveRide.pendingStop.address,
+        newDropoffLat: liveRide.pendingStop.lat,
+        newDropoffLng: liveRide.pendingStop.lng,
+        newStopAddress: (liveRide.dropoffAddress || rideMock.destination || "").replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim(),
+        newStopLat: liveRide.dropoffLocation.latitude,
+        newStopLng: liveRide.dropoffLocation.longitude,
+        fareDelta: liveRide.pendingStop.fareDelta,
+      });
+    } catch {
+      showError("Couldn't swap order — please try again");
+    } finally {
+      setSwapping(false);
+    }
+  };
+
   const confirmStop = async () => {
     const addr = stopAddress.trim();
     if (!addr) return;
@@ -395,15 +418,34 @@ export default function RideInProgress() {
       try { stopLatLng = await geocodeAddress(addr); } catch {}
     }
 
-    // Calculate detour fare delta
-    let fareDelta = 2.00;
-    if (stopLatLng && pickupCoords && dropoffCoords) {
-      const directM = haversineMeters(pickupCoords[0], pickupCoords[1], dropoffCoords[0], dropoffCoords[1]);
-      const viaM =
-        haversineMeters(pickupCoords[0], pickupCoords[1], stopLatLng[0], stopLatLng[1]) +
-        haversineMeters(stopLatLng[0], stopLatLng[1], dropoffCoords[0], dropoffCoords[1]);
-      const extraMiles = Math.max(0, viaM - directM) / 1609.34;
-      fareDelta = parseFloat(Math.max(2.00, extraMiles * 1.85).toFixed(2));
+    // Calculate detour fare using OSRM road distance + time from driver's live position.
+    // Falls back to haversine if OSRM is unavailable.
+    // Formula: $3.50 base + $2.00/extra mile + $0.35/extra minute (≈$21/hr driver time)
+    const BASE_STOP_FEE = 3.50;
+    const RATE_PER_MILE  = 2.00;
+    const RATE_PER_MIN   = 0.35;
+    let fareDelta = BASE_STOP_FEE;
+    const fromCoords = driverCoords ?? pickupCoords;
+    if (stopLatLng && fromCoords && dropoffCoords) {
+      try {
+        const [directRes, viaRes] = await Promise.all([
+          fetch(`https://router.project-osrm.org/route/v1/driving/${fromCoords[1]},${fromCoords[0]};${dropoffCoords[1]},${dropoffCoords[0]}?overview=false`).then(r => r.json()),
+          fetch(`https://router.project-osrm.org/route/v1/driving/${fromCoords[1]},${fromCoords[0]};${stopLatLng[1]},${stopLatLng[0]};${dropoffCoords[1]},${dropoffCoords[0]}?overview=false`).then(r => r.json()),
+        ]);
+        const extraMeters = Math.max(0, (viaRes.routes?.[0]?.distance ?? 0) - (directRes.routes?.[0]?.distance ?? 0));
+        const extraSecs   = Math.max(0, (viaRes.routes?.[0]?.duration ?? 0) - (directRes.routes?.[0]?.duration ?? 0));
+        const extraMiles  = extraMeters / 1609.34;
+        const extraMins   = extraSecs / 60;
+        fareDelta = parseFloat(Math.max(BASE_STOP_FEE, BASE_STOP_FEE + extraMiles * RATE_PER_MILE + extraMins * RATE_PER_MIN).toFixed(2));
+      } catch {
+        // OSRM unavailable — haversine fallback
+        const directM = haversineMeters(fromCoords[0], fromCoords[1], dropoffCoords[0], dropoffCoords[1]);
+        const viaM =
+          haversineMeters(fromCoords[0], fromCoords[1], stopLatLng[0], stopLatLng[1]) +
+          haversineMeters(stopLatLng[0], stopLatLng[1], dropoffCoords[0], dropoffCoords[1]);
+        const extraMiles = Math.max(0, viaM - directM) / 1609.34;
+        fareDelta = parseFloat(Math.max(BASE_STOP_FEE, BASE_STOP_FEE + extraMiles * RATE_PER_MILE).toFixed(2));
+      }
     }
 
     if (stopIsEditing) {
@@ -421,7 +463,6 @@ export default function RideInProgress() {
             lng: stopLatLng?.[1] ?? 0,
           });
         } catch { showError("Couldn't update stop — check your connection"); }
-        try { await sendRideMessage(liveRide.id, user!.uid, "passenger", `Stop updated to: ${addr}`); } catch {}
       }
     } else {
       setStopCount((c) => c + 1);
@@ -436,9 +477,13 @@ export default function RideInProgress() {
             lat: stopLatLng?.[0] ?? 0,
             lng: stopLatLng?.[1] ?? 0,
           });
-        } catch { showError("Stop logged locally — will sync when connection restores"); }
-        if (addr && user) {
-          try { await sendRideMessage(liveRide.id, user.uid, "passenger", `Stop requested: ${addr}`); } catch {}
+        } catch {
+          // Revert optimistic local state — driver was never notified
+          setStopCount((c) => Math.max(0, c - 1));
+          setStopFeeTotal((t) => parseFloat(Math.max(0, t - fareDelta).toFixed(2)));
+          setStopCoords(null);
+          showError("Couldn't send stop to driver. Please try again.");
+          return;
         }
       }
     }
@@ -590,32 +635,49 @@ export default function RideInProgress() {
           </div>
 
           {/* Trip Summary */}
-          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Trip Summary</p>
-            <div className="space-y-2">
-              <div className="flex gap-3 items-start">
-                <MapPin size={16} className="text-primary flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Pickup</p>
-                  <p className="text-sm text-foreground">{completedRideData?.pickupAddress || displayRide?.pickupAddress || "Your Location"}</p>
+          {(() => {
+            const stripCoords = (s: string) => s.replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim();
+            const summaryPickup = stripCoords(completedRideData?.pickupAddress || displayRide?.pickupAddress || "Your Location");
+            const summaryDropoff = stripCoords(completedRideData?.dropoffAddress || displayRide?.dropoffAddress || rideMock.destination || "");
+            const summaryStops = completedRideData?.stops ?? displayRide?.stops ?? [];
+            return (
+              <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Trip Summary</p>
+                <div className="space-y-2">
+                  <div className="flex gap-3 items-start">
+                    <MapPin size={16} className="text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pickup</p>
+                      <p className="text-sm text-foreground">{summaryPickup || "Your Location"}</p>
+                    </div>
+                  </div>
+                  {summaryStops.map((stop, i) => (
+                    <div key={i} className="flex gap-3 items-start">
+                      <MapPin size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Stop {i + 1}</p>
+                        <p className="text-sm text-foreground">{stop.address}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex gap-3 items-start">
+                    <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Dropoff</p>
+                      <p className="text-sm text-foreground">{summaryDropoff || "Destination"}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <Clock size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Duration</p>
+                      <p className="text-sm text-foreground">{formatTime(elapsed)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-3 items-start">
-                <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Dropoff</p>
-                  <p className="text-sm text-foreground">{completedRideData?.dropoffAddress || displayRide?.dropoffAddress || rideMock.destination}</p>
-                </div>
-              </div>
-              <div className="flex gap-3 items-start">
-                <Clock size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Duration</p>
-                  <p className="text-sm text-foreground">{formatTime(elapsed)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Rate your driver */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
@@ -702,6 +764,11 @@ export default function RideInProgress() {
   const pickupAddressDisplay = (() => {
     const raw = (liveRide?.pickupAddress ?? "").replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim();
     return raw && raw !== "Current Location" ? raw : "Your Current Location";
+  })();
+
+  const dropoffAddressDisplay = (() => {
+    const raw = (liveRide?.dropoffAddress ?? rideMock.destination ?? "").replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim();
+    return raw || "Your Destination";
   })();
 
   const pickupEtaMinutes = (() => {
@@ -848,22 +915,98 @@ export default function RideInProgress() {
         {/* Destination card */}
         {phase !== "matching" && (
           <div className="glass-card p-4 border border-border rounded-xl">
-            <div className="flex gap-3 items-start">
-              <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <MapPin size={14} className="text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
-                  {phase === "in_progress" ? "Dropoff" : phase === "arrived" ? "Pickup — Driver Here" : "Heading to Pickup"}
-                </p>
-                <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
-                  {phase === "in_progress" ? rideMock.destination : pickupAddressDisplay}
-                </p>
-                {phase === "en_route" && (
-                  <p className="text-xs text-muted-foreground mt-1">{pickupEtaMinutes} min away</p>
+            {phase === "in_progress" && liveRide?.stops && liveRide.stops.length > 0 ? (
+              <div>
+                {liveRide.stops.map((stop, i) => {
+                  const isPending = liveRide.pendingStop != null &&
+                    stop.lat === liveRide.pendingStop.lat &&
+                    stop.lng === liveRide.pendingStop.lng;
+                  return (
+                    <div key={`${stop.lat}-${stop.lng}-${i}`}>
+                      <div className="flex gap-3 items-start">
+                        <div className="flex flex-col items-center flex-shrink-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            isPending
+                              ? "bg-amber-500/15 border border-amber-500/30"
+                              : "bg-muted/20 border border-border/50"
+                          }`}>
+                            <MapPin size={14} className={isPending ? "text-amber-500" : "text-muted-foreground/60"} />
+                          </div>
+                          <div className="w-px h-4 bg-border/50 mt-1 mb-1" />
+                        </div>
+                        <div className="flex-1 min-w-0 pb-3">
+                          <p className={`text-xs font-semibold uppercase tracking-wide ${isPending ? "text-amber-500/90" : "text-muted-foreground/60"}`}>
+                            Stop {i + 1}
+                          </p>
+                          <p className={`text-sm font-semibold mt-0.5 truncate ${isPending ? "text-foreground" : "text-muted-foreground/70 line-through decoration-muted-foreground/40"}`}>
+                            {stop.address}
+                          </p>
+                          {isPending && (
+                            <p className="text-xs text-muted-foreground mt-0.5">+${stop.fareDelta.toFixed(2)} stop fee</p>
+                          )}
+                        </div>
+                        {isPending && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStopAddress(liveRide.pendingStop!.address);
+                              setSelectedStopCoords([liveRide.pendingStop!.lat, liveRide.pendingStop!.lng]);
+                              setStopIsEditing(true);
+                              setStopModalOpen(true);
+                            }}
+                            className="text-xs text-primary font-semibold flex-shrink-0 mt-1 px-2 py-1 rounded-lg bg-primary/10 active:bg-primary/20 transition-colors"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Swap button — only when a pending stop exists */}
+                {liveRide.pendingStop && liveRide.dropoffLocation && (
+                  <button
+                    type="button"
+                    onClick={handleSwap}
+                    disabled={swapping}
+                    className="flex items-center gap-1.5 ml-3 mb-1 text-xs text-muted-foreground hover:text-foreground active:scale-95 transition-all px-2.5 py-1 rounded-full bg-muted/20 border border-border/40 disabled:opacity-40"
+                  >
+                    <ArrowUpDown size={11} />
+                    <span>{swapping ? "Swapping…" : "Swap order"}</span>
+                  </button>
                 )}
+
+                {/* Dropoff */}
+                <div className="flex gap-3 items-start">
+                  <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                    <MapPin size={14} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Dropoff</p>
+                    <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
+                      {dropoffAddressDisplay}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex gap-3 items-start">
+                <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <MapPin size={14} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
+                    {phase === "in_progress" ? "Dropoff" : phase === "arrived" ? "Pickup — Driver Here" : "Heading to Pickup"}
+                  </p>
+                  <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
+                    {phase === "in_progress" ? (dropoffAddressDisplay) : pickupAddressDisplay}
+                  </p>
+                  {phase === "en_route" && (
+                    <p className="text-xs text-muted-foreground mt-1">{pickupEtaMinutes} min away</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -932,19 +1075,12 @@ export default function RideInProgress() {
                 <span className="text-sm font-bold text-foreground">+${stopFeeTotal.toFixed(2)}</span>
               </div>
             )}
-            <button type="button" onClick={() => {
-                if (stopCoords && liveRide?.pendingStop) {
-                  setStopAddress(liveRide.pendingStop.address);
-                  setSelectedStopCoords([liveRide.pendingStop.lat, liveRide.pendingStop.lng]);
-                  setStopIsEditing(true);
-                } else {
-                  setStopIsEditing(false);
-                }
-                setStopModalOpen(true);
-              }}
-              className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-foreground active:scale-95 transition-transform">
-              {stopCoords && liveRide?.pendingStop ? "Edit Stop" : "Request a Stop (+$2 min)"}
-            </button>
+            {!liveRide?.pendingStop && (
+              <button type="button" onClick={() => { setStopIsEditing(false); setStopModalOpen(true); }}
+                className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-foreground active:scale-95 transition-transform">
+                Request a Stop (+$3.50 min)
+              </button>
+            )}
             {/* Show for first 5 min when PIN is disabled and passenger is not near driver */}
             {!liveRide?.pinRequired && elapsed < 300 && !hasPickupIssueReport && (
               passengerNearDriver ? (
@@ -1040,14 +1176,12 @@ export default function RideInProgress() {
             <div className="bg-background border border-border rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Stop fee</span>
-                <span className="text-sm font-semibold text-foreground">
-                  {selectedStopCoords ? "Calculated on confirm" : "+$2.00 min"}
-                </span>
+                <span className="text-sm font-semibold text-foreground">+$3.50 min</span>
               </div>
               {stopCount > 0 && (
                 <p className="text-xs text-muted-foreground">You've already made {stopCount} stop{stopCount > 1 ? "s" : ""} (+${stopFeeTotal.toFixed(2)} total).</p>
               )}
-              <p className="text-xs text-muted-foreground">Stop fee is based on your detour distance. 100% goes directly to your driver.</p>
+              <p className="text-xs text-muted-foreground">Fee covers detour distance + extra drive time. Calculated live via route. 100% goes to your driver.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button type="button" onClick={closeStopModal}

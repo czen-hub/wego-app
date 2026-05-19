@@ -54,6 +54,16 @@ service cloud.firestore {
 
         ||
 
+        // Passenger requests or edits a stop during an in-progress ride
+        // (updates stopCount, stopFeeTotal, pendingStop, stops).
+        // Status must stay inProgress — passenger cannot change it via this rule.
+        (resource.data.passengerId == request.auth.uid
+          && resource.data.status == 'inProgress'
+          && request.resource.data.status == 'inProgress'
+          && request.resource.data.disputed != true)
+
+        ||
+
         // Driver claims an unclaimed pending ride (transaction in code prevents races).
         (resource.data.status == 'pending'
           && resource.data.driverId == null

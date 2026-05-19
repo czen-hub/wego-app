@@ -76,6 +76,7 @@ export default function TripInProgress() {
   }, [phase]);
 
   const [stopEarnings, setStopEarnings] = useState(0);
+  const [completedStops, setCompletedStops] = useState<Array<{ address: string; fareDelta: number }>>([]);
   const [passengerRating, setPassengerRating] = useState(0);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -318,32 +319,46 @@ export default function TripInProgress() {
           )}
 
           {/* Trip Summary */}
-          <div className="glass-card p-4 border border-border rounded-xl space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{isDelivery ? "Delivery Summary" : "Trip Summary"}</p>
-            <div className="space-y-2">
-              <div className="flex gap-3 items-start">
-                <MapPin size={16} className="text-primary flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Pickup</p>
-                  <p className="text-sm text-foreground">{trip.pickupLocation}</p>
+          {(() => {
+            const stripCoords = (s: string) => s.replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim();
+            return (
+              <div className="glass-card p-4 border border-border rounded-xl space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{isDelivery ? "Delivery Summary" : "Trip Summary"}</p>
+                <div className="space-y-2">
+                  <div className="flex gap-3 items-start">
+                    <MapPin size={16} className="text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pickup</p>
+                      <p className="text-sm text-foreground">{stripCoords(trip.pickupLocation)}</p>
+                    </div>
+                  </div>
+                  {completedStops.map((stop, i) => (
+                    <div key={i} className="flex gap-3 items-start">
+                      <MapPin size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Stop {i + 1}</p>
+                        <p className="text-sm text-foreground">{stop.address}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex gap-3 items-start">
+                    <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Dropoff</p>
+                      <p className="text-sm text-foreground">{stripCoords(trip.dropoffLocation)}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <Clock size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Duration</p>
+                      <p className="text-sm text-foreground">{formatTime(elapsed)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-3 items-start">
-                <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Dropoff</p>
-                  <p className="text-sm text-foreground">{trip.dropoffLocation}</p>
-                </div>
-              </div>
-              <div className="flex gap-3 items-start">
-                <Clock size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Duration</p>
-                  <p className="text-sm text-foreground">{formatTime(elapsed)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Passenger Rating */}
           {!isDelivery && (
@@ -1020,26 +1035,18 @@ export default function TripInProgress() {
               <p className="text-xs text-muted-foreground">100% of the stop fee goes to you. Route updated on the map.</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setChatOpen(true)}
-                className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform"
-              >
-                Message
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  setStopNotifOpen(false);
-                  setStopEarnings((e) => parseFloat((e + stopNotif.fareDelta).toFixed(2)));
-                  if (trip.rideId) acknowledgeStop(trip.rideId).catch(() => {});
-                }}
-                className="py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-95 transition-transform"
-              >
-                Got it
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                setStopNotifOpen(false);
+                setStopEarnings((e) => parseFloat((e + stopNotif.fareDelta).toFixed(2)));
+                setCompletedStops(prev => [...prev, { address: stopNotif.address, fareDelta: stopNotif.fareDelta }]);
+                if (trip.rideId) acknowledgeStop(trip.rideId).catch(() => {});
+              }}
+              className="w-full py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-95 transition-transform"
+            >
+              Got it
+            </button>
           </div>
         </div>
       )}
