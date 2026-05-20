@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign, CornerUpRight, Star } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
-import { updateRideStatus, sendRideMessage, listenToRideMessages, submitRating, acknowledgeRideDispute, acknowledgeStop, type ChatMessage } from "@/lib/db";
+import { updateRideStatus, logEarningsEntry, sendRideMessage, listenToRideMessages, submitRating, acknowledgeRideDispute, acknowledgeStop, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -746,7 +746,12 @@ export default function TripInProgress() {
             )}
             <button type="button" onClick={() => {
                 setPhase("complete");
-                if (trip.rideId) updateRideStatus(trip.rideId, "completed").catch(() => {});
+                if (trip.rideId) {
+                  const gross = trip.riderPayment + stopEarnings;
+                  const coopFee = Math.round(trip.coopFee * 100) / 100;
+                  updateRideStatus(trip.rideId, "completed").catch(() => {});
+                  if (user) logEarningsEntry({ driverId: user.uid, rideId: trip.rideId, gross, coopFee, type: trip.type ?? "ride" }).catch(() => {});
+                }
               }}
               disabled={pickupIssueNeedsAcknowledgement}
               className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl ${

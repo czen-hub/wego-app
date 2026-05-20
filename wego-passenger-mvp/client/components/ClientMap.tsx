@@ -296,6 +296,11 @@ export default function ClientMap({
         const controller = new AbortController();
         routeFetchAbortRef.current = controller;
 
+        // Abort automatically after 8 s — public OSRM can be slow/down
+        const timeoutId = setTimeout(() => {
+          if (!hasSolidRouteRef.current) controller.abort();
+        }, 8000);
+
         const waypoints = [from, ...curVia, to].map(([lat, lng]) => `${lng},${lat}`).join(';');
 
         fetch(
@@ -324,10 +329,9 @@ export default function ClientMap({
           })
           .catch((err) => {
             fetchInProgressRef.current = false;
-            if (err.name !== "AbortError") {
-              // OSRM unavailable — placeholder dashed line stays
-            }
-          });
+            if (err.name !== "AbortError") console.warn("[Map] OSRM unavailable, showing estimated route");
+          })
+          .finally(() => clearTimeout(timeoutId));
       }
     } else {
       routeLineRef.current?.remove();

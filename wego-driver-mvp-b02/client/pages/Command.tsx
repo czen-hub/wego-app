@@ -4,17 +4,22 @@ import {
   Plane, Music, Target, Clock, ChevronUp, ChevronDown,
   Package, UtensilsCrossed, MapPin, CheckCircle, X,
   SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Wifi,
+  type LucideIcon,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
 import ClientMap from "@/components/ClientMap";
 import { useDispatch } from "@/hooks/useDispatch";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
-import { type Ride, type EarningsEntry, acceptRide, listenToWeeklyEarnings, updateDriverPreferences, getDriverPreferences } from "@/lib/db";
+import { type Ride, type EarningsEntry, type Opportunity, acceptRide, listenToWeeklyEarnings, listenToOpportunities, getDriverGoal, updateDriverPreferences, getDriverPreferences } from "@/lib/db";
 
-const OPPORTUNITIES = [
-  { id: "airport", icon: Plane,  iconColor: "text-primary", iconBg: "bg-primary/10", title: "Airport Bonus",  detail: "SFO Terminal 2",      bonus: "+$8/trip",    bonusColor: "text-primary", tag: "Active now", tagColor: "bg-primary/15 text-primary" },
-  { id: "event",   icon: Music,  iconColor: "text-primary", iconBg: "bg-primary/10", title: "Warriors Game", detail: "Chase Center · 7 PM", bonus: "+$6/trip",  bonusColor: "text-primary", tag: "Tonight",    tagColor: "bg-primary/15 text-primary" },
+const ICON_MAP: Record<string, LucideIcon> = {
+  Plane, Music, Target, Package, UtensilsCrossed, Car,
+};
+
+const FALLBACK_OPPORTUNITIES: (Omit<Opportunity, "active">)[] = [
+  { id: "airport", iconName: "Plane", title: "Airport Bonus",  detail: "SFO Terminal 2",     bonus: "+$8/trip", tag: "Active now" },
+  { id: "event",   iconName: "Music", title: "Event Surge",    detail: "Downtown · Tonight", bonus: "+$6/trip", tag: "Tonight"    },
 ];
 
 function Toggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
@@ -164,7 +169,22 @@ export default function Command() {
       return next;
     });
   };
-  const weeklyGoal = 20;
+  const [weeklyGoal, setWeeklyGoal] = useState(20);
+  const [bonusAmount, setBonusAmount] = useState(25);
+  const [liveOpps, setLiveOpps] = useState<Opportunity[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    getDriverGoal(user.uid).then((g) => {
+      setWeeklyGoal(g.weeklyGoal);
+      setBonusAmount(g.bonusAmount);
+    });
+  }, [user]);
+
+  useEffect(() => {
+    return listenToOpportunities(setLiveOpps);
+  }, []);
+
   const [earningsVisible, setEarningsVisible] = useState(true);
   const [todayEntries, setTodayEntries] = useState<EarningsEntry[]>([]);
   const [weeklyEntries, setWeeklyEntries] = useState<EarningsEntry[]>([]);
@@ -423,19 +443,19 @@ export default function Command() {
               <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><Clock size={11} /><span>Updated hourly</span></div>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
-              {OPPORTUNITIES.map((opp) => {
-                const Icon = opp.icon;
+              {(liveOpps.length > 0 ? liveOpps : FALLBACK_OPPORTUNITIES).map((opp) => {
+                const Icon = ICON_MAP[opp.iconName] ?? Target;
                 return (
                   <button key={opp.id} type="button" className="flex-1 min-w-[140px] bg-background border border-border rounded-xl p-3 text-left space-y-2 hover:border-primary/40 active:scale-95 transition-all duration-150">
                     <div className="flex items-start justify-between">
-                      <div className={`p-1.5 rounded-lg ${opp.iconBg}`}><Icon size={16} className={opp.iconColor} /></div>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${opp.tagColor}`}>{opp.tag}</span>
+                      <div className="p-1.5 rounded-lg bg-primary/10"><Icon size={16} className="text-primary" /></div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">{opp.tag}</span>
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-foreground">{opp.title}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{opp.detail}</p>
                     </div>
-                    <p className={`text-base font-bold ${opp.bonusColor}`}>{opp.bonus}</p>
+                    <p className="text-base font-bold text-primary">{opp.bonus}</p>
                   </button>
                 );
               })}
@@ -448,7 +468,7 @@ export default function Command() {
               <div className="w-full h-2 bg-muted/30 rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, weeklyGoal > 0 ? Math.round((weeklyDone / weeklyGoal) * 100) : 0)}%` }} />
               </div>
-              <p className="text-xs text-muted-foreground">{Math.max(weeklyGoal - weeklyDone, 0)} more rides unlocks your <span className="text-primary font-semibold">$25 bonus</span></p>
+              <p className="text-xs text-muted-foreground">{Math.max(weeklyGoal - weeklyDone, 0)} more rides unlocks your <span className="text-primary font-semibold">${bonusAmount} bonus</span></p>
             </div>
           </div>
 

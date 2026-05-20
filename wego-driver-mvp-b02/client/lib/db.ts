@@ -92,6 +92,21 @@ export interface EarningsEntry {
   completedAt: Date | null;
 }
 
+export interface Opportunity {
+  id: string;
+  title: string;
+  detail: string;
+  bonus: string;
+  tag: string;
+  iconName: string;
+  active: boolean;
+}
+
+export interface DriverGoal {
+  weeklyGoal: number;
+  bonusAmount: number;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function toDate(ts: unknown): Date | null {
@@ -420,6 +435,24 @@ export async function acknowledgeStop(rideId: string): Promise<void> {
   await updateDoc(doc(db, "rides", rideId), { pendingStop: null });
 }
 
+export async function logEarningsEntry(opts: {
+  driverId: string;
+  rideId: string;
+  gross: number;
+  coopFee: number;
+  type: RideType;
+}): Promise<void> {
+  await addDoc(collection(db, "earnings"), {
+    driverId: opts.driverId,
+    rideId: opts.rideId,
+    gross: opts.gross,
+    coopFee: opts.coopFee,
+    amount: Math.round((opts.gross - opts.coopFee) * 100) / 100,
+    type: opts.type,
+    completedAt: serverTimestamp(),
+  });
+}
+
 // ── Ride request (passenger side, used for testing) ────────────────────────
 
 export async function requestRide(opts: {
@@ -447,6 +480,45 @@ export async function requestRide(opts: {
     requestedAt: serverTimestamp(),
     acceptedAt: null,
     completedAt: null,
-    riderRating: 4.87,
+    riderRating: 5.0,
   });
+}
+
+// ── Driver dashboard data ──────────────────────────────────────────────────
+
+export function listenToOpportunities(
+  callback: (opps: Opportunity[]) => void
+): () => void {
+  const q = query(
+    collection(db, "opportunities"),
+    where("active", "==", true)
+  );
+  return onSnapshot(q, (snap) => {
+    const opps = snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        title:    (data.title    as string) ?? "",
+        detail:   (data.detail   as string) ?? "",
+        bonus:    (data.bonus    as string) ?? "",
+        tag:      (data.tag      as string) ?? "",
+        iconName: (data.iconName as string) ?? "Plane",
+        active:   (data.active   as boolean) ?? true,
+      } satisfies Opportunity;
+    });
+    callback(opps);
+  }, () => callback([]));
+}
+
+export async function getDriverGoal(driverId: string): Promise<DriverGoal> {
+  const { getDoc: gd } = await import("firebase/firestore");
+  const snap = await gd(doc(db, "drivers", driverId));
+  if (snap.exists()) {
+    const data = snap.data();
+    return {
+      weeklyGoal:   (data.weeklyGoal   as number) ?? 20,
+      bonusAmount:  (data.bonusAmount  as number) ?? 25,
+    };
+  }
+  return { weeklyGoal: 20, bonusAmount: 25 };
 }

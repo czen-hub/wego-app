@@ -17,88 +17,6 @@ interface Message {
   read: boolean;
 }
 
-const MOCK_MESSAGES: Message[] = [
-  {
-    id: "1",
-    type: "alert",
-    from: "WeGo Operations",
-    subject: "High demand zone: SoMa district",
-    preview: "High ride activity in SoMa. Head there now to get more requests.",
-    body: "High ride demand has been detected in the SoMa district (Mission St / 3rd St area). Drivers heading there now are seeing more ride requests. This typically lasts 30–60 minutes. Note: WeGo does not apply surge pricing — your rate stays the same, but you will get more rides.",
-    time: "2m ago",
-    read: false,
-  },
-  {
-    id: "2",
-    type: "rider",
-    from: "Rider — Trip #4821",
-    subject: "5-star rating from Sarah M.",
-    preview: "Sarah left you a 5-star rating. \"Smooth ride, very professional!\"",
-    body: "Sarah M. rated your trip 5 stars and left a comment:\n\n\"Smooth ride, very professional! Car was clean and the driver knew exactly where to go. Will definitely request again.\"",
-    time: "18m ago",
-    read: false,
-  },
-  {
-    id: "3",
-    type: "promo",
-    from: "WeGo Bonuses",
-    subject: "Airport bonus active — +$8/trip at SFO",
-    preview: "Head to SFO Terminal 2 pickup zone to earn an extra $8 per completed trip.",
-    body: "The SFO Airport Bonus is active until 10 PM tonight.\n\nEarn an extra $8 per completed trip when you pick up from SFO Terminal 2. This bonus applies automatically — no code needed.\n\nBonus trips completed today: 0 / no limit.",
-    time: "35m ago",
-    read: false,
-  },
-  {
-    id: "4",
-    type: "wego",
-    from: "WeGo Cooperative",
-    subject: "April member vote — Deadline Friday",
-    preview: "Two resolutions are open for member vote. Your voice matters.",
-    body: "Two governance resolutions are open for member vote and close this Friday at 11:59 PM.\n\nResolution 23-A: Increase Hardware Reserve Fund allocation from 50% to 55% of coop fee.\n\nResolution 23-B: Add dental coverage option to the group insurance program.\n\nLog into the Governance tab to cast your vote. All active members are eligible.",
-    time: "2h ago",
-    read: false,
-  },
-  {
-    id: "5",
-    type: "promo",
-    from: "WeGo Bonuses",
-    subject: "Complete 5 more rides for a $25 weekly bonus",
-    preview: "You're 10/15 rides toward your weekly bonus. Keep going!",
-    body: "You're making great progress on your weekly bonus!\n\nWeekly Ride Goal: 10 / 15 completed\nBonus when you hit 15: $25.00\n\nAt your current pace you'll hit the goal by tonight. The weekly period resets every Monday at midnight.",
-    time: "3h ago",
-    read: true,
-  },
-  {
-    id: "6",
-    type: "wego",
-    from: "WeGo Cooperative",
-    subject: "April earnings statement is ready",
-    preview: "Your April 2026 earnings summary has been generated.",
-    body: "Your April 2026 earnings statement is now available.\n\nTotal Gross: $10,420.00\nWeGo Fee (12%): $1,250.40\nYour Net Take-Home: $9,169.60\nTotal Rides: 259\n\nThis statement has been filed for your tax records.",
-    time: "Yesterday",
-    read: true,
-  },
-  {
-    id: "7",
-    type: "system",
-    from: "WeGo Platform",
-    subject: "App updated to v2.4.1",
-    preview: "Improved GPS accuracy and faster ride matching in this update.",
-    body: "WeGo Driver App v2.4.1 is now live.\n\nWhat's new:\n• Improved GPS lock speed by 40%\n• Faster ride matching algorithm\n• Earnings dashboard loads 2× faster\n• Fixed rare crash on trip completion screen",
-    time: "2 days ago",
-    read: true,
-  },
-  {
-    id: "8",
-    type: "rider",
-    from: "Rider — Trip #4809",
-    subject: "4-star rating from James K.",
-    preview: "James left you a 4-star rating.",
-    body: "James K. rated your trip 4 stars. No written comment was left.\n\nTip: Riders who don't leave comments sometimes appreciate a simple greeting or confirming the destination at pickup.",
-    time: "3 days ago",
-    read: true,
-  },
-];
 
 const DB_TYPE_MAP: Record<DbMessage["type"], MessageType> = {
   notification: "alert",
@@ -168,15 +86,16 @@ const typeBg = (type: MessageType, read: boolean) => {
 
 export default function Inbox() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<Message | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("all");
 
-  // Replace mock messages with real Firebase messages when available
   useEffect(() => {
     if (!user) return;
     const unsub = listenToMessages(user.uid, (dbMsgs) => {
-      if (dbMsgs.length > 0) setMessages(dbMsgs.map(fromDb));
+      setMessages(dbMsgs.map(fromDb));
+      setLoaded(true);
     });
     return unsub;
   }, [user]);
@@ -285,9 +204,28 @@ export default function Inbox() {
 
         {/* Message list */}
         <div className="px-4 space-y-2">
-          {filtered.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <p className="text-sm">No messages in this category</p>
+          {!loaded ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="w-full bg-card border border-border rounded-xl flex items-start gap-3 p-4 animate-pulse">
+                  <div className="w-9 h-9 rounded-lg bg-muted/40 flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-2.5 w-24 bg-muted/40 rounded" />
+                    <div className="h-3 w-48 bg-muted/40 rounded" />
+                    <div className="h-2.5 w-36 bg-muted/40 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-16 space-y-2">
+              <Bell size={32} className="mx-auto text-muted-foreground/40" />
+              <p className="text-sm font-medium text-foreground">
+                {activeTab === "all" ? "No messages yet" : `No ${activeTab} yet`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                WeGo will send alerts, ride ratings, and co-op updates here.
+              </p>
             </div>
           ) : (
             filtered.map((msg) => (
