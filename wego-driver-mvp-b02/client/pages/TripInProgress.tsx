@@ -262,6 +262,8 @@ export default function TripInProgress() {
   const meterCharge = parseFloat(Math.min((meterSecs / 60) * 0.50, 1.00).toFixed(2));
   const canLeave = waitElapsed >= freeWaitSecs;
 
+  const stripCoords = (s: string) => s.replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim();
+
   const isDelivery = trip.type === "courier" || trip.type === "food";
   const typeLabel = trip.type === "food" ? "Food Delivery" : trip.type === "courier" ? "Courier" : "Ride";
   const pickupLabel = trip.type === "food" ? "Restaurant" : "Pickup";
@@ -601,7 +603,7 @@ export default function TripInProgress() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">{pickupLabel} Location</p>
-                <p className="text-base font-semibold text-foreground mt-0.5">{trip.pickupLocation}</p>
+                <p className="text-base font-semibold text-foreground mt-0.5">{stripCoords(trip.pickupLocation)}</p>
                 <p className="text-xs text-muted-foreground mt-1">{pickupEtaMinutes} min away</p>
               </div>
             </div>
@@ -612,7 +614,7 @@ export default function TripInProgress() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">At {pickupLabel} — Waiting</p>
-                <p className="text-base font-semibold text-foreground mt-0.5">{trip.pickupLocation}</p>
+                <p className="text-base font-semibold text-foreground mt-0.5">{stripCoords(trip.pickupLocation)}</p>
               </div>
             </div>
           ) : (
@@ -622,7 +624,7 @@ export default function TripInProgress() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Dropoff Location</p>
-                <p className="text-base font-semibold text-foreground mt-0.5">{trip.dropoffLocation}</p>
+                <p className="text-base font-semibold text-foreground mt-0.5">{stripCoords(trip.dropoffLocation)}</p>
               </div>
             </div>
           )}

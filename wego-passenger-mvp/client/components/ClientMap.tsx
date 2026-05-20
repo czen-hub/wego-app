@@ -24,6 +24,7 @@ interface ClientMapProps {
   from?: [number, number];
   to?: [number, number];
   via?: [number, number];
+  viaPoints?: [number, number][];
   driverPos?: [number, number];
   center?: [number, number];
   zoom?: number;
@@ -40,6 +41,7 @@ export default function ClientMap({
   from,
   to,
   via,
+  viaPoints,
   driverPos,
   center = [37.7749, -122.4194],
   zoom = 13,
@@ -54,7 +56,7 @@ export default function ClientMap({
   const leafletRef = useRef<any>(null);
   const fromMarkerRef = useRef<LeafletMarker | null>(null);
   const toMarkerRef = useRef<LeafletMarker | null>(null);
-  const viaMarkerRef = useRef<LeafletMarker | null>(null);
+  const viaMarkersRef = useRef<LeafletMarker[]>([]);
   const driverPosMarkerRef = useRef<LeafletMarker | null>(null);
   const routeLineRef = useRef<LeafletPolyline | null>(null);
   const routeFetchAbortRef = useRef<AbortController | null>(null);
@@ -113,13 +115,13 @@ export default function ClientMap({
       routeLineRef.current?.remove();
       fromMarkerRef.current?.remove();
       toMarkerRef.current?.remove();
-      viaMarkerRef.current?.remove();
+      for (const m of viaMarkersRef.current) m.remove();
       driverPosMarkerRef.current?.remove();
       mapRef.current?.remove();
       routeLineRef.current = null;
       fromMarkerRef.current = null;
       toMarkerRef.current = null;
-      viaMarkerRef.current = null;
+      viaMarkersRef.current = [];
       driverPosMarkerRef.current = null;
       mapRef.current = null;
       leafletRef.current = null;
@@ -190,7 +192,8 @@ export default function ClientMap({
   // Stable string keys — route effect only fires when coords actually change
   const fromKey = from ? `${from[0].toFixed(5)},${from[1].toFixed(5)}` : "";
   const toKey = to ? `${to[0].toFixed(5)},${to[1].toFixed(5)}` : "";
-  const viaKey = via ? `${via[0].toFixed(5)},${via[1].toFixed(5)}` : "";
+  const effectiveViaPoints = (viaPoints && viaPoints.length > 0) ? viaPoints : via ? [via] : [];
+  const viaKey = effectiveViaPoints.map(p => `${p[0].toFixed(5)},${p[1].toFixed(5)}`).join("|");
   const centerKey = `${center[0].toFixed(5)},${center[1].toFixed(5)}`;
   const driverPosKey = driverPos ? `${driverPos[0].toFixed(5)},${driverPos[1].toFixed(5)}` : "";
 
@@ -224,18 +227,19 @@ export default function ClientMap({
       }).addTo(map);
     }
 
-    // Via (stop) marker
-    viaMarkerRef.current?.remove();
-    viaMarkerRef.current = null;
-    if (via) {
-      viaMarkerRef.current = L.marker(via, {
+    // Via (stop) markers — supports multiple
+    const curVia = (viaPoints && viaPoints.length > 0) ? viaPoints : via ? [via] : [];
+    for (const m of viaMarkersRef.current) m.remove();
+    viaMarkersRef.current = [];
+    for (const pt of curVia) {
+      viaMarkersRef.current.push(L.marker(pt, {
         icon: L.divIcon({
           className: "",
           html: '<div style="width:14px;height:14px;border-radius:50%;background:#f59e0b;border:3px solid white;box-shadow:0 2px 8px rgba(245,158,11,0.6)"></div>',
           iconSize: [14, 14],
           iconAnchor: [7, 7],
         }),
-      }).addTo(map);
+      }).addTo(map));
     }
 
     // Only show from marker when no separate driverPos is supplied
@@ -268,7 +272,7 @@ export default function ClientMap({
         const same =
           Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
 
-        const placeholderPoints: [number, number][] = via ? [from, via, to] : [from, to];
+        const placeholderPoints: [number, number][] = curVia.length > 0 ? [from, ...curVia, to] : [from, to];
         routeLineRef.current = L.polyline(placeholderPoints, {
           color: "#0047ff",
           weight: 3,
@@ -284,7 +288,7 @@ export default function ClientMap({
             map.getZoom() !== zoom;
           if (needsMove) map.setView(from, zoom, { animate: false });
         } else {
-          const boundsPoints: [number, number][] = via ? [from, via, to] : [from, to];
+          const boundsPoints: [number, number][] = curVia.length > 0 ? [from, ...curVia, to] : [from, to];
           map.fitBounds(boundsPoints, { padding: [48, 48], maxZoom: 14, animate: false });
         }
 
@@ -292,9 +296,7 @@ export default function ClientMap({
         const controller = new AbortController();
         routeFetchAbortRef.current = controller;
 
-        const waypoints = via
-          ? `${from[1]},${from[0]};${via[1]},${via[0]};${to[1]},${to[0]}`
-          : `${from[1]},${from[0]};${to[1]},${to[0]}`;
+        const waypoints = [from, ...curVia, to].map(([lat, lng]) => `${lng},${lat}`).join(';');
 
         fetch(
           `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`,

@@ -202,6 +202,11 @@
     flex-shrink: 0;
   }
 
+  .request-map-panel {
+    height: 40%;
+    flex-shrink: 0;
+  }
+
   .ride-sheet {
     background: #0e2040;
     border-top: 2px solid rgba(0, 71, 255, 0.7);

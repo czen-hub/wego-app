@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield, ArrowUpDown } from "lucide-react";
+import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield, ArrowUp, ArrowDown } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 
 import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStopWithDetails, updateStopDetails, swapStopAndDropoff, type Ride, type ChatMessage } from "@/lib/db";
@@ -435,14 +435,18 @@ export default function RideInProgress() {
       try { stopLatLng = await geocodeAddress(addr); } catch {}
     }
 
-    // Calculate detour fare using OSRM road distance + time from driver's live position.
-    // Falls back to haversine if OSRM is unavailable.
-    // Formula: $3.50 base + $2.00/extra mile + $0.35/extra minute (≈$21/hr driver time)
+    // Calculate stop fee by comparing the FULL route (pickup → stop → dropoff) vs
+    // (pickup → dropoff). Always anchored to the pickup point so the fee is consistent
+    // and reflects the true route cost regardless of where the driver is mid-trip.
+    // Formula: $3.50 base + $1.00/extra road mile + $0.20/extra minute
+    // Rates calibrated so that a long detour (e.g. +170 mi / +160 min) produces
+    // a stop fee in line with market pricing (~$200 on top of base fare).
     const BASE_STOP_FEE = 3.50;
-    const RATE_PER_MILE  = 2.00;
-    const RATE_PER_MIN   = 0.35;
+    const RATE_PER_MILE  = 1.00;
+    const RATE_PER_MIN   = 0.20;
     let fareDelta = BASE_STOP_FEE;
-    const fromCoords = driverCoords ?? pickupCoords;
+    // Use pickup as the origin — gives accurate full-route detour cost
+    const fromCoords = pickupCoords ?? driverCoords;
     if (stopLatLng && fromCoords && dropoffCoords) {
       try {
         const [directRes, viaRes] = await Promise.all([
@@ -985,15 +989,18 @@ export default function RideInProgress() {
                 })}
                 {/* Swap button — only when a pending stop exists */}
                 {liveRide.pendingStop && liveRide.dropoffLocation && (
-                  <button
-                    type="button"
-                    onClick={handleSwap}
-                    disabled={swapping}
-                    className="flex items-center gap-1.5 ml-3 mb-1 text-xs text-muted-foreground hover:text-foreground active:scale-95 transition-all px-2.5 py-1 rounded-full bg-muted/20 border border-border/40 disabled:opacity-40"
-                  >
-                    <ArrowUpDown size={11} />
-                    <span>{swapping ? "Swapping…" : "Swap order"}</span>
-                  </button>
+                  <div className="flex justify-end mb-1 -mt-1">
+                    <button
+                      type="button"
+                      aria-label="Swap stop and dropoff order"
+                      onClick={handleSwap}
+                      disabled={swapping}
+                      className="flex items-center gap-0.5 px-2 py-1 rounded-full border border-border/50 bg-muted/20 active:scale-90 transition-all disabled:opacity-40"
+                    >
+                      <ArrowUp size={11} className="text-muted-foreground" />
+                      <ArrowDown size={11} className="text-muted-foreground" />
+                    </button>
+                  </div>
                 )}
 
                 {/* Dropoff */}
@@ -1201,7 +1208,7 @@ export default function RideInProgress() {
               {stopCount > 0 && (
                 <p className="text-xs text-muted-foreground">You've already made {stopCount} stop{stopCount > 1 ? "s" : ""} (+${stopFeeTotal.toFixed(2)} total).</p>
               )}
-              <p className="text-xs text-muted-foreground">Fee covers detour distance + extra drive time. Calculated live via route. 100% goes to your driver.</p>
+              <p className="text-xs text-muted-foreground">Based on full detour distance + drive time from your pickup. 100% goes to your driver.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button type="button" onClick={closeStopModal}

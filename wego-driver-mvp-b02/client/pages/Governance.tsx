@@ -1,7 +1,55 @@
 ﻿import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Award, CheckCircle, XCircle, Shield, Settings } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Award, CheckCircle, XCircle, Shield, Menu, Star, Gem, Sparkles } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+
+// ── Member tier ────────────────────────────────────────────────────────────
+type Tier = "silver" | "gold" | "platinum";
+
+function getTier(rides: number): Tier {
+  if (rides >= 200) return "platinum";
+  if (rides >= 50)  return "gold";
+  return "silver";
+}
+
+const TIER_CONFIG = {
+  silver: {
+    label: "Silver Member",
+    Icon: Star,
+    cardGradient: "from-slate-600 via-slate-700 to-slate-900",
+    badgeBg: "bg-white/10 border-white/25",
+    badgeText: "text-slate-200",
+    iconColor: "text-slate-300",
+    progressColor: "bg-slate-400",
+    progressTrack: "bg-white/10",
+    nextAt: 50,
+    nextLabel: "Gold",
+  },
+  gold: {
+    label: "Gold Member",
+    Icon: Award,
+    cardGradient: "from-amber-700 via-amber-800 to-stone-900",
+    badgeBg: "bg-amber-400/20 border-amber-400/40",
+    badgeText: "text-amber-300",
+    iconColor: "text-amber-300",
+    progressColor: "bg-amber-400",
+    progressTrack: "bg-white/10",
+    nextAt: 200,
+    nextLabel: "Platinum",
+  },
+  platinum: {
+    label: "Platinum Member",
+    Icon: Gem,
+    cardGradient: "from-violet-700 via-purple-800 to-slate-900",
+    badgeBg: "bg-violet-400/20 border-violet-400/40",
+    badgeText: "text-violet-200",
+    iconColor: "text-violet-300",
+    progressColor: "bg-violet-400",
+    progressTrack: "bg-white/10",
+    nextAt: null,
+    nextLabel: null,
+  },
+} as const;
 
 interface InitiativeVote {
   id: string;
@@ -18,7 +66,16 @@ interface PendingVote {
 }
 
 export default function Governance() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
+  const rides = profile?.totalRides ?? 0;
+  const tier  = getTier(rides);
+  const cfg   = TIER_CONFIG[tier];
+  const { Icon } = cfg;
+  const toNext = cfg.nextAt !== null ? cfg.nextAt - rides : null;
+  const pct    = cfg.nextAt !== null
+    ? Math.min(100, Math.round((rides / cfg.nextAt) * 100))
+    : 100;
   const [initiatives, setInitiatives] = useState<InitiativeVote[]>([
     {
       id: "init-08",
@@ -50,39 +107,41 @@ export default function Governance() {
     <div className="bg-background pt-4 px-4 pb-6">
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-foreground">Governance</h1>
-          <p className="text-muted-foreground">Your voice in the cooperative</p>
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold text-foreground">Governance</h1>
+            <p className="text-muted-foreground">Your voice in the cooperative</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
+            aria-label="Account Settings"
+            className="mt-1 p-2.5 rounded-xl bg-card border border-border text-foreground active:scale-95 transition-transform"
+          >
+            <Menu size={20} />
+          </button>
         </div>
 
-        {/* Digital ID Card - Premium Wallet Style */}
+        {/* Digital ID Card */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
             Digital Member ID
           </p>
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-900 via-blue-950 to-slate-950 border border-primary/30 p-6 space-y-6">
-            {/* Background Pattern */}
-            <div className="absolute inset-0 opacity-10">
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(45deg, transparent 30%, rgba(0, 71, 255, 0.1) 32%, rgba(0, 71, 255, 0.1) 34%, transparent 36%, transparent 64%, rgba(0, 71, 255, 0.1) 66%, rgba(0, 71, 255, 0.1) 68%, transparent 70%)",
-                  backgroundSize: "80px 80px",
-                }}
-              />
-            </div>
+          <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${cfg.cardGradient} border border-white/10 p-6 space-y-5`}>
+            {/* Background shine pattern */}
+            <div className="card-shine absolute inset-0 opacity-10" />
 
-            {/* Content */}
             <div className="relative z-10 space-y-5">
-              {/* Top Badge */}
+              {/* Top row: verified pill + tier badge */}
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-white/15 border border-white/30 rounded-full">
                   <Shield size={14} className="text-white/80" />
                   <span className="text-xs font-semibold text-white">Active Seat: Verified</span>
                 </div>
-                <div className="text-primary text-opacity-60">
-                  <Award size={20} />
+                {/* Tier badge */}
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${cfg.badgeBg}`}>
+                  <Icon size={13} className={cfg.iconColor} />
+                  <span className={`text-xs font-bold ${cfg.badgeText}`}>{cfg.label}</span>
                 </div>
               </div>
 
@@ -99,20 +158,43 @@ export default function Governance() {
               </div>
 
               {/* Divider */}
-              <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+              <div className="h-px bg-white/10" />
 
-              {/* Co-op Shares Stats */}
-              <div className="grid grid-cols-2 gap-4 pt-2">
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-4 pt-1">
                 <div>
-                  <p className="text-xs text-white/50 mb-2">Total Dues Paid</p>
+                  <p className="text-xs text-white/50 mb-1">Dues Paid</p>
                   <p className="text-xl font-bold text-white">$500</p>
                 </div>
                 <div>
-                  <p className="text-xs text-white/50 mb-2">Voting Power</p>
+                  <p className="text-xs text-white/50 mb-1">Rides</p>
+                  <p className="text-xl font-bold text-white">{rides}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-white/50 mb-1">Voting</p>
                   <p className="text-xl font-bold text-white">1 Share</p>
-                  <p className="text-xs text-white/50">Equal Voice</p>
+                  <p className="text-xs text-white/40">Equal Voice</p>
                 </div>
               </div>
+
+              {/* Tier progress */}
+              {toNext !== null ? (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[10px] text-white/50">
+                    <span>{tier.charAt(0).toUpperCase() + tier.slice(1)}</span>
+                    <span>{toNext} rides to {cfg.nextLabel}</span>
+                  </div>
+                  <div className={`h-1.5 rounded-full ${cfg.progressTrack}`}>
+                    {/* eslint-disable-next-line react/forbid-component-props */}
+                    <div className={`h-full rounded-full ${cfg.progressColor} transition-all`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <Sparkles size={12} className={cfg.iconColor} />
+                  <span className={`text-xs font-semibold ${cfg.badgeText}`}>Maximum tier reached</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -239,23 +321,6 @@ export default function Governance() {
             </li>
           </ul>
         </div>
-
-        {/* Settings */}
-        <Link
-          to="/settings"
-          className="glass-card flex items-center justify-between p-4 border border-border rounded-xl hover:border-primary/30 transition-colors active:scale-95"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Settings size={18} className="text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">Account Settings</p>
-              <p className="text-xs text-muted-foreground">Notifications, vehicle, payout preferences</p>
-            </div>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><path d="m9 18 6-6-6-6"/></svg>
-        </Link>
 
         {/* Deactivation Protection */}
         <div className="glass-card p-4 border border-primary/20 rounded-xl space-y-3 bg-primary/5">

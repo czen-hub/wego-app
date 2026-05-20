@@ -138,6 +138,9 @@ export async function requestRide(opts: {
   estimatedMinutes?: number;
   isAdvanced?: boolean;
   pinEnabled?: boolean;
+  plannedStops?: Array<{ address: string; lat: number; lng: number }>;
+  initialStopCount?: number;
+  initialStopFeeTotal?: number;
 }) {
   const coopFee = Math.round(opts.fare * 0.12 * 100) / 100;
   const driverTake = Math.round((opts.fare - coopFee) * 100) / 100;
@@ -163,8 +166,9 @@ export async function requestRide(opts: {
     isAdvanced: opts.isAdvanced ?? false,
     pin,
     pinRequired: opts.pinEnabled ?? false,
-    stopCount: 0,
-    stopFeeTotal: 0,
+    stops: (opts.plannedStops ?? []).map(s => ({ address: s.address, lat: s.lat, lng: s.lng, fareDelta: 0 })),
+    stopCount: opts.initialStopCount ?? 0,
+    stopFeeTotal: opts.initialStopFeeTotal ?? 0,
     riderRating: 0,
     passengerRatingGiven: 0,
     driverRatingGiven: 0,
