@@ -43,7 +43,8 @@ export interface Ride {
   estimatedMinutes: number;
   stopCount: number;
   stopFeeTotal: number;
-  pendingStop: { address: string; lat: number; lng: number; fareDelta: number } | null;
+  pendingStop: { id?: string; address: string; lat: number; lng: number; fareDelta: number } | null;
+  stops: Array<{ address: string; lat: number; lng: number; fareDelta: number }>;
   pin: string | null;
   pinRequired: boolean;
   scheduledDate: string | null;
@@ -96,6 +97,7 @@ export interface EarningsEntry {
 function toDate(ts: unknown): Date | null {
   if (!ts) return null;
   if (ts instanceof Timestamp) return ts.toDate();
+  if (ts instanceof Date) return ts;
   return null;
 }
 
@@ -121,7 +123,8 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     estimatedMinutes: (data.estimatedMinutes as number) ?? 10,
     stopCount: (data.stopCount as number) ?? 0,
     stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
-    pendingStop: (data.pendingStop as { address: string; lat: number; lng: number; fareDelta: number } | null) ?? null,
+    pendingStop: (data.pendingStop as { id?: string; address: string; lat: number; lng: number; fareDelta: number } | null) ?? null,
+    stops: (data.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>) ?? [],
     pin: (data.pin as string | null) ?? null,
     pinRequired: (data.pinRequired as boolean) ?? false,
     scheduledDate: (data.scheduledDate as string | null) ?? null,

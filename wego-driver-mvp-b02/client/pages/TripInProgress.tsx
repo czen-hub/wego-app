@@ -119,7 +119,8 @@ export default function TripInProgress() {
   const [stopNotifOpen, setStopNotifOpen] = useState(false);
   const [stopNotif, setStopNotif] = useState<{ address: string; lat: number; lng: number; fareDelta: number } | null>(null);
   const [stopViaCoords, setStopViaCoords] = useState<[number, number] | null>(null);
-  const lastPendingStopAddressRef = useRef<string | null>(null);
+  const lastPendingStopKeyRef = useRef<string | null>(null);
+  const pinSubmittingRef = useRef(false);
   const [toastError, setToastError] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showError = (msg: string) => {
@@ -162,9 +163,11 @@ export default function TripInProgress() {
       setRidePin((data.pin as string | null) ?? null);
       setPinRequired((data.pinRequired as boolean) ?? false);
       // Detect new passenger stop request
-      const newPendingStop = data.pendingStop as { address: string; lat: number; lng: number; fareDelta: number } | null | undefined;
-      if (newPendingStop && newPendingStop.address !== lastPendingStopAddressRef.current) {
-        lastPendingStopAddressRef.current = newPendingStop.address;
+      const newPendingStop = data.pendingStop as { id?: string; address: string; lat: number; lng: number; fareDelta: number } | null | undefined;
+      // Use unique stop ID if available (prevents same-address re-request from being missed)
+      const stopKey = newPendingStop?.id ?? newPendingStop?.address ?? null;
+      if (newPendingStop && stopKey !== lastPendingStopKeyRef.current) {
+        lastPendingStopKeyRef.current = stopKey;
         setStopNotif(newPendingStop);
         if (newPendingStop.lat !== 0 || newPendingStop.lng !== 0) {
           setStopViaCoords([newPendingStop.lat, newPendingStop.lng]);
@@ -172,8 +175,15 @@ export default function TripInProgress() {
         setStopNotifOpen(true);
       }
       if (!newPendingStop) {
-        lastPendingStopAddressRef.current = null;
+        lastPendingStopKeyRef.current = null;
       }
+      // Sync completedStops and stopEarnings from Firestore — survives driver session restarts
+      const allStops = (data.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>) ?? [];
+      const ackStops = newPendingStop
+        ? allStops.filter(s => !(s.lat === newPendingStop.lat && s.lng === newPendingStop.lng && s.address === newPendingStop.address))
+        : allStops;
+      setCompletedStops(ackStops.map(s => ({ address: s.address, fareDelta: s.fareDelta })));
+      setStopEarnings(parseFloat(((data.stopFeeTotal as number) ?? 0).toFixed(2)));
 
       const status = data.status;
       const pickupIssueReported =
@@ -975,7 +985,7 @@ export default function TripInProgress() {
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => { setPinModalOpen(false); setPinEntry(["", "", "", ""]); setPinError(false); }}
+              <button type="button" onClick={() => { setPinModalOpen(false); setPinEntry(["", "", "", ""]); setPinError(false); pinSubmittingRef.current = false; }}
                 className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
                 Cancel
               </button>
@@ -983,6 +993,8 @@ export default function TripInProgress() {
                 type="button"
                 disabled={pinEntry.some((d) => d === "")}
                 onClick={() => {
+                  if (pinSubmittingRef.current) return;
+                  pinSubmittingRef.current = true;
                   const entered = pinEntry.join("");
                   if (entered === ridePin) {
                     setPinModalOpen(false);
@@ -998,6 +1010,7 @@ export default function TripInProgress() {
                     window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`, "_blank");
                   } else {
                     setPinError(true);
+                    pinSubmittingRef.current = false;
                   }
                 }}
                 className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40"
@@ -1039,8 +1052,6 @@ export default function TripInProgress() {
               type="button"
               onClick={async () => {
                 setStopNotifOpen(false);
-                setStopEarnings((e) => parseFloat((e + stopNotif.fareDelta).toFixed(2)));
-                setCompletedStops(prev => [...prev, { address: stopNotif.address, fareDelta: stopNotif.fareDelta }]);
                 if (trip.rideId) acknowledgeStop(trip.rideId).catch(() => {});
               }}
               className="w-full py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-95 transition-transform"

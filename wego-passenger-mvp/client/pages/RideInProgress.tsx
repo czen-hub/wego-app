@@ -108,11 +108,11 @@ export default function RideInProgress() {
     driverName: string; driverCar: string; driverPlate: string;
     pickupAddress: string; dropoffAddress: string;
     fare: number; driverTake: number; coopFee: number;
+    stopFeeTotal: number; stopCount: number;
     stops: Array<{ address: string; lat: number; lng: number; fareDelta: number }>;
   } | null>(null);
   const effectiveRideIdRef = useRef<string | null>(null);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
-  const STOP_FEE = 2.00;
   const pendingStopKey = liveRide?.pendingStop
     ? `${liveRide.pendingStop.lat.toFixed(5)},${liveRide.pendingStop.lng.toFixed(5)}`
     : null;
@@ -217,11 +217,24 @@ export default function RideInProgress() {
   useEffect(() => {
     if (!liveRide) return;
     if (liveRide.pendingStop) {
-      setStopCoords([liveRide.pendingStop.lat, liveRide.pendingStop.lng]);
+      const { lat, lng } = liveRide.pendingStop;
+      if (lat !== 0 || lng !== 0) setStopCoords([lat, lng]);
     } else {
       setStopCoords(null);
     }
   }, [pendingStopKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset stop state when a new ride becomes active — prevents state carry-over between rides
+  const prevRideIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!liveRide?.id || liveRide.id === prevRideIdRef.current) return;
+    prevRideIdRef.current = liveRide.id;
+    setStopCount(liveRide.stopCount ?? 0);
+    setStopFeeTotal(liveRide.stopFeeTotal ?? 0);
+    setStopCoords(null);
+    setStopAddress("");
+    setStopIsEditing(false);
+  }, [liveRide?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Watch passenger GPS during in_progress to verify proximity to driver
   useEffect(() => {
@@ -339,6 +352,8 @@ export default function RideInProgress() {
         driverTake: (d.driverTake as number) || 0,
         coopFee:    (d.coopFee    as number) || 0,
         stops: (d.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>) || [],
+        stopFeeTotal: (d.stopFeeTotal as number) || 0,
+        stopCount: (d.stopCount as number) || 0,
       });
     }).catch(() => {
       // Falls back to displayRide / driverProfile already cached in state
@@ -398,6 +413,8 @@ export default function RideInProgress() {
         newStopLat: liveRide.dropoffLocation.latitude,
         newStopLng: liveRide.dropoffLocation.longitude,
         fareDelta: liveRide.pendingStop.fareDelta,
+        currentStopLat: liveRide.pendingStop.lat,
+        currentStopLng: liveRide.pendingStop.lng,
       });
     } catch {
       showError("Couldn't swap order — please try again");
@@ -493,8 +510,11 @@ export default function RideInProgress() {
   const displayRide = liveRide ?? lastKnownRide;
   const baseFare = completedRideData?.fare ?? displayRide?.fare ?? rideMock.fare;
   const baseDriverTake = completedRideData?.driverTake ?? displayRide?.driverTake ?? rideMock.driverTake;
-  const totalFare = parseFloat((baseFare + waitFeeCharged + stopFeeTotal).toFixed(2));
-  const totalDriverTake = parseFloat((baseDriverTake + waitFeeCharged + stopFeeTotal).toFixed(2));
+  // Use Firestore-confirmed stop totals on the completion screen (survives page refresh)
+  const completedStopFeeTotal = completedRideData?.stopFeeTotal ?? stopFeeTotal;
+  const completedStopCount = completedRideData?.stopCount ?? stopCount;
+  const totalFare = parseFloat((baseFare + waitFeeCharged + completedStopFeeTotal).toFixed(2));
+  const totalDriverTake = parseFloat((baseDriverTake + waitFeeCharged + completedStopFeeTotal).toFixed(2));
   const totalCoopFee = completedRideData?.coopFee ?? displayRide?.coopFee ?? rideMock.coopFee;
   const hasPickupIssueReport =
     liveRide?.disputed === true && liveRide?.disputeReason === "passenger_not_picked_up";
@@ -602,10 +622,10 @@ export default function RideInProgress() {
                   <span className="text-foreground font-semibold">+${waitFeeCharged.toFixed(2)}</span>
                 </div>
               )}
-              {stopFeeTotal > 0 && (
+              {completedStopFeeTotal > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Stop fee ({stopCount} stop{stopCount > 1 ? "s" : ""})</span>
-                  <span className="text-foreground font-semibold">+${stopFeeTotal.toFixed(2)}</span>
+                  <span className="text-muted-foreground">Stop fee ({completedStopCount} stop{completedStopCount > 1 ? "s" : ""})</span>
+                  <span className="text-foreground font-semibold">+${completedStopFeeTotal.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm border-t border-border/50 pt-2">

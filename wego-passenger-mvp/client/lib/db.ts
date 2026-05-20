@@ -40,7 +40,7 @@ export interface Ride {
   isAdvanced: boolean;
   stopCount: number;
   stopFeeTotal: number;
-  pendingStop: { address: string; lat: number; lng: number; fareDelta: number } | null;
+  pendingStop: { id?: string; address: string; lat: number; lng: number; fareDelta: number } | null;
   stops: Array<{ address: string; lat: number; lng: number; fareDelta: number }>;
   scheduledDate: string | null;
   scheduledHour: number | null;
@@ -74,6 +74,7 @@ export interface ChatMessage {
 function toDate(ts: unknown): Date | null {
   if (!ts) return null;
   if (ts instanceof Timestamp) return ts.toDate();
+  if (ts instanceof Date) return ts;
   return null;
 }
 
@@ -100,7 +101,7 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     isAdvanced: (data.isAdvanced as boolean) ?? false,
     stopCount: (data.stopCount as number) ?? 0,
     stopFeeTotal: (data.stopFeeTotal as number) ?? 0,
-    pendingStop: (data.pendingStop as { address: string; lat: number; lng: number; fareDelta: number } | null) ?? null,
+    pendingStop: (data.pendingStop as { id?: string; address: string; lat: number; lng: number; fareDelta: number } | null) ?? null,
     stops: (data.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>) ?? [],
     scheduledDate: (data.scheduledDate as string | null) ?? null,
     scheduledHour: (data.scheduledHour as number | null) ?? null,
@@ -293,7 +294,12 @@ export function listenToPassengerRide(
   return onSnapshot(q, (snap) => {
     let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
     rides = rides.filter(r => ["pending", "accepted", "arrived", "inProgress", "reserved"].includes(r.status));
-    rides.sort((a, b) => (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0));
+    rides.sort((a, b) => {
+      const aActive = a.status === "reserved" ? 0 : 1;
+      const bActive = b.status === "reserved" ? 0 : 1;
+      if (aActive !== bActive) return bActive - aActive; // active rides always beat reserved
+      return (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0);
+    });
     callback(rides.length === 0 ? null : rides[0]);
   }, (err) => console.error("listenToPassengerRide:", err));
 }
@@ -367,10 +373,11 @@ export async function logStopWithDetails(rideId: string, opts: {
   lat: number;
   lng: number;
 }): Promise<void> {
+  const stopId = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   await updateDoc(doc(db, "rides", rideId), {
     stopCount: increment(1),
     stopFeeTotal: increment(opts.feeAmount),
-    pendingStop: { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.feeAmount },
+    pendingStop: { id: stopId, address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.feeAmount },
     stops: arrayUnion({ address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.feeAmount }),
   });
 }
@@ -385,14 +392,16 @@ export async function updateStopDetails(rideId: string, opts: {
   const snap = await getDoc(doc(db, "rides", rideId));
   type StopEntry = { address: string; lat: number; lng: number; fareDelta: number };
   const existing: StopEntry[] = (snap.data()?.stops ?? []) as StopEntry[];
-  const newEntry = { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.newFeeAmount };
+  const stopId = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const newEntryForArray = { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.newFeeAmount };
+  const newPendingEntry = { id: stopId, ...newEntryForArray };
   const updatedStops = existing.length > 0
-    ? [...existing.slice(0, -1), newEntry]
-    : [newEntry];
+    ? [...existing.slice(0, -1), newEntryForArray]
+    : [newEntryForArray];
   await updateDoc(doc(db, "rides", rideId), {
     stops: updatedStops,
     stopFeeTotal: increment(opts.newFeeAmount - opts.oldFeeAmount),
-    pendingStop: newEntry,
+    pendingStop: newPendingEntry,
   });
 }
 
@@ -406,18 +415,28 @@ export async function swapStopAndDropoff(rideId: string, opts: {
   newStopLat: number;
   newStopLng: number;
   fareDelta: number;
+  currentStopLat: number;
+  currentStopLng: number;
 }): Promise<void> {
   const snap = await getDoc(doc(db, "rides", rideId));
   type StopEntry = { address: string; lat: number; lng: number; fareDelta: number };
   const existing: StopEntry[] = (snap.data()?.stops ?? []) as StopEntry[];
-  const newStopEntry = { address: opts.newStopAddress, lat: opts.newStopLat, lng: opts.newStopLng, fareDelta: opts.fareDelta };
-  const updatedStops = existing.length > 0
-    ? [...existing.slice(0, -1), newStopEntry]
-    : [newStopEntry];
+  const stopId = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const newStopForArray: StopEntry = { address: opts.newStopAddress, lat: opts.newStopLat, lng: opts.newStopLng, fareDelta: opts.fareDelta };
+  const newPendingEntry = { id: stopId, ...newStopForArray };
+  let replaced = false;
+  const updatedStops = existing.map(s => {
+    if (!replaced && Math.abs(s.lat - opts.currentStopLat) < 0.00001 && Math.abs(s.lng - opts.currentStopLng) < 0.00001) {
+      replaced = true;
+      return newStopForArray;
+    }
+    return s;
+  });
+  if (!replaced) updatedStops.push(newStopForArray);
   await updateDoc(doc(db, "rides", rideId), {
     dropoffAddress: opts.newDropoffAddress,
     dropoffLocation: new GeoPoint(opts.newDropoffLat, opts.newDropoffLng),
-    pendingStop: newStopEntry,
+    pendingStop: newPendingEntry,
     stops: updatedStops,
   });
 }
