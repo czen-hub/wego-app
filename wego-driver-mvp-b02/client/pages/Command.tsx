@@ -10,7 +10,7 @@ import ClientMap from "@/components/ClientMap";
 import { useDispatch } from "@/hooks/useDispatch";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
-import { type Ride, type EarningsEntry, acceptRide, listenToWeeklyEarnings } from "@/lib/db";
+import { type Ride, type EarningsEntry, acceptRide, listenToWeeklyEarnings, updateDriverPreferences, getDriverPreferences } from "@/lib/db";
 
 const OPPORTUNITIES = [
   { id: "airport", icon: Plane,  iconColor: "text-primary", iconBg: "bg-primary/10", title: "Airport Bonus",  detail: "SFO Terminal 2",      bonus: "+$8/trip",    bonusColor: "text-primary", tag: "Active now", tagColor: "bg-primary/15 text-primary" },
@@ -141,6 +141,29 @@ export default function Command() {
   const [acceptCourier, setAcceptCourier] = useState(false);
   const [acceptFood, setAcceptFood] = useState(false);
   const [acceptPets, setAcceptPets] = useState(false);
+
+  // Load persisted preferences once on mount
+  useEffect(() => {
+    if (!user) return;
+    getDriverPreferences(user.uid).then((prefs) => {
+      if (!prefs) return;
+      setAcceptRides(prefs.acceptRides);
+      setAcceptCourier(prefs.acceptCourier);
+      setAcceptFood(prefs.acceptFood);
+      setAcceptPets(prefs.acceptPets);
+    });
+  }, [user]);
+
+  const togglePref = (
+    key: "acceptRides" | "acceptCourier" | "acceptFood" | "acceptPets",
+    setter: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    setter((prev) => {
+      const next = !prev;
+      if (user) updateDriverPreferences(user.uid, { [key]: next });
+      return next;
+    });
+  };
   const weeklyGoal = 20;
   const [earningsVisible, setEarningsVisible] = useState(true);
   const [todayEntries, setTodayEntries] = useState<EarningsEntry[]>([]);
@@ -537,10 +560,10 @@ export default function Command() {
 
               {/* Service toggles */}
               {[
-                { icon: Car,             label: "Rides",         sublabel: "Standard passenger rides",    on: acceptRides,   toggle: () => setAcceptRides((v)   => !v) },
-                { icon: Package,         label: "Courier",       sublabel: "Package delivery jobs",       on: acceptCourier, toggle: () => setAcceptCourier((v) => !v) },
-                { icon: UtensilsCrossed, label: "Food Delivery", sublabel: "Restaurant pickup & dropoff", on: acceptFood,    toggle: () => setAcceptFood((v)    => !v) },
-                { icon: PawPrint,        label: "Pet-Friendly",  sublabel: "Accept riders with pets",     on: acceptPets,    toggle: () => setAcceptPets((v)    => !v) },
+                { icon: Car,             label: "Rides",         sublabel: "Standard passenger rides",    on: acceptRides,   toggle: () => togglePref("acceptRides",   setAcceptRides)   },
+                { icon: Package,         label: "Courier",       sublabel: "Package delivery jobs",       on: acceptCourier, toggle: () => togglePref("acceptCourier", setAcceptCourier) },
+                { icon: UtensilsCrossed, label: "Food Delivery", sublabel: "Restaurant pickup & dropoff", on: acceptFood,    toggle: () => togglePref("acceptFood",    setAcceptFood)    },
+                { icon: PawPrint,        label: "Pet-Friendly",  sublabel: "Accept riders with pets",     on: acceptPets,    toggle: () => togglePref("acceptPets",    setAcceptPets)    },
               ].map(({ icon: Icon, label, sublabel, on, toggle }) => (
                 <div key={label} className="flex items-center justify-between py-4">
                   <div className="flex items-center gap-3">

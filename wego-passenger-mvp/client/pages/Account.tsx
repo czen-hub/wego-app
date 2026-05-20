@@ -137,13 +137,13 @@ const HELP_FAQS = [
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const INITIAL_CARDS = [{ id: "visa4242", label: "Visa", last4: "4242", isDefault: true }];
+const INITIAL_CARDS: { id: string; label: string; last4: string; isDefault: boolean }[] = [];
 interface Contact { id: string; name: string; phone: string }
 
 export default function Account() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  const { logOut, profile } = useAuth();
+  const { logOut, profile, user } = useAuth();
 
   // Profile
   const [name, setName] = useState("");
@@ -864,9 +864,9 @@ export default function Account() {
             <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 text-center space-y-2">
               <p className="text-sm font-semibold text-foreground">Still need help?</p>
               <p className="text-xs text-muted-foreground">Contact our support team — we typically respond within 24 hours.</p>
-              <button type="button" className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold active:scale-95 transition-transform">
+              <a href="mailto:support@wego.coop" className="inline-block px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold active:scale-95 transition-transform">
                 Contact Support
-              </button>
+              </a>
             </div>
           </div>
         </Modal>

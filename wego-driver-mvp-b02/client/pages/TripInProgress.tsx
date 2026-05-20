@@ -36,20 +36,16 @@ interface TripData {
   rideId?: string;
 }
 
-const DEFAULT_TRIP: TripData = {
-  riderName: "Sarah M.",
-  pickupLocation: "San Jose Airport (SJC)",
-  dropoffLocation: "SFO Airport",
-  riderPayment: 50,
-  coopFee: 6.00,
-  driverTake: 44.00,
-  estimatedTime: 8,
-};
-
 export default function TripInProgress() {
   const navigate = useNavigate();
   const location = useLocation();
-  const trip: TripData = (location.state as TripData) ?? DEFAULT_TRIP;
+  const trip = location.state as TripData | null;
+
+  // Guard: driver should never reach this page without navigation state
+  useEffect(() => {
+    if (!trip) navigate("/", { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [phase, setPhase] = useState<TripPhase>("to-pickup");
   const [elapsed, setElapsed] = useState(0);
@@ -473,6 +469,8 @@ export default function TripInProgress() {
     }
     setNavModalOpen(false);
   };
+
+  if (!trip) return null;
 
   return (
     <div className="relative max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden">

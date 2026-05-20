@@ -134,7 +134,7 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     requestedAt: toDate(data.requestedAt),
     acceptedAt: toDate(data.acceptedAt),
     completedAt: toDate(data.completedAt),
-    riderRating: (data.riderRating as number) ?? 4.87,
+    riderRating: (data.riderRating as number) ?? 5.0,
     driverRatingGiven: (data.driverRatingGiven as number) ?? 0,
     disputed: (data.disputed as boolean) ?? false,
     disputeReason: (data.disputeReason as string | null) ?? null,
@@ -151,6 +151,26 @@ export function setDriverOnline(driverId: string, online: boolean) {
     isOnline: online,
     lastSeen: serverTimestamp(),
   }, { merge: true });
+}
+
+export function updateDriverPreferences(
+  driverId: string,
+  prefs: { acceptRides?: boolean; acceptCourier?: boolean; acceptFood?: boolean; acceptPets?: boolean }
+) {
+  return setDoc(doc(db, "drivers", driverId), prefs, { merge: true });
+}
+
+export async function getDriverPreferences(driverId: string) {
+  const { getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, "drivers", driverId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    acceptRides:   (data.acceptRides   as boolean) ?? true,
+    acceptCourier: (data.acceptCourier as boolean) ?? false,
+    acceptFood:    (data.acceptFood    as boolean) ?? false,
+    acceptPets:    (data.acceptPets    as boolean) ?? false,
+  };
 }
 
 export function updateDriverLocation(driverId: string, lat: number, lng: number) {

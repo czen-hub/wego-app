@@ -43,8 +43,6 @@ export default function RideHistory() {
 
   const totalFares = rides.reduce((s, r) => s + r.fare, 0);
   const totalDriverEarned = rides.reduce((s, r) => s + (r.driverTake || r.fare * 0.88), 0);
-  const uberEstimate = totalFares * 1.5;
-  const totalSaved = uberEstimate - totalFares;
   const isEmpty = loaded && rides.length === 0;
 
   const openLostItem = (ride: Ride) => {
@@ -157,24 +155,9 @@ export default function RideHistory() {
                   </div>
                 </div>
                 <div className="bg-card border border-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">Saved vs. Corp 1 / Corp 2</p>
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Corp 1 / Corp 2 estimate</span>
-                      <span className="line-through text-muted-foreground">${uberEstimate.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground font-medium">WeGo (what you paid)</span>
-                      <span className="font-semibold text-foreground">${totalFares.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between border-t border-border/50 pt-1.5">
-                      <span className="font-semibold text-foreground">You saved</span>
-                      <span className="font-bold text-primary">+${totalSaved.toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    No surge pricing, ever. Based on Corp 1/Corp 2 averaging 50% more.
-                  </p>
+                  <p className="text-xs text-muted-foreground">Your total spent with WeGo</p>
+                  <p className="text-2xl font-bold text-foreground">${totalFares.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground">No surge pricing, ever.</p>
                 </div>
               </div>
 

@@ -32,10 +32,10 @@ interface RideData {
 }
 
 const DEFAULT_RIDE: RideData = {
-  destination: "SFO Airport",
-  fare: 50.00,
-  driverTake: 44.00,
-  coopFee: 6.00,
+  destination: "",
+  fare: 0,
+  driverTake: 0,
+  coopFee: 0,
 };
 
 
