@@ -375,6 +375,7 @@ export default function RideInProgress() {
 
   const isAdvanced = liveRide?.isAdvanced ?? rideMock.isAdvanced ?? false;
   const isFood = liveRide?.type === "food";
+  const isCourier = liveRide?.type === "courier";
   const freeWaitSecs = isAdvanced ? 480 : 300;
   const waitRemaining = Math.max(0, freeWaitSecs - waitElapsed);
   const waitMeterSecs = isAdvanced ? Math.max(0, waitElapsed - freeWaitSecs) : 0;
@@ -490,6 +491,8 @@ export default function RideInProgress() {
             address: addr,
             lat: stopLatLng?.[0] ?? 0,
             lng: stopLatLng?.[1] ?? 0,
+            oldLat: liveRide.pendingStop?.lat,
+            oldLng: liveRide.pendingStop?.lng,
           });
         } catch { showError("Couldn't update stop — check your connection"); }
       }
@@ -616,8 +619,8 @@ export default function RideInProgress() {
             <div className="w-20 h-20 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
               <CheckCircle size={40} className="text-primary" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground">{isFood ? "Order Delivered!" : "You've arrived!"}</h1>
-            <p className="text-muted-foreground text-center text-sm">{isFood ? "Your order has been delivered" : "Thanks for riding with WeGo"}</p>
+            <h1 className="text-3xl font-bold text-foreground">{isFood ? "Order Delivered!" : isCourier ? "Package Delivered!" : "You've arrived!"}</h1>
+            <p className="text-muted-foreground text-center text-sm">{isFood ? "Your order has been delivered" : isCourier ? "Your package has been delivered" : "Thanks for riding with WeGo"}</p>
           </div>
 
           {/* Receipt */}
@@ -841,10 +844,10 @@ export default function RideInProgress() {
         {/* Phase badge */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
           <div className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border backdrop-blur-sm bg-primary/20 border-primary/40 text-primary">
-            {phase === "matching" && (isFood ? "Placing Delivery" : "Finding Driver")}
-            {phase === "en_route" && (isFood ? "Collecting Your Order" : "Driver En Route")}
-            {phase === "arrived" && (isFood ? "Driver at Restaurant" : "Driver Arrived")}
-            {phase === "in_progress" && (isFood ? "Order On the Way" : "Trip in Progress")}
+            {phase === "matching" && (isFood ? "Placing Delivery" : isCourier ? "Sending Package" : "Finding Driver")}
+            {phase === "en_route" && (isFood ? "Collecting Your Order" : isCourier ? "Collecting Package" : "Driver En Route")}
+            {phase === "arrived" && (isFood ? "Driver at Restaurant" : isCourier ? "Driver at Sender" : "Driver Arrived")}
+            {phase === "in_progress" && (isFood ? "Order On the Way" : isCourier ? "Package En Route" : "Trip in Progress")}
           </div>
         </div>
 
@@ -894,7 +897,7 @@ export default function RideInProgress() {
             ) : (
               <>
                 <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto" />
-                <p className="font-semibold text-foreground">{isFood ? "Finding your delivery driver..." : "Finding your driver..."}</p>
+                <p className="font-semibold text-foreground">{isFood || isCourier ? "Finding your delivery driver..." : "Finding your driver..."}</p>
                 {matchTimeout ? (
                   <p className="text-xs text-destructive font-medium">Taking longer than expected. You can cancel for free.</p>
                 ) : (
@@ -1031,7 +1034,7 @@ export default function RideInProgress() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
-                    {phase === "in_progress" ? (isFood ? "Delivering To" : "Dropoff") : phase === "arrived" ? (isFood ? "At Restaurant" : "Pickup — Driver Here") : (isFood ? "Collecting From" : "Heading to Pickup")}
+                    {phase === "in_progress" ? (isFood || isCourier ? "Delivering To" : "Dropoff") : phase === "arrived" ? (isFood ? "At Restaurant" : isCourier ? "At Sender" : "Pickup — Driver Here") : (isFood || isCourier ? "Collecting From" : "Heading to Pickup")}
                   </p>
                   <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
                     {phase === "in_progress" ? (dropoffAddressDisplay) : pickupAddressDisplay}
@@ -1064,7 +1067,7 @@ export default function RideInProgress() {
         {phase === "en_route" && (
           <div className="glass-card p-4 border border-border rounded-xl flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse flex-shrink-0" />
-            <p className="text-sm text-foreground font-medium">{isFood ? "Driver collecting your order" : "Your driver is on the way"}</p>
+            <p className="text-sm text-foreground font-medium">{isFood ? "Driver collecting your order" : isCourier ? "Driver collecting your package" : "Your driver is on the way"}</p>
           </div>
         )}
         {phase === "arrived" && (
@@ -1100,7 +1103,7 @@ export default function RideInProgress() {
         )}
         {phase === "in_progress" && (
           <>
-            {!isFood && hasPickupIssueReport && (
+            {!isFood && !isCourier && hasPickupIssueReport && (
               <div className="glass-card p-4 border border-amber-500/35 rounded-xl bg-amber-500/5 space-y-2">
                 <div className="flex items-center gap-2">
                   <TriangleAlert size={16} className="text-amber-500" />
@@ -1127,7 +1130,7 @@ export default function RideInProgress() {
               </button>
             )}
             {/* Show for first 5 min when PIN is disabled and passenger is not near driver — not applicable for food delivery */}
-            {!isFood && !liveRide?.pinRequired && elapsed < 300 && !hasPickupIssueReport && (
+            {!isFood && !isCourier && !liveRide?.pinRequired && elapsed < 300 && !hasPickupIssueReport && (
               passengerNearDriver ? (
                 <div className="w-full py-3 rounded-xl border border-border bg-muted/10 text-muted-foreground text-sm font-semibold text-center select-none">
                   You're confirmed in the vehicle
@@ -1139,7 +1142,7 @@ export default function RideInProgress() {
                 </button>
               )
             )}
-            {!isFood && hasPickupIssueReport && (
+            {!isFood && !isCourier && hasPickupIssueReport && (
               <button type="button" onClick={async () => {
                   setCancelledFromDispute(true);
                   if (liveRide?.id) { try { await cancelRide(liveRide.id); } catch { showError("Couldn't end ride — check your connection"); return; } }
@@ -1157,7 +1160,7 @@ export default function RideInProgress() {
         {(phase === "matching" || phase === "en_route" || phase === "arrived") && (
           <button type="button" onClick={() => setCancelOpen(true)}
             className="w-full py-3 rounded-2xl border border-destructive/30 text-destructive text-sm font-semibold active:scale-95 transition-transform hover:bg-destructive/5">
-            {isFood ? "Cancel Order" : "Cancel Ride"}
+            {isFood ? "Cancel Order" : isCourier ? "Cancel Delivery" : "Cancel Ride"}
           </button>
         )}
       </div>

@@ -11,7 +11,7 @@ import ClientMap from "@/components/ClientMap";
 import { useDispatch } from "@/hooks/useDispatch";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
-import { type Ride, type EarningsEntry, type Opportunity, acceptRide, listenToWeeklyEarnings, listenToOpportunities, getDriverGoal, updateDriverPreferences, getDriverPreferences } from "@/lib/db";
+import { type Ride, type EarningsEntry, type Opportunity, listenToWeeklyEarnings, listenToOpportunities, getDriverGoal, updateDriverPreferences, getDriverPreferences } from "@/lib/db";
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Plane, Music, Target, Package, UtensilsCrossed, Car,
@@ -269,14 +269,7 @@ export default function Command() {
     if (!pendingRide || accepting) return;
     setAccepting(true);
     try {
-      if (user) {
-        await acceptRide(pendingRide.id, user.uid, {
-          name: profile?.name || "Driver",
-          rating: profile?.rating || 5.0,
-          car: profile?.vehicleMake ? `${profile.vehicleYear} ${profile.vehicleMake} ${profile.vehicleModel}` : "Standard Vehicle",
-          plate: profile?.licensePlate || "WEGO-1"
-        });
-      }
+      await dispatch.accept(pendingRide.id);
       setAccepting(false);
       navigatedRef.current = true;
       navigate("/trip", {

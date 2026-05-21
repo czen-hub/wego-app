@@ -7,6 +7,7 @@ import {
   addDoc,
   updateDoc,
   getDoc,
+  runTransaction,
   serverTimestamp,
   Timestamp,
   GeoPoint,
@@ -283,6 +284,29 @@ export async function cancelRide(rideId: string): Promise<void> {
 export async function submitRating(rideId: string, rating: number, raterType: "passenger" | "driver"): Promise<void> {
   const field = raterType === "passenger" ? "passengerRatingGiven" : "driverRatingGiven";
   await updateDoc(doc(db, "rides", rideId), { [field]: rating });
+
+  // When passenger rates, update the driver's rolling average rating on their profile
+  if (raterType === "passenger") {
+    try {
+      const rideSnap = await getDoc(doc(db, "rides", rideId));
+      const driverId = rideSnap.data()?.driverId as string | null;
+      if (driverId) {
+        const driverRef = doc(db, "drivers", driverId);
+        await runTransaction(db, async (tx) => {
+          const driverSnap = await tx.get(driverRef);
+          const data = driverSnap.data() ?? {};
+          const currentRating = (data.rating as number) ?? 5.0;
+          // Default ratingCount to 10 so early ratings don't swing the average wildly
+          const ratingCount = (data.ratingCount as number) ?? 10;
+          const newCount = ratingCount + 1;
+          const newRating = Math.round(((currentRating * ratingCount + rating) / newCount) * 100) / 100;
+          tx.update(driverRef, { rating: newRating, ratingCount: newCount });
+        });
+      }
+    } catch {
+      // Non-critical — ride rating already saved, driver profile update is best-effort
+    }
+  }
 }
 
 // ── Listen to active ride ──────────────────────────────────────────────────
@@ -392,6 +416,8 @@ export async function updateStopDetails(rideId: string, opts: {
   address: string;
   lat: number;
   lng: number;
+  oldLat?: number;
+  oldLng?: number;
 }): Promise<void> {
   const snap = await getDoc(doc(db, "rides", rideId));
   type StopEntry = { address: string; lat: number; lng: number; fareDelta: number };
@@ -399,9 +425,15 @@ export async function updateStopDetails(rideId: string, opts: {
   const stopId = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const newEntryForArray = { address: opts.address, lat: opts.lat, lng: opts.lng, fareDelta: opts.newFeeAmount };
   const newPendingEntry = { id: stopId, ...newEntryForArray };
-  const updatedStops = existing.length > 0
-    ? [...existing.slice(0, -1), newEntryForArray]
-    : [newEntryForArray];
+  let updatedStops: StopEntry[];
+  if (opts.oldLat !== undefined && opts.oldLng !== undefined) {
+    const matched = existing.some(s => s.lat === opts.oldLat && s.lng === opts.oldLng);
+    updatedStops = matched
+      ? existing.map(s => (s.lat === opts.oldLat && s.lng === opts.oldLng) ? newEntryForArray : s)
+      : [...existing, newEntryForArray];
+  } else {
+    updatedStops = existing.length > 0 ? [...existing.slice(0, -1), newEntryForArray] : [newEntryForArray];
+  }
   await updateDoc(doc(db, "rides", rideId), {
     stops: updatedStops,
     stopFeeTotal: increment(opts.newFeeAmount - opts.oldFeeAmount),

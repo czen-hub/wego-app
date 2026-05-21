@@ -24,12 +24,11 @@ service cloud.firestore {
     // ── Rides ─────────────────────────────────────────────────────────────────
     match /rides/{rideId} {
 
-      // Read: own ride (as passenger or driver) OR any pending ride (drivers need
-      // to see the queue; pending rides have no sensitive data beyond address/fare).
+      // Read: own ride (as passenger or driver) OR unclaimed queued ride.
       allow read: if isAuth() && (
         resource.data.passengerId == request.auth.uid ||
         resource.data.driverId   == request.auth.uid ||
-        resource.data.status == 'pending'
+        resource.data.status in ['pending', 'reserved']
       );
 
       // Create: passengers only, must set themselves as owner, status must be pending.
@@ -40,9 +39,17 @@ service cloud.firestore {
 
       allow update: if isAuth() && (
 
-        // Passenger cancels their own pending, accepted, reserved, or in-progress ride.
+        // Passenger cancels pending, accepted, or reserved ride (no active driver yet).
         (resource.data.passengerId == request.auth.uid
-          && resource.data.status in ['pending', 'accepted', 'reserved', 'inProgress']
+          && resource.data.status in ['pending', 'accepted', 'reserved']
+          && request.resource.data.status == 'cancelled')
+
+        ||
+
+        // Passenger cancels in-progress ride only after filing a dispute (ghost ride).
+        (resource.data.passengerId == request.auth.uid
+          && resource.data.status == 'inProgress'
+          && resource.data.disputed == true
           && request.resource.data.status == 'cancelled')
 
         ||
@@ -54,18 +61,27 @@ service cloud.firestore {
 
         ||
 
-        // Passenger requests or edits a stop during an in-progress ride
-        // (updates stopCount, stopFeeTotal, pendingStop, stops).
-        // Status must stay inProgress — passenger cannot change it via this rule.
+        // Passenger requests or edits a stop during an in-progress ride.
+        // Status must stay inProgress and only stop-related fields may change.
         (resource.data.passengerId == request.auth.uid
           && resource.data.status == 'inProgress'
           && request.resource.data.status == 'inProgress'
-          && request.resource.data.disputed != true)
+          && request.resource.data.disputed != true
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['stopCount', 'stopFeeTotal', 'pendingStop', 'stops']))
 
         ||
 
         // Driver claims an unclaimed pending ride (transaction in code prevents races).
         (resource.data.status == 'pending'
+          && resource.data.driverId == null
+          && request.resource.data.driverId == request.auth.uid
+          && request.resource.data.status   == 'accepted')
+
+        ||
+
+        // Driver claims a reserved (pre-booked) ride.
+        (resource.data.status == 'reserved'
           && resource.data.driverId == null
           && request.resource.data.driverId == request.auth.uid
           && request.resource.data.status   == 'accepted')
@@ -96,11 +112,10 @@ service cloud.firestore {
     }
 
     // ── Earnings ──────────────────────────────────────────────────────────────
-    // Drivers write their own earnings on trip complete; any auth user reads
-    // (needed for cooperative fleet reserve fund total across all drivers).
+    // Drivers write and read their own earnings only.
     match /earnings/{entryId} {
       allow create: if isAuth() && request.resource.data.driverId == request.auth.uid;
-      allow read:   if isAuth();
+      allow read:   if isAuth() && resource.data.driverId == request.auth.uid;
       allow update, delete: if false;
     }
 
@@ -136,8 +151,15 @@ service cloud.firestore {
     }
 
     // ── Ride Chat ─────────────────────────────────────────────────────────────
+    // Only ride participants (passenger or driver) may create or read messages.
     match /ride_chats/{msgId} {
-      allow read, create: if isAuth();
+      allow create: if isAuth()
+        && request.resource.data.senderId == request.auth.uid
+        && (get(/databases/$(database)/documents/rides/$(request.resource.data.rideId)).data.passengerId == request.auth.uid
+            || get(/databases/$(database)/documents/rides/$(request.resource.data.rideId)).data.driverId  == request.auth.uid);
+      allow read: if isAuth()
+        && (get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.passengerId == request.auth.uid
+            || get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.driverId  == request.auth.uid);
       allow update, delete: if false;
     }
   }

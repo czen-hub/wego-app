@@ -244,6 +244,7 @@ export default function TripInProgress() {
     }
     setCancellationFee(fee);
     setPassengerCancelled(true);
+    if (trip.rideId) updateRideStatus(trip.rideId, "cancelled").catch(() => {});
   };
 
   // Timer during in-progress phase
@@ -761,7 +762,7 @@ export default function TripInProgress() {
             <button type="button" onClick={() => {
                 setPhase("complete");
                 if (trip.rideId) {
-                  const gross = trip.riderPayment;
+                  const gross = trip.riderPayment + stopEarnings;
                   const coopFee = Math.round(trip.coopFee * 100) / 100;
                   updateRideStatus(trip.rideId, "completed").catch(() => {});
                   if (user) {

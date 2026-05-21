@@ -145,10 +145,10 @@ export function useDispatch(): UseDispatchReturn {
   const accept = async (rideId: string) => {
     if (!user) return;
     await acceptRide(rideId, user.uid, {
-      name: profile?.name || "Driver",
+      name: profile?.name || "",
       rating: profile?.rating || 5.0,
-      car: profile?.vehicleMake ? `${profile.vehicleYear} ${profile.vehicleMake} ${profile.vehicleModel}` : "Standard Vehicle",
-      plate: profile?.licensePlate || "WEGO-1",
+      car: profile?.vehicleMake ? `${profile.vehicleYear} ${profile.vehicleMake} ${profile.vehicleModel}` : "",
+      plate: profile?.licensePlate || "",
     });
     setIncomingRides([]);
   };

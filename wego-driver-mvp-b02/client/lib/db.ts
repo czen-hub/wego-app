@@ -300,7 +300,7 @@ export function listenToMessages(
 ): () => void {
   const q = query(
     collection(db, "messages"),
-    where("userId", "==", driverId)
+    where("driverId", "==", driverId)
   );
   return onSnapshot(q, (snap) => {
     let msgs = snap.docs.map((d) => {
