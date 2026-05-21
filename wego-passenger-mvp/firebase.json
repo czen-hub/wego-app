@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "predeploy": ["npx vite build --outDir dist/spa"],
     "public": "dist/spa",
     "ignore": [
       "firebase.json",

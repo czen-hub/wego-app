@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plane, Music, Target, Clock, ChevronUp, ChevronDown,
   Package, UtensilsCrossed, MapPin, CheckCircle, X,
-  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Wifi,
+  SlidersHorizontal, Car, PawPrint, Eye, EyeOff,
   type LucideIcon,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
@@ -116,7 +116,7 @@ export default function Command() {
   const location = useLocation();
   const { user, profile } = useAuth();
   const dispatch = useDispatch();
-  const { isOnline, setOnline, incomingRides, activeRide, locationError } = dispatch;
+  const { isOnline, setOnline, incomingRides, activeRide, locationError, rideListenerError } = dispatch;
   const { coords: currentCoords, loading: locationLoading } = useCurrentLocation();
   const mapCenter: [number, number] = currentCoords ?? [37.3541, -121.9552];
 
@@ -138,14 +138,22 @@ export default function Command() {
   const [declinedRideId, setDeclinedRideId] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [onlineError, setOnlineError] = useState<string | null>(null);
   const [offlineBlockOpen, setOfflineBlockOpen] = useState(false);
-  const pendingRide = incomingRides.find((r) => r.id !== declinedRideId) ?? null;
-  const hasRequest = pendingRide !== null;
 
   const [acceptRides, setAcceptRides] = useState(true);
   const [acceptCourier, setAcceptCourier] = useState(false);
   const [acceptFood, setAcceptFood] = useState(false);
   const [acceptPets, setAcceptPets] = useState(false);
+
+  const pendingRide = incomingRides.find((r) => {
+    if (r.id === declinedRideId) return false;
+    if (r.type === "ride" && !acceptRides) return false;
+    if (r.type === "courier" && !acceptCourier) return false;
+    if (r.type === "food" && !acceptFood) return false;
+    return true;
+  }) ?? null;
+  const hasRequest = pendingRide !== null;
 
   // Load persisted preferences once on mount
   useEffect(() => {
@@ -247,10 +255,14 @@ export default function Command() {
   }, [hasRequest]);
 
   const handleToggleOnline = async () => {
-    // Prevent going offline while mid-trip — driver must complete or cancel the ride first
     if (isOnline && activeRide) { setOfflineBlockOpen(true); return; }
-    await setOnline(!isOnline);
-    if (isOnline) setDeclinedRideId(null);
+    try {
+      await setOnline(!isOnline);
+      if (isOnline) setDeclinedRideId(null);
+    } catch {
+      setOnlineError("Failed to go online. Check your connection.");
+      setTimeout(() => setOnlineError(null), 4000);
+    }
   };
 
   const handleAccept = async () => {
@@ -343,17 +355,31 @@ export default function Command() {
       </div>
 
       {/* ── ONLINE / OFFLINE BADGE — top center, always visible, tappable ── */}
-      <div className="absolute top-4 left-0 right-0 z-20 flex justify-center">
-        <button
-          type="button"
-          onClick={handleToggleOnline}
-          className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg active:scale-95 transition-transform"
-        >
-          <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-primary animate-pulse" : "bg-slate-400"}`} />
-          <span className={`text-xs font-bold uppercase tracking-widest ${isOnline ? "text-primary" : "text-muted-foreground"}`}>
-            {isOnline ? "Online" : "Offline"}
-          </span>
-        </button>
+      <div className="absolute top-4 left-0 right-0 z-20 flex flex-col items-center gap-2">
+        {isOnline ? (
+          <button
+            type="button"
+            onClick={handleToggleOnline}
+            className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg active:scale-95 transition-transform"
+          >
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs font-bold text-primary uppercase tracking-widest">Online</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleToggleOnline}
+            className="flex items-center gap-2 px-5 py-3 bg-amber-500 rounded-2xl shadow-xl active:scale-95 transition-transform"
+          >
+            <div className="w-2.5 h-2.5 rounded-full bg-white opacity-80" />
+            <span className="text-sm font-bold text-white">Offline — Tap to go online</span>
+          </button>
+        )}
+        {onlineError && (
+          <div className="bg-destructive text-destructive-foreground text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
+            {onlineError}
+          </div>
+        )}
       </div>
 
       {/* ── INCOMING REQUEST CARD ── */}
@@ -380,17 +406,16 @@ export default function Command() {
         </div>
       )}
 
-      {/* ── WAITING FOR RIDES indicator ── */}
-      {isOnline && !hasRequest && (
-        <div className="absolute top-16 left-0 right-0 z-10 flex justify-center">
-          {locationError ? (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-full px-4 py-2 flex items-center gap-2">
+      {isOnline && !hasRequest && (locationError || rideListenerError) && (
+        <div className="absolute top-20 left-0 right-0 z-10 flex flex-col items-center gap-1.5">
+          {locationError && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-full px-4 py-2">
               <span className="text-xs font-medium text-destructive">{locationError}</span>
             </div>
-          ) : (
-            <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-4 py-2 flex items-center gap-2">
-              <Wifi size={13} className="text-primary animate-pulse" />
-              <span className="text-xs font-medium text-muted-foreground">Waiting for rides nearby…</span>
+          )}
+          {rideListenerError && (
+            <div className="bg-destructive/90 rounded-full px-4 py-2">
+              <span className="text-xs font-bold text-white">{rideListenerError}</span>
             </div>
           )}
         </div>

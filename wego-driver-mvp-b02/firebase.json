@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "predeploy": ["npx vite build --outDir dist/spa"],
     "target": "driver",
     "public": "dist/spa",
     "ignore": [

@@ -24,12 +24,12 @@ service cloud.firestore {
     // ── Rides ─────────────────────────────────────────────────────────────────
     match /rides/{rideId} {
 
-      // Read: own ride (as passenger or driver) OR any pending+unclaimed ride
-      // so drivers can see the queue.
+      // Read: own ride (as passenger or driver) OR any pending ride (drivers need
+      // to see the queue; pending rides have no sensitive data beyond address/fare).
       allow read: if isAuth() && (
         resource.data.passengerId == request.auth.uid ||
         resource.data.driverId   == request.auth.uid ||
-        (resource.data.status == 'pending' && resource.data.driverId == null)
+        resource.data.status == 'pending'
       );
 
       // Create: passengers only, must set themselves as owner, status must be pending.
@@ -92,6 +92,38 @@ service cloud.firestore {
       );
 
       // No hard deletes — cancelled status is the soft-delete.
+      allow delete: if false;
+    }
+
+    // ── Earnings ──────────────────────────────────────────────────────────────
+    // Drivers write their own earnings on trip complete; any auth user reads
+    // (needed for cooperative fleet reserve fund total across all drivers).
+    match /earnings/{entryId} {
+      allow create: if isAuth() && request.resource.data.driverId == request.auth.uid;
+      allow read:   if isAuth();
+      allow update, delete: if false;
+    }
+
+    // ── Messages ──────────────────────────────────────────────────────────────
+    // Drivers read their own inbox; updates allowed for marking read.
+    match /messages/{msgId} {
+      allow read:   if isAuth() && resource.data.driverId == request.auth.uid;
+      allow update: if isAuth() && resource.data.driverId == request.auth.uid;
+      allow create: if isAuth();
+      allow delete: if false;
+    }
+
+    // ── Opportunities ─────────────────────────────────────────────────────────
+    match /opportunities/{oppId} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+
+    // ── Governance Votes ──────────────────────────────────────────────────────
+    // Drivers cast and update their own votes; all members can read vote totals.
+    match /governance_votes/{voteId} {
+      allow create, update: if isAuth() && request.resource.data.driverId == request.auth.uid;
+      allow read: if isAuth();
       allow delete: if false;
     }
 

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageCircle, ChevronLeft, AlertTriangle, Send, X, DollarSign, CornerUpRight, Star } from "lucide-react";
+import { MapPin, CheckCircle, Clock, Navigation, Phone, MessageSquare, ChevronLeft, AlertTriangle, Send, X, DollarSign, CornerUpRight, Star } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
-import { updateRideStatus, logEarningsEntry, sendRideMessage, listenToRideMessages, submitRating, acknowledgeRideDispute, acknowledgeStop, type ChatMessage } from "@/lib/db";
+import { updateRideStatus, logEarningsEntry, incrementDriverRideCount, sendRideMessage, listenToRideMessages, submitRating, acknowledgeRideDispute, acknowledgeStop, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -84,6 +84,7 @@ export default function TripInProgress() {
   const [sosModalOpen, setSosModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const prevMsgCountRef = useRef(0);
   const [passengerCancelled, setPassengerCancelled] = useState(false);
   const [cancellationFee, setCancellationFee] = useState(0);
   const { coords: driverCoords } = useCurrentLocation();
@@ -140,7 +141,13 @@ export default function TripInProgress() {
   useEffect(() => {
     if (!trip.rideId) return;
     const unsub = listenToRideMessages(trip.rideId, (msgs) => {
+      const prev = prevMsgCountRef.current;
+      prevMsgCountRef.current = msgs.length;
       setChatMessages(msgs);
+      if (msgs.length > prev) {
+        const hasNewPassengerMsg = msgs.slice(prev).some(m => m.senderType === "passenger");
+        if (hasNewPassengerMsg) setChatOpen(true);
+      }
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
     return unsub;
@@ -368,16 +375,15 @@ export default function TripInProgress() {
             );
           })()}
 
-          {/* Passenger Rating */}
-          {!isDelivery && (
-            <div className="glass-card p-4 border border-border rounded-xl space-y-4">
+          {/* Rating */}
+          <div className="glass-card p-4 border border-border rounded-xl space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
                   {trip.riderName.charAt(0)}
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">{trip.riderName}</p>
-                  <p className="text-xs text-muted-foreground">Rate this passenger</p>
+                  <p className="text-xs text-muted-foreground">{isDelivery ? "Rate this customer" : "Rate this passenger"}</p>
                 </div>
               </div>
               {!ratingSubmitted ? (
@@ -423,7 +429,6 @@ export default function TripInProgress() {
                 </div>
               )}
             </div>
-          )}
 
           <button
             type="button"
@@ -517,7 +522,7 @@ export default function TripInProgress() {
                 : "bg-primary/20 border-primary/40 text-primary"
             }`}
           >
-            {phase === "to-pickup" ? `Heading to ${pickupLabel}` : phase === "waiting" ? "Waiting at Pickup" : `${typeLabel} in Progress`}
+            {phase === "to-pickup" ? `Heading to ${pickupLabel}` : phase === "waiting" ? (trip.type === "food" ? "At Restaurant" : "Waiting at Pickup") : `${typeLabel} in Progress`}
           </div>
         </div>
 
@@ -564,14 +569,14 @@ export default function TripInProgress() {
             <p className="text-xs text-muted-foreground">Your Take: <span className="text-primary font-semibold">${trip.driverTake.toFixed(2)}</span></p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button type="button" aria-label="Message rider" title="Message rider"
+            <button type="button" aria-label="Message rider"
               onClick={() => setChatOpen(true)}
-              className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center active:scale-95 transition-transform">
-              <MessageCircle size={16} className="text-muted-foreground" />
+              className={`w-10 h-10 rounded-full border flex items-center justify-center active:scale-95 transition-all ${chatMessages.length > 0 && !chatOpen ? "bg-primary border-primary" : "bg-card border-border"}`}>
+              <MessageSquare size={16} className={chatMessages.length > 0 && !chatOpen ? "text-white" : "text-primary"} />
             </button>
-            <button type="button" aria-label="Call rider" title="Call rider"
+            <button type="button" aria-label="Call rider"
               onClick={handleCall}
-              className={`w-9 h-9 rounded-full border flex items-center justify-center active:scale-95 transition-transform ${calling ? "bg-primary border-primary" : "bg-primary/10 border-primary/20"}`}>
+              className={`w-10 h-10 rounded-full border flex items-center justify-center active:scale-95 transition-all ${calling ? "bg-green-500 border-green-500" : "bg-card border-border"}`}>
               <Phone size={16} className={calling ? "text-white" : "text-primary"} />
             </button>
           </div>
@@ -611,7 +616,7 @@ export default function TripInProgress() {
                 <MapPin size={14} className="text-primary" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">At {pickupLabel} — Waiting</p>
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">{trip.type === "food" ? "At Restaurant — Awaiting Order" : `At ${pickupLabel} — Waiting`}</p>
                 <p className="text-base font-semibold text-foreground mt-0.5">{stripCoords(trip.pickupLocation)}</p>
               </div>
             </div>
@@ -642,27 +647,34 @@ export default function TripInProgress() {
 
         {phase === "waiting" && (
           <>
-            <div className={`glass-card p-4 border rounded-xl space-y-2 ${canLeave ? "border-destructive/30" : "border-border"}`}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {canLeave ? (meterSecs > 0 ? "On Meter" : "Free Window Ended") : "Free Wait Time"}
-                </p>
-                <span className={`text-2xl font-bold font-mono ${canLeave ? "text-destructive" : "text-primary"}`}>
-                  {canLeave ? `+${formatTime(waitElapsed - freeWaitSecs)}` : formatTime(waitRemaining)}
-                </span>
+            {trip.type === "food" ? (
+              <div className="glass-card p-4 border border-border rounded-xl flex items-center gap-3">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+                <p className="text-sm text-foreground font-medium">Waiting for order to be prepared</p>
               </div>
-              {trip.isAdvanced && meterSecs > 0 && (
-                <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
-                  <span className="text-xs text-muted-foreground">Meter charge (passenger owes)</span>
-                  <span className="text-sm font-bold text-primary">${meterCharge.toFixed(2)}</span>
+            ) : (
+              <div className={`glass-card p-4 border rounded-xl space-y-2 ${canLeave ? "border-destructive/30" : "border-border"}`}>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    {canLeave ? (meterSecs > 0 ? "On Meter" : "Free Window Ended") : "Free Wait Time"}
+                  </p>
+                  <span className={`text-2xl font-bold font-mono ${canLeave ? "text-destructive" : "text-primary"}`}>
+                    {canLeave ? `+${formatTime(waitElapsed - freeWaitSecs)}` : formatTime(waitRemaining)}
+                  </span>
                 </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {trip.isAdvanced
-                  ? "Advance booking: 8 min free · 2 min on meter ($0.50/min)"
-                  : "Standard ride: 5 min free wait"}
-              </p>
-            </div>
+                {trip.isAdvanced && meterSecs > 0 && (
+                  <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
+                    <span className="text-xs text-muted-foreground">Meter charge (passenger owes)</span>
+                    <span className="text-sm font-bold text-primary">${meterCharge.toFixed(2)}</span>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {trip.isAdvanced
+                    ? "Advance booking: 8 min free · 2 min on meter ($0.50/min)"
+                    : "Standard ride: 5 min free wait"}
+                </p>
+              </div>
+            )}
 
             <button type="button" onClick={() => {
                 if (pinRequired) {
@@ -682,18 +694,20 @@ export default function TripInProgress() {
               disabled={pickupIssueNeedsAcknowledgement}
               className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl ${pickupIssueNeedsAcknowledgement ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-none cursor-not-allowed" : "bg-primary text-foreground shadow-primary/30"}`}>
               <CheckCircle size={22} />
-              {pickupIssueNeedsAcknowledgement ? "Acknowledge Safety Alert First" : "Passenger is Here"}
+              {pickupIssueNeedsAcknowledgement ? "Acknowledge Safety Alert First" : (trip.type === "food" ? "Food Picked Up" : "Passenger is Here")}
             </button>
 
-            <button type="button" onClick={simulatePassengerCancel}
-              disabled={!canLeave}
-              className={`w-full py-3 rounded-xl border text-sm font-semibold active:scale-95 transition-transform ${
-                canLeave
-                  ? "border-destructive/50 text-destructive hover:bg-destructive/5"
-                  : "border-border text-muted-foreground opacity-40"
-              }`}>
-              {canLeave ? "Cancel — No Show" : `Cancel & Leave unlocks in ${formatTime(waitRemaining)}`}
-            </button>
+            {trip.type !== "food" && (
+              <button type="button" onClick={simulatePassengerCancel}
+                disabled={!canLeave}
+                className={`w-full py-3 rounded-xl border text-sm font-semibold active:scale-95 transition-transform ${
+                  canLeave
+                    ? "border-destructive/50 text-destructive hover:bg-destructive/5"
+                    : "border-border text-muted-foreground opacity-40"
+                }`}>
+                {canLeave ? "Cancel — No Show" : `Cancel & Leave unlocks in ${formatTime(waitRemaining)}`}
+              </button>
+            )}
           </>
         )}
 
@@ -747,10 +761,13 @@ export default function TripInProgress() {
             <button type="button" onClick={() => {
                 setPhase("complete");
                 if (trip.rideId) {
-                  const gross = trip.riderPayment + stopEarnings;
+                  const gross = trip.riderPayment;
                   const coopFee = Math.round(trip.coopFee * 100) / 100;
                   updateRideStatus(trip.rideId, "completed").catch(() => {});
-                  if (user) logEarningsEntry({ driverId: user.uid, rideId: trip.rideId, gross, coopFee, type: trip.type ?? "ride" }).catch(() => {});
+                  if (user) {
+                    logEarningsEntry({ driverId: user.uid, rideId: trip.rideId, gross, coopFee, type: trip.type ?? "ride" }).catch(() => {});
+                    incrementDriverRideCount(user.uid).catch(() => {});
+                  }
                 }
               }}
               disabled={pickupIssueNeedsAcknowledgement}
@@ -902,7 +919,7 @@ export default function TripInProgress() {
                 <X size={15} className="text-muted-foreground" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-[120px]">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 min-h-[120px]">
               {chatMessages.length === 0 && (
                 <div className="space-y-2">
                   {["I'm on my way!", "I've arrived, look for my car", "Running 3 min late — apologies"].map((t) => (
@@ -918,8 +935,8 @@ export default function TripInProgress() {
                 </div>
               )}
               {chatMessages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.senderType === "driver" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${msg.senderType === "driver" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
+                <div key={msg.id} className={`flex w-full ${msg.senderType === "driver" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${msg.senderType === "driver" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
                     {msg.text}
                   </div>
                 </div>

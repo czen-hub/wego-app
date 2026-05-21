@@ -55,6 +55,7 @@ export interface Ride {
   acceptedAt: Date | null;
   completedAt: Date | null;
   riderRating: number;
+  passengerRatingGiven: number;
   driverRatingGiven: number;
   disputed: boolean;
   disputeReason: string | null;
@@ -150,6 +151,7 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     acceptedAt: toDate(data.acceptedAt),
     completedAt: toDate(data.completedAt),
     riderRating: (data.riderRating as number) ?? 5.0,
+    passengerRatingGiven: (data.passengerRatingGiven as number) ?? 0,
     driverRatingGiven: (data.driverRatingGiven as number) ?? 0,
     disputed: (data.disputed as boolean) ?? false,
     disputeReason: (data.disputeReason as string | null) ?? null,
@@ -198,8 +200,13 @@ export function updateDriverLocation(driverId: string, lat: number, lng: number)
 // ── Ride listeners ─────────────────────────────────────────────────────────
 
 export function listenForPendingRides(
-  callback: (rides: Ride[]) => void
+  callback: (rides: Ride[]) => void,
+  onError?: (err: Error) => void
 ): () => void {
+  // Two equality conditions — Firestore serves these from single-field indexes
+  // (no composite index needed for pure == chains). Adding driverId==null makes
+  // the query satisfy the security rule statically, which prevents the entire
+  // listener from being rejected when old/dirty test docs exist with driverId set.
   const q = query(
     collection(db, "rides"),
     where("status", "==", "pending"),
@@ -207,13 +214,14 @@ export function listenForPendingRides(
   );
   return onSnapshot(q, (snap) => {
     let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
-    // Filter out rides older than 30 minutes in memory to prevent ghost pings from past test sessions
+    // Drop ghost pings from old test sessions. Use Date.now() fallback so a brand-new
+    // ride whose serverTimestamp hasn't resolved yet isn't accidentally excluded.
     const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
-    rides = rides.filter(r => (r.requestedAt?.getTime() ?? 0) > thirtyMinsAgo);
+    rides = rides.filter(r => (r.requestedAt?.getTime() ?? Date.now()) > thirtyMinsAgo);
     rides.sort((a, b) => (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0));
     rides = rides.slice(0, 5);
     callback(rides);
-  }, (err) => console.error("Error in listenForPendingRides:", err));
+  }, (err) => { console.error("Error in listenForPendingRides:", err); onError?.(err); });
 }
 
 export function listenToDriverRide(
@@ -314,6 +322,41 @@ export function listenToMessages(
 
 export function markMessageRead(messageId: string) {
   return updateDoc(doc(db, "messages", messageId), { read: true });
+}
+
+export async function markAllMessagesRead(messageIds: string[]): Promise<void> {
+  await Promise.all(messageIds.map((id) => markMessageRead(id).catch(() => {})));
+}
+
+export async function submitGovernanceVote(
+  driverId: string,
+  initiativeId: string,
+  choice: "approve" | "reject"
+): Promise<void> {
+  await setDoc(doc(db, "governance_votes", `${initiativeId}_${driverId}`), {
+    driverId,
+    initiativeId,
+    choice,
+    votedAt: serverTimestamp(),
+  });
+}
+
+export function listenToGovernanceVotes(
+  driverId: string,
+  callback: (votes: Record<string, "approve" | "reject">) => void
+): () => void {
+  const q = query(collection(db, "governance_votes"), where("driverId", "==", driverId));
+  return onSnapshot(q, (snap) => {
+    const votes: Record<string, "approve" | "reject"> = {};
+    snap.docs.forEach((d) => {
+      const data = d.data();
+      votes[data.initiativeId as string] = data.choice as "approve" | "reject";
+    });
+    callback(votes);
+  }, (err) => {
+    console.error("Error in listenToGovernanceVotes:", err);
+    callback({});
+  });
 }
 
 // ── Ride Chat ──────────────────────────────────────────────────────────────
@@ -424,6 +467,29 @@ export function listenToReservedRides(
   });
 }
 
+export function listenToPendingJobsByType(
+  type: "food" | "courier",
+  callback: (rides: Ride[]) => void
+): () => void {
+  // Use single compound (status + type) — both are non-null equality filters
+  // so Firestore can satisfy this with auto-created single-field indexes.
+  // driverId==null check is done in memory to avoid needing a 3-field composite index.
+  const q = query(
+    collection(db, "rides"),
+    where("status", "==", "pending"),
+    where("type", "==", type)
+  );
+  return onSnapshot(q, (snap) => {
+    let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
+    rides = rides.filter(r => r.driverId === null);
+    rides.sort((a, b) => (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0));
+    callback(rides);
+  }, (err) => {
+    console.error(`listenToPendingJobsByType(${type}):`, err);
+    callback([]);
+  });
+}
+
 export async function logStop(rideId: string, feeAmount: number): Promise<void> {
   await updateDoc(doc(db, "rides", rideId), {
     stopCount: increment(1),
@@ -450,6 +516,44 @@ export async function logEarningsEntry(opts: {
     amount: Math.round((opts.gross - opts.coopFee) * 100) / 100,
     type: opts.type,
     completedAt: serverTimestamp(),
+  });
+}
+
+export function listenToDriverFleetShare(
+  driverId: string,
+  callback: (fleetShare: number) => void
+): () => void {
+  const q = query(collection(db, "earnings"), where("driverId", "==", driverId));
+  return onSnapshot(q, (snap) => {
+    let total = 0;
+    snap.docs.forEach((d) => {
+      const fee = (d.data().coopFee as number) ?? 0;
+      total += fee * 0.5;
+    });
+    callback(Math.round(total * 100) / 100);
+  }, (err) => {
+    console.error("Error in listenToDriverFleetShare:", err);
+    callback(0);
+  });
+}
+
+export async function incrementDriverRideCount(driverId: string): Promise<void> {
+  await updateDoc(doc(db, "drivers", driverId), { totalRides: increment(1) });
+}
+
+export function listenToFleetReserve(
+  callback: (totalReserve: number) => void
+): () => void {
+  return onSnapshot(collection(db, "earnings"), (snap) => {
+    let total = 0;
+    snap.docs.forEach((d) => {
+      const fee = (d.data().coopFee as number) ?? 0;
+      total += fee * 0.5; // 50% of the 12% coop fee goes to hardware reserve
+    });
+    callback(Math.round(total * 100) / 100);
+  }, (err) => {
+    console.error("Error in listenToFleetReserve:", err);
+    callback(0);
   });
 }
 

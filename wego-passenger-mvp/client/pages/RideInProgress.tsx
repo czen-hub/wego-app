@@ -78,6 +78,7 @@ export default function RideInProgress() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [calling, setCalling] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const prevMsgCountRef = useRef(0);
   const [waitElapsed, setWaitElapsed] = useState(0);
   const [waitFeeCharged, setWaitFeeCharged] = useState(0);
   const [stopCount, setStopCount] = useState(0);
@@ -161,7 +162,13 @@ export default function RideInProgress() {
   useEffect(() => {
     if (!liveRide?.id) return;
     const unsub = listenToRideMessages(liveRide.id, (msgs) => {
+      const prev = prevMsgCountRef.current;
+      prevMsgCountRef.current = msgs.length;
       setChatMessages(msgs);
+      if (msgs.length > prev) {
+        const hasNewDriverMsg = msgs.slice(prev).some(m => m.senderType === "driver");
+        if (hasNewDriverMsg) setChatOpen(true);
+      }
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
     return unsub;
@@ -367,6 +374,7 @@ export default function RideInProgress() {
   };
 
   const isAdvanced = liveRide?.isAdvanced ?? rideMock.isAdvanced ?? false;
+  const isFood = liveRide?.type === "food";
   const freeWaitSecs = isAdvanced ? 480 : 300;
   const waitRemaining = Math.max(0, freeWaitSecs - waitElapsed);
   const waitMeterSecs = isAdvanced ? Math.max(0, waitElapsed - freeWaitSecs) : 0;
@@ -608,8 +616,8 @@ export default function RideInProgress() {
             <div className="w-20 h-20 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
               <CheckCircle size={40} className="text-primary" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground">You've arrived!</h1>
-            <p className="text-muted-foreground text-center text-sm">Thanks for riding with WeGo</p>
+            <h1 className="text-3xl font-bold text-foreground">{isFood ? "Order Delivered!" : "You've arrived!"}</h1>
+            <p className="text-muted-foreground text-center text-sm">{isFood ? "Your order has been delivered" : "Thanks for riding with WeGo"}</p>
           </div>
 
           {/* Receipt */}
@@ -802,7 +810,7 @@ export default function RideInProgress() {
   })();
 
   return (
-    <div className="max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden">
+    <div className="relative max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden">
       {/* Map — fills remaining space above the cards */}
       <div className="relative z-0 flex-1 min-h-[240px]">
         {(() => {
@@ -833,10 +841,10 @@ export default function RideInProgress() {
         {/* Phase badge */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
           <div className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border backdrop-blur-sm bg-primary/20 border-primary/40 text-primary">
-            {phase === "matching" && "Finding Driver"}
-            {phase === "en_route" && "Driver En Route"}
-            {phase === "arrived" && "Driver Arrived"}
-            {phase === "in_progress" && "Trip in Progress"}
+            {phase === "matching" && (isFood ? "Placing Delivery" : "Finding Driver")}
+            {phase === "en_route" && (isFood ? "Collecting Your Order" : "Driver En Route")}
+            {phase === "arrived" && (isFood ? "Driver at Restaurant" : "Driver Arrived")}
+            {phase === "in_progress" && (isFood ? "Order On the Way" : "Trip in Progress")}
           </div>
         </div>
 
@@ -886,7 +894,7 @@ export default function RideInProgress() {
             ) : (
               <>
                 <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto" />
-                <p className="font-semibold text-foreground">Finding your driver...</p>
+                <p className="font-semibold text-foreground">{isFood ? "Finding your delivery driver..." : "Finding your driver..."}</p>
                 {matchTimeout ? (
                   <p className="text-xs text-destructive font-medium">Taking longer than expected. You can cancel for free.</p>
                 ) : (
@@ -911,14 +919,14 @@ export default function RideInProgress() {
                   <span className="text-xs text-muted-foreground">{(liveRide?.driverRating || 4.95).toFixed(2)}</span>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button type="button" aria-label="Call driver" onClick={handleCall}
-                  className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors ${calling ? "bg-primary border-primary" : "bg-primary/10 border-primary/20"}`}>
-                  <Phone size={14} className={calling ? "text-white" : "text-primary"} />
-                </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <button type="button" aria-label="Message driver" onClick={() => setChatOpen(true)}
-                  className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                  <MessageSquare size={14} className="text-primary" />
+                  className={`w-10 h-10 rounded-full border flex items-center justify-center active:scale-95 transition-all ${chatMessages.length > 0 && !chatOpen ? "bg-primary border-primary" : "bg-card border-border"}`}>
+                  <MessageSquare size={16} className={chatMessages.length > 0 && !chatOpen ? "text-white" : "text-primary"} />
+                </button>
+                <button type="button" aria-label="Call driver" onClick={handleCall}
+                  className={`w-10 h-10 rounded-full border flex items-center justify-center active:scale-95 transition-all ${calling ? "bg-green-500 border-green-500" : "bg-card border-border"}`}>
+                  <Phone size={16} className={calling ? "text-white" : "text-primary"} />
                 </button>
               </div>
             </div>
@@ -1023,7 +1031,7 @@ export default function RideInProgress() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
-                    {phase === "in_progress" ? "Dropoff" : phase === "arrived" ? "Pickup — Driver Here" : "Heading to Pickup"}
+                    {phase === "in_progress" ? (isFood ? "Delivering To" : "Dropoff") : phase === "arrived" ? (isFood ? "At Restaurant" : "Pickup — Driver Here") : (isFood ? "Collecting From" : "Heading to Pickup")}
                   </p>
                   <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
                     {phase === "in_progress" ? (dropoffAddressDisplay) : pickupAddressDisplay}
@@ -1056,33 +1064,43 @@ export default function RideInProgress() {
         {phase === "en_route" && (
           <div className="glass-card p-4 border border-border rounded-xl flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse flex-shrink-0" />
-            <p className="text-sm text-foreground font-medium">Your driver is on the way</p>
+            <p className="text-sm text-foreground font-medium">{isFood ? "Driver collecting your order" : "Your driver is on the way"}</p>
           </div>
         )}
         {phase === "arrived" && (
-          <div className={`glass-card p-4 border rounded-xl space-y-2 ${driverCanLeave ? "border-destructive/30" : "border-primary/30"}`}>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-foreground">
-                {driverCanLeave ? "Please hurry — driver may leave" : "Head to your vehicle"}
-              </p>
-              <span className={`text-lg font-bold font-mono ${driverCanLeave ? "text-destructive" : "text-primary"}`}>
-                {driverCanLeave ? `+${formatTime(waitElapsed - freeWaitSecs)}` : formatTime(waitRemaining)}
-              </span>
-            </div>
-            {isAdvanced && waitMeterSecs > 0 && (
-              <div className="flex items-center justify-between bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-                <span className="text-xs text-muted-foreground">Wait meter</span>
-                <span className="text-sm font-bold text-destructive">+${waitMeterCharge.toFixed(2)}</span>
+          isFood ? (
+            <div className="glass-card p-4 border border-primary/30 rounded-xl space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0" />
+                <p className="text-sm font-semibold text-foreground">Driver collecting your order</p>
               </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {isAdvanced ? `Advance booking: 8 min free · ${formatTime(waitRemaining)} remaining` : `${formatTime(waitRemaining)} free wait remaining`}
-            </p>
-          </div>
+              <p className="text-xs text-muted-foreground">Your driver is at the restaurant. Your food will be on its way soon.</p>
+            </div>
+          ) : (
+            <div className={`glass-card p-4 border rounded-xl space-y-2 ${driverCanLeave ? "border-destructive/30" : "border-primary/30"}`}>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-foreground">
+                  {driverCanLeave ? "Please hurry — driver may leave" : "Head to your vehicle"}
+                </p>
+                <span className={`text-lg font-bold font-mono ${driverCanLeave ? "text-destructive" : "text-primary"}`}>
+                  {driverCanLeave ? `+${formatTime(waitElapsed - freeWaitSecs)}` : formatTime(waitRemaining)}
+                </span>
+              </div>
+              {isAdvanced && waitMeterSecs > 0 && (
+                <div className="flex items-center justify-between bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                  <span className="text-xs text-muted-foreground">Wait meter</span>
+                  <span className="text-sm font-bold text-destructive">+${waitMeterCharge.toFixed(2)}</span>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {isAdvanced ? `Advance booking: 8 min free · ${formatTime(waitRemaining)} remaining` : `${formatTime(waitRemaining)} free wait remaining`}
+              </p>
+            </div>
+          )
         )}
         {phase === "in_progress" && (
           <>
-            {hasPickupIssueReport && (
+            {!isFood && hasPickupIssueReport && (
               <div className="glass-card p-4 border border-amber-500/35 rounded-xl bg-amber-500/5 space-y-2">
                 <div className="flex items-center gap-2">
                   <TriangleAlert size={16} className="text-amber-500" />
@@ -1102,14 +1120,14 @@ export default function RideInProgress() {
                 <span className="text-sm font-bold text-foreground">+${stopFeeTotal.toFixed(2)}</span>
               </div>
             )}
-            {!liveRide?.pendingStop && (
+            {!liveRide?.pendingStop && liveRide?.type === "ride" && (
               <button type="button" onClick={() => { setStopIsEditing(false); setStopModalOpen(true); }}
                 className="w-full py-3 rounded-xl border border-border text-sm font-semibold text-foreground active:scale-95 transition-transform">
                 Request a Stop (+$3.50 min)
               </button>
             )}
-            {/* Show for first 5 min when PIN is disabled and passenger is not near driver */}
-            {!liveRide?.pinRequired && elapsed < 300 && !hasPickupIssueReport && (
+            {/* Show for first 5 min when PIN is disabled and passenger is not near driver — not applicable for food delivery */}
+            {!isFood && !liveRide?.pinRequired && elapsed < 300 && !hasPickupIssueReport && (
               passengerNearDriver ? (
                 <div className="w-full py-3 rounded-xl border border-border bg-muted/10 text-muted-foreground text-sm font-semibold text-center select-none">
                   You're confirmed in the vehicle
@@ -1121,7 +1139,7 @@ export default function RideInProgress() {
                 </button>
               )
             )}
-            {hasPickupIssueReport && (
+            {!isFood && hasPickupIssueReport && (
               <button type="button" onClick={async () => {
                   setCancelledFromDispute(true);
                   if (liveRide?.id) { try { await cancelRide(liveRide.id); } catch { showError("Couldn't end ride — check your connection"); return; } }
@@ -1139,14 +1157,14 @@ export default function RideInProgress() {
         {(phase === "matching" || phase === "en_route" || phase === "arrived") && (
           <button type="button" onClick={() => setCancelOpen(true)}
             className="w-full py-3 rounded-2xl border border-destructive/30 text-destructive text-sm font-semibold active:scale-95 transition-transform hover:bg-destructive/5">
-            Cancel Ride
+            {isFood ? "Cancel Order" : "Cancel Ride"}
           </button>
         )}
       </div>
 
       {/* Stop request modal */}
       {stopModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
+        <div className="absolute inset-0 z-50 flex items-end justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeStopModal} />
           <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl px-4 pt-4 pb-8 space-y-4">
             <div className="flex items-center justify-between">
@@ -1229,7 +1247,7 @@ export default function RideInProgress() {
       {cancelOpen && (() => {
         const { fee, label, driverNote } = getCancellationFee();
         return (
-          <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 z-50 flex items-end justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={() => setCancelOpen(false)} />
             <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl px-4 pt-4 pb-8 space-y-4">
               <div className="flex items-center justify-between">
@@ -1273,7 +1291,7 @@ export default function RideInProgress() {
 
       {/* Calling toast */}
       {calling && (
-        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border border-border rounded-2xl px-5 py-3 shadow-xl">
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border border-border rounded-2xl px-5 py-3 shadow-xl">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
           <p className="text-sm font-semibold text-foreground">Calling {liveRide?.driverName || "Driver"}…</p>
         </div>
@@ -1281,25 +1299,25 @@ export default function RideInProgress() {
 
       {/* Chat modal */}
       {chatOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+        <div className="absolute inset-0 z-50 flex flex-col justify-end items-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setChatOpen(false)} />
-          <div className="relative bg-card border-t border-border rounded-t-2xl flex flex-col max-h-[70vh]">
+          <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl flex flex-col max-h-[70vh] overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">
+            <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                   {liveRide?.driverName?.charAt(0) || "?"}
                 </div>
-                <p className="text-sm font-semibold text-foreground">{liveRide?.driverName || "Your Driver"}</p>
+                <p className="text-sm font-semibold text-foreground truncate">{liveRide?.driverName || "Your Driver"}</p>
               </div>
               <button type="button" aria-label="Close chat" onClick={() => setChatOpen(false)}
-                className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
+                className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center flex-shrink-0 ml-2">
                 <X size={15} className="text-muted-foreground" />
               </button>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-[120px]">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 min-h-[120px]">
               {chatMessages.length === 0 && (
                 <div className="space-y-2">
                   {["I'm on my way!", "Running 2 min late", "I'm outside"].map((t) => (
@@ -1315,8 +1333,8 @@ export default function RideInProgress() {
                 </div>
               )}
               {chatMessages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.senderType === "passenger" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${msg.senderType === "passenger" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
+                <div key={msg.id} className={`flex w-full ${msg.senderType === "passenger" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[75%] min-w-0 px-3 py-2 rounded-2xl text-sm break-words overflow-hidden ${msg.senderType === "passenger" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
                     {msg.text}
                   </div>
                 </div>
@@ -1344,7 +1362,7 @@ export default function RideInProgress() {
       )}
       {/* Wasn't picked up dispute modal */}
       {disputeOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
           <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-5">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
@@ -1428,7 +1446,7 @@ export default function RideInProgress() {
 
       {/* SOS Modal */}
       {sosModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
           <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-5">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">

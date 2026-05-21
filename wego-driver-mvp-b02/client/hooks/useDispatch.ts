@@ -22,6 +22,7 @@ interface UseDispatchReturn {
   start: () => Promise<void>;
   complete: () => Promise<void>;
   locationError: string | null;
+  rideListenerError: string | null;
 }
 
 export function useDispatch(): UseDispatchReturn {
@@ -30,6 +31,7 @@ export function useDispatch(): UseDispatchReturn {
   const [incomingRides, setIncomingRides] = useState<Ride[]>([]);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [rideListenerError, setRideListenerError] = useState<string | null>(null);
   const locationWatchRef = useRef<number | null>(null);
 
   const setGeoError = (error?: GeolocationPositionError) => {
@@ -70,11 +72,14 @@ export function useDispatch(): UseDispatchReturn {
 
   // Listen for pending rides when online
   useEffect(() => {
-    if (!isOnline || !user) return;
-    const unsub = listenForPendingRides(setIncomingRides);
+    if (!isOnline || !user) { setRideListenerError(null); return; }
+    const unsub = listenForPendingRides(setIncomingRides, (err) => {
+      setRideListenerError("Ride feed error: " + (err.message ?? "permission denied"));
+    });
     return () => {
       unsub();
       setIncomingRides([]);
+      setRideListenerError(null);
     };
   }, [isOnline, user]);
 
@@ -159,5 +164,5 @@ export function useDispatch(): UseDispatchReturn {
     setActiveRide(null);
   };
 
-  return { isOnline, setOnline, incomingRides, activeRide, accept, start, complete, locationError };
+  return { isOnline, setOnline, incomingRides, activeRide, accept, start, complete, locationError, rideListenerError };
 }
