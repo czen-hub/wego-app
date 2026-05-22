@@ -2,14 +2,14 @@ import { MapPin } from "lucide-react";
 
 const MapPlaceholder = () => {
   return (
-    <div className="relative w-full h-64 bg-gradient-to-br from-blue-950 to-slate-900 rounded-2xl overflow-hidden border border-border flex items-center justify-center flex-col gap-3">
+    <div className="relative w-full h-64 bg-zinc-900 rounded-2xl overflow-hidden border border-border flex items-center justify-center flex-col gap-3">
       {/* Decorative grid pattern */}
-      <div className="absolute inset-0 opacity-20">
+      <div className="absolute inset-0 opacity-30">
         <div
           className="absolute inset-0"
           style={{
             backgroundImage:
-              "linear-gradient(0deg, transparent 24%, rgba(0, 71, 255, 0.05) 25%, rgba(0, 71, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 71, 255, 0.05) 75%, rgba(0, 71, 255, 0.05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(0, 71, 255, 0.05) 25%, rgba(0, 71, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 71, 255, 0.05) 75%, rgba(0, 71, 255, 0.05) 76%, transparent 77%, transparent)",
+              "linear-gradient(0deg, transparent 24%, rgba(251,191,36,0.06) 25%, rgba(251,191,36,0.06) 26%, transparent 27%, transparent 74%, rgba(251,191,36,0.06) 75%, rgba(251,191,36,0.06) 76%, transparent 77%), linear-gradient(90deg, transparent 24%, rgba(251,191,36,0.06) 25%, rgba(251,191,36,0.06) 26%, transparent 27%, transparent 74%, rgba(251,191,36,0.06) 75%, rgba(251,191,36,0.06) 76%, transparent 77%)",
             backgroundSize: "50px 50px",
           }}
         />

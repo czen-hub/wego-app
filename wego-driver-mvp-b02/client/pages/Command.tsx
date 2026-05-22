@@ -67,7 +67,7 @@ function CourierCard({ ride, onAccept, onDecline }: { ride: Ride; onAccept: () =
       </div>
       <div className="grid grid-cols-2 gap-3 pt-2">
         <button type="button" onClick={onDecline} className="py-3 px-4 rounded-lg border border-border text-muted-foreground hover:border-destructive transition-all flex items-center justify-center gap-2"><X size={18} /><span className="font-semibold">Decline</span></button>
-        <button type="button" onClick={onAccept} className="py-3 px-4 rounded-lg bg-gradient-to-r from-primary to-blue-600 text-white font-semibold flex items-center justify-center gap-2"><CheckCircle size={18} /><span>Accept</span></button>
+        <button type="button" onClick={onAccept} className="py-3 px-4 rounded-lg bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2"><CheckCircle size={18} /><span>Accept</span></button>
       </div>
     </div>
   );
@@ -105,7 +105,7 @@ function FoodCard({ ride, onAccept, onDecline }: { ride: Ride; onAccept: () => v
       </div>
       <div className="grid grid-cols-2 gap-3 pt-2">
         <button type="button" onClick={onDecline} className="py-3 px-4 rounded-lg border border-border text-muted-foreground hover:border-destructive transition-all flex items-center justify-center gap-2"><X size={18} /><span className="font-semibold">Decline</span></button>
-        <button type="button" onClick={onAccept} className="py-3 px-4 rounded-lg bg-gradient-to-r from-primary to-blue-600 text-white font-semibold flex items-center justify-center gap-2"><CheckCircle size={18} /><span>Accept</span></button>
+        <button type="button" onClick={onAccept} className="py-3 px-4 rounded-lg bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2"><CheckCircle size={18} /><span>Accept</span></button>
       </div>
     </div>
   );

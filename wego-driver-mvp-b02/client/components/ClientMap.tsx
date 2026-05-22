@@ -243,7 +243,7 @@ export default function ClientMap({
         fromMarkerRef.current = L.marker(from, {
           icon: L.divIcon({
             className: "",
-            html: '<div style="width:14px;height:14px;border-radius:50%;background:#0047ff;border:3px solid white;box-shadow:0 2px 8px rgba(0,71,255,0.6)"></div>',
+            html: '<div style="width:14px;height:14px;border-radius:50%;background:#F59E0B;border:3px solid white;box-shadow:0 2px 8px rgba(245,158,11,0.6)"></div>',
             iconSize: [14, 14],
             iconAnchor: [7, 7],
           }),
@@ -267,7 +267,7 @@ export default function ClientMap({
 
         const placeholderPoints: [number, number][] = via ? [from, via, to] : [from, to];
         routeLineRef.current = L.polyline(placeholderPoints, {
-          color: "#0047ff",
+          color: "#F59E0B",
           weight: 3,
           opacity: 0.35,
           dashArray: "8,6",
@@ -311,7 +311,7 @@ export default function ClientMap({
             const LL = leafletRef.current;
             const latLngs: [number, number][] = coords.map(([lng, lat]) => [lat, lng]);
             routeLineRef.current = LL.polyline(latLngs, {
-              color: "#0047ff",
+              color: "#F59E0B",
               weight: 4,
               opacity: 0.9,
             }).addTo(mapRef.current);
@@ -369,7 +369,7 @@ export default function ClientMap({
       driverPosMarkerRef.current = L.marker(driverPos, {
         icon: L.divIcon({
           className: "",
-          html: '<div style="width:14px;height:14px;border-radius:50%;background:#0047ff;border:3px solid white;box-shadow:0 2px 8px rgba(0,71,255,0.6)"></div>',
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:#F59E0B;border:3px solid white;box-shadow:0 2px 8px rgba(245,158,11,0.6)"></div>',
           iconSize: [14, 14],
           iconAnchor: [7, 7],
         }),

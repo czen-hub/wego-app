@@ -215,7 +215,7 @@ const handleTouchStart = (e: React.TouchEvent) => {
         )}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
           <div className="relative -mt-9">
-            <MapPin size={38} className="text-primary drop-shadow-[0_8px_18px_rgba(0,71,255,0.45)]" />
+            <MapPin size={38} className="text-primary drop-shadow-[0_8px_18px_rgba(245,158,11,0.45)]" />
             <div className="absolute left-1/2 top-[31px] h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-primary/30 blur-[1px]" />
           </div>
         </div>

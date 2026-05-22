@@ -1,5 +1,5 @@
 /** @import must precede all other statements */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,83 +7,79 @@
 
 @layer base {
   /**
-   * Tailwind CSS theme - WeGo Cooperative Dark Institutional Theme
-   * tailwind.config.ts expects the following color variables to be expressed as HSL values.
-   * A different format will require also updating the theme in tailwind.config.ts.
-  */
+   * Obsidian & Amber — WeGo Driver
+   * 3 colors: near-black (#0A0A0A), amber (#F59E0B), near-white (#F7F4EF)
+   */
   :root {
-    /* WeGo Dark Theme (default) */
-    --background: 213 37% 6%;
-    --foreground: 0 0% 100%;
+    --background: 0 0% 4%;
+    --foreground: 48 12% 95%;
 
-    --card: 213 37% 10%;
-    --card-foreground: 0 0% 100%;
+    --card: 0 0% 9%;
+    --card-foreground: 48 12% 95%;
 
-    --popover: 213 37% 10%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 48 12% 95%;
 
-    --primary: 224 100% 50%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 43 96% 56%;
+    --primary-foreground: 0 0% 4%;
 
-    --secondary: 214 90% 65%;
-    --secondary-foreground: 213 37% 6%;
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 48 12% 95%;
 
-    --accent: 224 100% 50%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 43 96% 56%;
+    --accent-foreground: 0 0% 4%;
 
-    --cyan: 214 90% 65%;
+    --cyan: 43 96% 56%;
 
-    --muted: 213 20% 35%;
-    --muted-foreground: 213 20% 70%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 52%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 213 20% 20%;
-    --input: 213 37% 10%;
-    --ring: 224 100% 50%;
+    --border: 0 0% 14%;
+    --input: 0 0% 10%;
+    --ring: 43 96% 56%;
 
-    --radius: 0.5rem;
+    --radius: 1rem;
   }
 
-  /* WeGo Slate Theme — readable in bright light */
   [data-theme="light"] {
-    --background: 213 22% 76%;     /* slate blue-gray, not near-white */
-    --foreground: 213 55% 7%;      /* deep navy — strong contrast */
+    --background: 48 30% 97%;
+    --foreground: 0 0% 8%;
 
-    --card: 213 18% 84%;           /* lighter cards on slate bg */
-    --card-foreground: 213 55% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8%;
 
-    --popover: 213 18% 84%;
-    --popover-foreground: 213 55% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
 
-    --primary: 224 88% 40%;        /* darker royal blue, WCAG AA */
+    --primary: 43 96% 42%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 224 88% 40%;      /* same as primary — no teal */
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 48 20% 93%;
+    --secondary-foreground: 0 0% 8%;
 
-    --accent: 224 88% 40%;
+    --accent: 43 96% 42%;
     --accent-foreground: 0 0% 100%;
 
-    --cyan: 224 88% 40%;
+    --cyan: 43 96% 42%;
 
-    --muted: 213 18% 70%;          /* visible muted areas */
-    --muted-foreground: 213 30% 26%; /* dark enough to read on any card */
+    --muted: 48 15% 91%;
+    --muted-foreground: 0 0% 35%;
 
-    --destructive: 0 78% 40%;
+    --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 213 18% 64%;         /* clearly visible borders */
-    --input: 213 15% 80%;
-    --ring: 224 88% 40%;
+    --border: 48 12% 86%;
+    --input: 0 0% 96%;
+    --ring: 43 96% 42%;
   }
 }
 
-/* ── Light-mode overrides for the map background gradient ───────────────────── */
-[data-theme="light"] .from-blue-950 { --tw-gradient-from: hsl(213 30% 62%) !important; }
-[data-theme="light"] .via-slate-900 { --tw-gradient-via:  hsl(213 25% 66%) !important; }
-[data-theme="light"] .to-slate-950  { --tw-gradient-to:   hsl(213 28% 60%) !important; }
+[data-theme="light"] .from-blue-950 { --tw-gradient-from: hsl(48 20% 88%) !important; }
+[data-theme="light"] .via-slate-900 { --tw-gradient-via:  hsl(48 15% 90%) !important; }
+[data-theme="light"] .to-slate-950  { --tw-gradient-to:   hsl(48 12% 86%) !important; }
 
 @layer base {
   * {
@@ -102,14 +98,14 @@
 
   body {
     @apply text-foreground;
-    background-color: #000;
-    font-family: "Inter", sans-serif;
+    background-color: #0A0A0A;
+    font-family: "Space Grotesk", sans-serif;
   }
 
   #root {
     width: 100%;
     min-height: 100dvh;
-    background-color: #000;
+    background-color: #0A0A0A;
     position: relative;
   }
 
@@ -124,24 +120,16 @@
     white-space: pre;
   }
 
-  h1 {
-    @apply text-3xl font-bold;
-  }
-
-  h2 {
-    @apply text-2xl font-bold;
-  }
-
-  h3 {
-    @apply text-xl font-semibold;
-  }
+  h1 { @apply text-3xl font-bold; }
+  h2 { @apply text-2xl font-bold; }
+  h3 { @apply text-xl font-semibold; }
 }
 
 @layer components {
   .map-grid {
     background-image:
-      linear-gradient(0deg, transparent 24%, rgba(0,71,255,0.07) 25%, rgba(0,71,255,0.07) 26%, transparent 27%, transparent 74%, rgba(0,71,255,0.07) 75%, rgba(0,71,255,0.07) 76%, transparent 77%),
-      linear-gradient(90deg, transparent 24%, rgba(0,71,255,0.07) 25%, rgba(0,71,255,0.07) 26%, transparent 27%, transparent 74%, rgba(0,71,255,0.07) 75%, rgba(0,71,255,0.07) 76%, transparent 77%);
+      linear-gradient(0deg, transparent 24%, rgba(251,191,36,0.05) 25%, rgba(251,191,36,0.05) 26%, transparent 27%, transparent 74%, rgba(251,191,36,0.05) 75%, rgba(251,191,36,0.05) 76%, transparent 77%),
+      linear-gradient(90deg, transparent 24%, rgba(251,191,36,0.05) 25%, rgba(251,191,36,0.05) 26%, transparent 27%, transparent 74%, rgba(251,191,36,0.05) 75%, rgba(251,191,36,0.05) 76%, transparent 77%);
     background-size: 50px 50px;
   }
 
@@ -150,15 +138,15 @@
   }
 
   .btn-primary {
-    @apply px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold transition-all duration-200 hover:opacity-90 active:scale-95;
+    @apply px-6 py-3 bg-primary text-primary-foreground rounded-xl font-semibold transition-all duration-200 hover:opacity-90 active:scale-95;
   }
 
   .btn-secondary {
-    @apply px-6 py-3 bg-secondary text-secondary-foreground rounded-lg font-semibold transition-all duration-200 hover:opacity-90 active:scale-95;
+    @apply px-6 py-3 bg-secondary text-secondary-foreground rounded-xl font-semibold transition-all duration-200 hover:opacity-90 active:scale-95;
   }
 
   .glass-card {
-    @apply bg-card/80 backdrop-blur-md border border-border rounded-xl;
+    @apply bg-card border border-border rounded-2xl;
   }
 
   .leaflet-fill {
@@ -190,12 +178,12 @@
     background-image: linear-gradient(
       45deg,
       transparent 30%,
-      rgba(255, 255, 255, 0.08) 32%,
-      rgba(255, 255, 255, 0.08) 34%,
+      rgba(251, 191, 36, 0.06) 32%,
+      rgba(251, 191, 36, 0.06) 34%,
       transparent 36%,
       transparent 64%,
-      rgba(255, 255, 255, 0.08) 66%,
-      rgba(255, 255, 255, 0.08) 68%,
+      rgba(251, 191, 36, 0.06) 66%,
+      rgba(251, 191, 36, 0.06) 68%,
       transparent 70%
     );
     background-size: 80px 80px;

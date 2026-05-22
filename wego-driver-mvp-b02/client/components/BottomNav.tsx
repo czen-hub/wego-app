@@ -23,27 +23,35 @@ const BottomNav = () => {
   ];
 
   return (
-    <nav className="bg-card border-t border-border px-2 pt-3 bottom-nav-safe">
-      <div className="max-w-2xl mx-auto flex justify-around items-center">
-        {navItems.map(({ path, icon: Icon, label, badge }) => (
-          <Link
-            key={path}
-            to={path}
-            className={`relative flex flex-col items-center gap-1 p-2 rounded-lg transition-all duration-200 ${
-              isActive(path)
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <div className="relative">
-              <Icon size={22} />
-              {badge && !isActive(path) && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-card" />
+    <nav className="bg-card border-t border-border bottom-nav-safe">
+      <div className="flex justify-around items-stretch pt-1">
+        {navItems.map(({ path, icon: Icon, label, badge }) => {
+          const active = isActive(path);
+          return (
+            <Link
+              key={path}
+              to={path}
+              className="relative flex-1 flex flex-col items-center gap-1 py-2 select-none"
+            >
+              {active && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary" />
               )}
-            </div>
-            <span className="text-[10px] font-medium">{label}</span>
-          </Link>
-        ))}
+              <div className="relative">
+                <Icon
+                  size={22}
+                  strokeWidth={active ? 2.5 : 1.75}
+                  className={`transition-colors duration-200 ${active ? "text-primary" : "text-muted-foreground"}`}
+                />
+                {badge && !active && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary border-2 border-card" />
+                )}
+              </div>
+              <span className={`text-[10px] font-semibold transition-colors duration-200 ${active ? "text-primary" : "text-muted-foreground"}`}>
+                {label}
+              </span>
+            </Link>
+          );
+        })}
       </div>
     </nav>
   );

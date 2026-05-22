@@ -55,10 +55,10 @@ export default function Login() {
 
       {/* ── BRAND HERO ── */}
       <div className="relative overflow-hidden px-6 pt-16 pb-10 flex flex-col items-center text-center">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/20 via-primary/8 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/15 via-primary/5 to-transparent pointer-events-none" />
         <div className="relative z-10">
           <div
-            className="w-20 h-20 rounded-[22px] bg-primary flex items-center justify-center mx-auto mb-4 shadow-[0_8px_32px_rgba(0,71,255,0.55)]"
+            className="w-20 h-20 rounded-[22px] bg-primary flex items-center justify-center mx-auto mb-4 shadow-[0_8px_32px_rgba(245,158,11,0.40)]"
           >
             <Zap size={38} strokeWidth={2.5} className="text-white" />
           </div>

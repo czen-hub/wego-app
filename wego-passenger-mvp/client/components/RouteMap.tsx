@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 
 const pickupIcon = L.divIcon({
   className: "",
-  html: '<div style="width:14px;height:14px;border-radius:50%;background:#0047ff;border:3px solid white;box-shadow:0 2px 8px rgba(0,71,255,0.6)"></div>',
+  html: '<div style="width:14px;height:14px;border-radius:50%;background:#F59E0B;border:3px solid white;box-shadow:0 2px 8px rgba(245,158,11,0.6)"></div>',
   iconSize: [14, 14],
   iconAnchor: [7, 7],
 });
@@ -84,7 +84,7 @@ export default function RouteMap({
           <>
             <Polyline
               positions={[from, to]}
-              pathOptions={{ color: "#0047ff", weight: 3, opacity: 0.75, dashArray: "8,6" }}
+              pathOptions={{ color: "#F59E0B", weight: 3, opacity: 0.75, dashArray: "8,6" }}
             />
             <FitRoute from={from} to={to} />
           </>
