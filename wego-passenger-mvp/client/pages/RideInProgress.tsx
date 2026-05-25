@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield, ArrowUp, ArrowDown } from "lucide-react";
+import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield, ArrowUp, ArrowDown, Navigation, Compass } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 
 import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStopWithDetails, updateStopDetails, swapStopAndDropoff, type Ride, type ChatMessage } from "@/lib/db";
@@ -8,12 +8,16 @@ import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-async function geocodeAddress(address: string): Promise<[number, number] | null> {
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
+
+async function geocodeAddress(address: string, proximity?: [number, number]): Promise<[number, number] | null> {
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=us`;
-    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const prox = proximity ? `&proximity=${proximity[1]},${proximity[0]}` : "";
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?types=address,place,poi&language=en&limit=1${prox}&access_token=${MAPBOX_TOKEN}`;
+    const res = await fetch(url);
     const data = await res.json();
-    if (data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    const feat = data.features?.[0];
+    if (feat) return [feat.center[1] as number, feat.center[0] as number];
   } catch {}
   return null;
 }
@@ -103,6 +107,16 @@ export default function RideInProgress() {
   const [matchTimeout, setMatchTimeout] = useState(false);
   const [driverCoords, setDriverCoords] = useState<[number, number] | null>(null);
   const [passengerCoords, setPassengerCoords] = useState<[number, number] | null>(null);
+  const [mapResetToken, setMapResetToken] = useState(0);
+  const [headingUp, setHeadingUp] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const [autoCloseIn, setAutoCloseIn] = useState(8);
+  const autoCloseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastMapMoveRef = useRef<number>(0);
+  const [contactWindowSecs, setContactWindowSecs] = useState(300);
+  const contactWindowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [stopFareDeltaPreview, setStopFareDeltaPreview] = useState<number | null>(null);
+  const [stopFareCalculating, setStopFareCalculating] = useState(false);
   const [lastKnownRide, setLastKnownRide] = useState<Ride | null>(null);
   const [driverProfile, setDriverProfile] = useState<{ name: string; car: string; plate: string } | null>(null);
   const [completedRideData, setCompletedRideData] = useState<{
@@ -114,6 +128,7 @@ export default function RideInProgress() {
   } | null>(null);
   const effectiveRideIdRef = useRef<string | null>(null);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
+  const chatRideId = liveRide?.id ?? activeRideId;
   const pendingStopKey = liveRide?.pendingStop
     ? `${liveRide.pendingStop.lat.toFixed(5)},${liveRide.pendingStop.lng.toFixed(5)}`
     : null;
@@ -158,10 +173,10 @@ export default function RideInProgress() {
     return unsub;
   }, [user]);
 
-  // Listen to live chat
+  // Listen to live chat — uses chatRideId so listener stays alive after ride completes (liveRide→null)
   useEffect(() => {
-    if (!liveRide?.id) return;
-    const unsub = listenToRideMessages(liveRide.id, (msgs) => {
+    if (!chatRideId) return;
+    const unsub = listenToRideMessages(chatRideId, (msgs) => {
       const prev = prevMsgCountRef.current;
       prevMsgCountRef.current = msgs.length;
       setChatMessages(msgs);
@@ -172,7 +187,7 @@ export default function RideInProgress() {
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
     return unsub;
-  }, [liveRide?.id]);
+  }, [chatRideId]);
 
   // Direct ride doc listener — depends on activeRideId (state), NOT liveRide?.id (ref).
   // This means it stays subscribed even after liveRide goes null when the ride completes,
@@ -261,6 +276,39 @@ export default function RideInProgress() {
     return () => clearTimeout(timer);
   }, [phase]);
 
+  // Auto-close countdown on completion screen — must live before any early returns (Rules of Hooks)
+  function resetAutoClose() {
+    if (autoCloseTimerRef.current) clearInterval(autoCloseTimerRef.current);
+    setAutoCloseIn(8);
+    autoCloseTimerRef.current = setInterval(() => {
+      setAutoCloseIn((n) => {
+        if (n <= 1) {
+          clearInterval(autoCloseTimerRef.current!);
+          autoCloseTimerRef.current = null;
+          navigate("/");
+          return 8;
+        }
+        return n - 1;
+      });
+    }, 1000);
+  }
+  useEffect(() => {
+    if (phase !== "complete") return;
+    resetAutoClose();
+    setContactWindowSecs(300);
+    const contactId = setInterval(() => {
+      setContactWindowSecs((s) => {
+        if (s <= 1) { clearInterval(contactId); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    contactWindowTimerRef.current = contactId;
+    return () => {
+      if (autoCloseTimerRef.current) clearInterval(autoCloseTimerRef.current);
+      clearInterval(contactId);
+    };
+  }, [phase]);
+
   // Commit wait meter charge when transitioning from arrived → in_progress
   const prevPhaseRef = useRef<RidePhase>(phase);
   useEffect(() => {
@@ -300,9 +348,10 @@ export default function RideInProgress() {
   };
 
   const confirmCancel = async () => {
+    const { fee } = getCancellationFee();
     if (liveRide?.id) {
       try {
-        await cancelRide(liveRide.id);
+        await cancelRide(liveRide.id, fee);
       } catch {
         showError("Couldn't cancel — check your connection and try again");
         setCancelOpen(false);
@@ -315,15 +364,34 @@ export default function RideInProgress() {
 
   const sendMessage = async () => {
     const text = chatInput.trim();
-    if (!text || !user || !liveRide?.id) return;
+    if (!text || !user || !chatRideId) return;
     setChatInput("");
-    await sendRideMessage(liveRide.id, user.uid, "passenger", text);
+    await sendRideMessage(chatRideId, user.uid, "passenger", text);
   };
 
   const handleCall = () => {
     setCalling(true);
     setTimeout(() => setCalling(false), 3000);
   };
+
+  // Auto-recenter: fire once 4s after first GPS fix, then every 8s of map idle
+  const hasInitialCenteredRef = useRef(false);
+  useEffect(() => {
+    if (!driverCoords || hasInitialCenteredRef.current) return;
+    hasInitialCenteredRef.current = true;
+    const id = setTimeout(() => setMapResetToken((v) => v + 1), 4000);
+    return () => clearTimeout(id);
+  }, [driverCoords]);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const t = lastMapMoveRef.current;
+      if (t > 0 && Date.now() - t >= 8000) {
+        lastMapMoveRef.current = 0;
+        setMapResetToken((v) => v + 1);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Timer during in_progress phase
   useEffect(() => {
@@ -387,13 +455,19 @@ export default function RideInProgress() {
     if (query.trim().length < 2) { setStopSuggestions([]); setShowSuggestions(false); return; }
     suggestionTimerRef.current = setTimeout(async () => {
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=us`;
-        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
-        const data: Record<string, unknown>[] = await res.json();
-        const suggestions = data.map(item => {
-          const parts = (item.display_name as string).split(",").map((p: string) => p.trim());
-          return { name: parts[0] ?? query, sub: parts.slice(1, 3).filter(Boolean).join(", "), lat: parseFloat(item.lat as string), lng: parseFloat(item.lon as string) };
-        });
+        const prox = passengerCoords ?? (liveRide?.dropoffLocation
+          ? [liveRide.dropoffLocation.latitude, liveRide.dropoffLocation.longitude] as [number, number]
+          : null);
+        const proxParam = prox ? `&proximity=${prox[1]},${prox[0]}` : "";
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?types=address,place,poi&language=en&limit=5${proxParam}&access_token=${MAPBOX_TOKEN}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const suggestions = (data.features ?? []).map((f: any) => ({
+          name: f.text ?? query,
+          sub: (f.place_name ?? "").replace(`${f.text}, `, ""),
+          lat: f.center[1] as number,
+          lng: f.center[0] as number,
+        }));
         setStopSuggestions(suggestions);
         setShowSuggestions(suggestions.length > 0);
       } catch { setShowSuggestions(false); }
@@ -408,6 +482,8 @@ export default function RideInProgress() {
     setSelectedStopCoords(null);
     setStopCalculating(false);
     setStopIsEditing(false);
+    setStopFareDeltaPreview(null);
+    setStopFareCalculating(false);
   };
 
   const handleSwap = async () => {
@@ -438,10 +514,11 @@ export default function RideInProgress() {
 
     setStopCalculating(true);
 
-    // Use autocomplete-selected coords first; fall back to Nominatim geocode if typed manually
+    // Use autocomplete-selected coords first; fall back to Mapbox geocode if typed manually
     let stopLatLng: [number, number] | null = selectedStopCoords;
     if (!stopLatLng) {
-      try { stopLatLng = await geocodeAddress(addr); } catch {}
+      const prox = passengerCoords ?? driverCoords ?? undefined;
+      try { stopLatLng = await geocodeAddress(addr, prox ?? undefined); } catch {}
     }
 
     // Calculate stop fee by comparing the FULL route (pickup → stop → dropoff) vs
@@ -610,8 +687,10 @@ export default function RideInProgress() {
 
   // ── COMPLETE VIEW ──────────────────────────────────────────────────────────
   if (phase === "complete") {
+    const contactExpired = contactWindowSecs === 0;
+    const driverDisplayName = completedRideData?.driverName || displayRide?.driverName || driverProfile?.name || "Your Driver";
     return (
-      <div className="h-screen bg-background flex flex-col items-center px-4 py-10 overflow-y-auto">
+      <div className="relative h-screen bg-background flex flex-col items-center px-4 py-10 overflow-y-auto" onPointerDown={resetAutoClose}>
         <div className="w-full space-y-5">
 
           {/* Success */}
@@ -677,7 +756,12 @@ export default function RideInProgress() {
             const summaryStops = completedRideData?.stops ?? displayRide?.stops ?? [];
             return (
               <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Trip Summary</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Trip Summary</p>
+                  <button type="button" onClick={() => setSummaryExpanded((e) => !e)} className="text-xs text-primary font-semibold">
+                    {summaryExpanded ? "See less" : "See more"}
+                  </button>
+                </div>
                 <div className="space-y-2">
                   <div className="flex gap-3 items-start">
                     <MapPin size={16} className="text-primary flex-shrink-0 mt-0.5" />
@@ -686,7 +770,7 @@ export default function RideInProgress() {
                       <p className="text-sm text-foreground">{summaryPickup || "Your Location"}</p>
                     </div>
                   </div>
-                  {summaryStops.map((stop, i) => (
+                  {summaryExpanded && summaryStops.map((stop, i) => (
                     <div key={i} className="flex gap-3 items-start">
                       <MapPin size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
                       <div>
@@ -702,13 +786,15 @@ export default function RideInProgress() {
                       <p className="text-sm text-foreground">{summaryDropoff || "Destination"}</p>
                     </div>
                   </div>
-                  <div className="flex gap-3 items-start">
-                    <Clock size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Duration</p>
-                      <p className="text-sm text-foreground">{formatTime(elapsed)}</p>
+                  {summaryExpanded && (
+                    <div className="flex gap-3 items-start">
+                      <Clock size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Duration</p>
+                        <p className="text-sm text-foreground">{formatTime(elapsed)}</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             );
@@ -776,6 +862,40 @@ export default function RideInProgress() {
             )}
           </div>
 
+          {/* Forgot something? — 5-min post-trip contact window */}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground">Forgot something?</p>
+              <span className={`text-xs font-mono font-bold ${contactExpired ? "text-muted-foreground" : "text-primary"}`}>
+                {contactExpired ? "Window closed" : `${Math.floor(contactWindowSecs / 60)}:${String(contactWindowSecs % 60).padStart(2, "0")}`}
+              </span>
+            </div>
+            {!contactExpired ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (autoCloseTimerRef.current) { clearInterval(autoCloseTimerRef.current); autoCloseTimerRef.current = null; }
+                  setChatOpen(true);
+                }}
+                className="w-full py-3 rounded-xl bg-primary/10 border border-primary/25 text-primary font-semibold text-sm active:scale-95 transition-transform flex items-center justify-center gap-2"
+              >
+                <MessageSquare size={16} />
+                Message Driver
+              </button>
+            ) : (
+              <a
+                href={`mailto:support@wego.app?subject=${encodeURIComponent(`Lost Item - Ride #${activeRideId ?? ""}`)}`}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform"
+              >
+                <MessageSquare size={16} className="text-muted-foreground" />
+                Contact Support
+              </a>
+            )}
+            <p className="text-xs text-muted-foreground text-center">
+              {contactExpired ? "The 5-min contact window has closed. Contact support for lost items." : "Contact your driver within this window about any left items."}
+            </p>
+          </div>
+
           <button
             type="button"
             onClick={() => navigate("/")}
@@ -783,12 +903,90 @@ export default function RideInProgress() {
           >
             Back to Home
           </button>
+          <p className="text-center text-xs text-muted-foreground">Closing automatically in {autoCloseIn}s · tap anywhere to reset</p>
         </div>
+
+        {/* Post-trip chat modal */}
+        {chatOpen && (
+          <div className="absolute inset-0 z-50 flex flex-col justify-end items-center">
+            <div className="absolute inset-0 bg-black/50" onClick={() => { setChatOpen(false); resetAutoClose(); }} />
+            <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl flex flex-col max-h-[70vh] overflow-hidden">
+              <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    {driverDisplayName.charAt(0)}
+                  </div>
+                  <p className="text-sm font-semibold text-foreground truncate">{driverDisplayName}</p>
+                </div>
+                <button type="button" aria-label="Close chat" onClick={() => { setChatOpen(false); resetAutoClose(); }}
+                  className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center flex-shrink-0 ml-2">
+                  <X size={15} className="text-muted-foreground" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 min-h-[120px]">
+                {chatMessages.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center pt-4">No messages yet. Let your driver know what you left.</p>
+                )}
+                {chatMessages.map((msg) => (
+                  <div key={msg.id} className={`flex w-full ${msg.senderType === "passenger" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[75%] min-w-0 px-3 py-2 rounded-2xl text-sm break-words overflow-hidden ${msg.senderType === "passenger" ? "bg-primary text-white" : "bg-muted/40 text-foreground border border-border"}`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="flex items-center gap-2 px-4 py-3 border-t border-border">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) sendMessage(); }}
+                  placeholder="Message driver…"
+                  className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary"
+                />
+                <button type="button" aria-label="Send message" onClick={sendMessage} disabled={!chatInput.trim()}
+                  className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform">
+                  <Send size={16} className="text-white" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   // ── ACTIVE TRIP VIEW ───────────────────────────────────────────────────────
+  const calculateFareDeltaPreview = async (stopLatLng: [number, number]) => {
+    const BASE_STOP_FEE = 3.50;
+    const RATE_PER_MILE = 1.00;
+    const RATE_PER_MIN = 0.20;
+    const fromCoords = liveRide?.pickupLocation
+      ? [liveRide.pickupLocation.latitude, liveRide.pickupLocation.longitude] as [number, number]
+      : driverCoords;
+    const toCoords = liveRide?.dropoffLocation
+      ? [liveRide.dropoffLocation.latitude, liveRide.dropoffLocation.longitude] as [number, number]
+      : null;
+    if (!fromCoords || !toCoords) { setStopFareDeltaPreview(BASE_STOP_FEE); return; }
+    setStopFareDeltaPreview(null);
+    setStopFareCalculating(true);
+    try {
+      const [directRes, viaRes] = await Promise.all([
+        fetch(`https://router.project-osrm.org/route/v1/driving/${fromCoords[1]},${fromCoords[0]};${toCoords[1]},${toCoords[0]}?overview=false`).then(r => r.json()),
+        fetch(`https://router.project-osrm.org/route/v1/driving/${fromCoords[1]},${fromCoords[0]};${stopLatLng[1]},${stopLatLng[0]};${toCoords[1]},${toCoords[0]}?overview=false`).then(r => r.json()),
+      ]);
+      const extraMeters = Math.max(0, (viaRes.routes?.[0]?.distance ?? 0) - (directRes.routes?.[0]?.distance ?? 0));
+      const extraSecs = Math.max(0, (viaRes.routes?.[0]?.duration ?? 0) - (directRes.routes?.[0]?.duration ?? 0));
+      const delta = parseFloat(Math.max(BASE_STOP_FEE, BASE_STOP_FEE + extraMeters / 1609.34 * RATE_PER_MILE + extraSecs / 60 * RATE_PER_MIN).toFixed(2));
+      setStopFareDeltaPreview(delta);
+    } catch {
+      setStopFareDeltaPreview(BASE_STOP_FEE);
+    } finally {
+      setStopFareCalculating(false);
+    }
+  };
+
   const pickupCoords: [number, number] | undefined = liveRide?.pickupLocation
     ? [liveRide.pickupLocation.latitude, liveRide.pickupLocation.longitude]
     : rideMock.fromCoords;
@@ -817,7 +1015,7 @@ export default function RideInProgress() {
       {/* Map — fills remaining space above the cards */}
       <div className="relative z-0 flex-1 min-h-[240px]">
         {(() => {
-          const mapFrom = phase === "in_progress" ? (driverCoords ?? pickupCoords) : (driverCoords ?? undefined);
+          const mapFrom = driverCoords ?? pickupCoords;
           const mapTo = phase === "in_progress" ? dropoffCoords : pickupCoords;
           const mapCenter = mapFrom ?? pickupCoords ?? [37.7749, -122.4194];
           return (
@@ -827,7 +1025,12 @@ export default function RideInProgress() {
               via={phase === "in_progress" ? (stopCoords ?? undefined) : undefined}
               driverPos={driverCoords ?? undefined}
               center={mapCenter}
+              zoom={15}
               className="absolute inset-0"
+              interactive
+              forceResetToken={mapResetToken}
+              followBearing={headingUp}
+              onCenterChange={() => { lastMapMoveRef.current = Date.now(); }}
             />
           );
         })()}
@@ -840,6 +1043,35 @@ export default function RideInProgress() {
         >
           <ChevronLeft size={20} className="text-foreground" />
         </button>
+
+        {/* Recenter + Compass buttons */}
+        <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              lastMapMoveRef.current = 0;
+              setMapResetToken((v) => v + 1);
+              const oe = (window as any).DeviceOrientationEvent;
+              if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
+            }}
+            aria-label="Recenter map"
+            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <Navigation size={18} className="text-primary" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setHeadingUp((h) => !h);
+              const oe = (window as any).DeviceOrientationEvent;
+              if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
+            }}
+            aria-label="Toggle heading-up mode"
+            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"}`}
+          >
+            <Compass size={18} className={headingUp ? "text-background" : "text-primary"} />
+          </button>
+        </div>
 
         {/* Phase badge */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
@@ -1210,6 +1442,7 @@ export default function RideInProgress() {
                         setSelectedStopCoords([s.lat, s.lng]);
                         setShowSuggestions(false);
                         setStopSuggestions([]);
+                        calculateFareDeltaPreview([s.lat, s.lng]);
                       }}
                       className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 hover:bg-muted/30 border-b border-border/50 last:border-b-0 active:bg-muted/50 transition-colors"
                     >
@@ -1224,7 +1457,13 @@ export default function RideInProgress() {
             <div className="bg-background border border-border rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Stop fee</span>
-                <span className="text-sm font-semibold text-foreground">+$3.50 min</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {stopFareCalculating
+                    ? "Calculating…"
+                    : stopFareDeltaPreview !== null
+                    ? `+$${stopFareDeltaPreview.toFixed(2)}`
+                    : "+$3.50 min"}
+                </span>
               </div>
               {stopCount > 0 && (
                 <p className="text-xs text-muted-foreground">You've already made {stopCount} stop{stopCount > 1 ? "s" : ""} (+${stopFeeTotal.toFixed(2)} total).</p>
@@ -1323,10 +1562,10 @@ export default function RideInProgress() {
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 min-h-[120px]">
               {chatMessages.length === 0 && (
                 <div className="space-y-2">
-                  {["I'm on my way!", "Running 2 min late", "I'm outside"].map((t) => (
+                  {["On my way out", "Please wait 2 min", "Can you pull forward?", "I see you"].map((t) => (
                     <button key={t} type="button" onClick={async () => {
-                        if (!user || !liveRide?.id) return;
-                        await sendRideMessage(liveRide.id, user.uid, "passenger", t);
+                        if (!user || !chatRideId) return;
+                        await sendRideMessage(chatRideId, user.uid, "passenger", t);
                       }}
                       className="block w-full text-left px-3 py-2 rounded-xl bg-muted/30 border border-border text-sm text-foreground hover:border-primary/40 transition-colors">
                       {t}
@@ -1351,7 +1590,7 @@ export default function RideInProgress() {
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) sendMessage(); }}
                 placeholder="Message driver…"
                 className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary"
               />

@@ -62,6 +62,8 @@ export interface Ride {
   disputedAt: Date | null;
   chargeBlocked: boolean;
   driverAlertSeenAt: Date | null;
+  earlyEnd?: boolean;
+  proratedFare?: number;
 }
 
 export interface ChatMessage {
@@ -158,6 +160,8 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     disputedAt: toDate(data.disputedAt),
     chargeBlocked: (data.chargeBlocked as boolean) ?? false,
     driverAlertSeenAt: toDate(data.driverAlertSeenAt),
+    earlyEnd: (data.earlyEnd as boolean | undefined) ?? undefined,
+    proratedFare: (data.proratedFare as number | undefined) ?? undefined,
   };
 }
 
@@ -285,6 +289,15 @@ export async function startRide(rideId: string) {
 
 export async function completeRide(rideId: string) {
   await updateRideStatus(rideId, "completed");
+}
+
+export async function endRideEarly(rideId: string, proratedFare: number) {
+  await updateDoc(doc(db, "rides", rideId), {
+    status: "completed",
+    earlyEnd: true,
+    proratedFare,
+    completedAt: serverTimestamp(),
+  });
 }
 
 export async function submitRating(rideId: string, rating: number, raterType: "passenger" | "driver"): Promise<void> {
@@ -612,6 +625,22 @@ export function listenToOpportunities(
     });
     callback(opps);
   }, () => callback([]));
+}
+
+export type RoadIssueType = "closure" | "accident" | "traffic" | "hazard" | "pothole" | "other";
+
+export async function reportRoadIssue(opts: {
+  driverId: string;
+  type: RoadIssueType;
+  lat: number;
+  lng: number;
+}): Promise<void> {
+  await addDoc(collection(db, "roadReports"), {
+    driverId: opts.driverId,
+    type: opts.type,
+    location: new GeoPoint(opts.lat, opts.lng),
+    createdAt: serverTimestamp(),
+  });
 }
 
 export async function getDriverGoal(driverId: string): Promise<DriverGoal> {

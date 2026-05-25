@@ -1,23 +1,67 @@
-import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
-import type {
-  LeafletMouseEvent,
-  Map as LeafletMap,
-  Marker as LeafletMarker,
-  Polyline as LeafletPolyline,
-} from "leaflet";
 
-const ROUTE_REFETCH_METERS = 150;
+declare const mapboxgl: any;
+
+const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
+const REFETCH_M = 150;
+const ADVANCE_M = 40;
 
 function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
+  const r = (d: number) => (d * Math.PI) / 180;
+  const dLat = r(lat2 - lat1);
+  const dLng = r(lng2 - lng1);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calcBearing(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const dLng = r(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(r(lat2));
+  const x =
+    Math.cos(r(lat1)) * Math.sin(r(lat2)) -
+    Math.sin(r(lat1)) * Math.cos(r(lat2)) * Math.cos(dLng);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+function circlePolygon(lat: number, lng: number, radiusM: number, steps = 64): [number, number][] {
+  const coords: [number, number][] = [];
+  const dLat = (radiusM / 6_371_000) * (180 / Math.PI);
+  const dLng = dLat / Math.cos((lat * Math.PI) / 180);
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * 2 * Math.PI;
+    coords.push([lng + dLng * Math.cos(a), lat + dLat * Math.sin(a)]);
+  }
+  return coords;
+}
+
+function dotEl(color: string, border = "white", glow = "rgba(0,0,0,0.4)") {
+  const el = document.createElement("div");
+  el.style.cssText = `width:14px;height:14px;border-radius:50%;background:${color};border:3px solid ${border};box-shadow:0 2px 8px ${glow};flex-shrink:0;`;
+  return el;
+}
+
+function navArrowEl(bearing: number): { wrapper: HTMLDivElement; inner: HTMLDivElement } {
+  // Mapbox sets translate(...) on the wrapper — we must not touch wrapper's transform.
+  // We apply rotate(...) only to the inner element to avoid fighting Mapbox's positioning.
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = `width:22px;height:22px;`;
+  const inner = document.createElement("div");
+  inner.style.cssText = `width:22px;height:22px;display:flex;align-items:center;justify-content:center;transform:rotate(${bearing}deg);transition:transform 0.4s ease;`;
+  inner.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 36 36" style="filter:drop-shadow(0 3px 8px rgba(245,158,11,0.55))"><polygon points="18,3 26,30 18,23 10,30" fill="#F59E0B" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>`;
+  wrapper.appendChild(inner);
+  return { wrapper, inner };
+}
+
+export interface RouteStep {
+  instruction: string;
+  type: string;
+  modifier?: string;
+  distance: number;
+  duration: number;
 }
 
 interface ClientMapProps {
@@ -25,14 +69,17 @@ interface ClientMapProps {
   to?: [number, number];
   via?: [number, number];
   driverPos?: [number, number];
+  accuracy?: number;
   center?: [number, number];
   zoom?: number;
   className?: string;
   interactive?: boolean;
   zoomAdjust?: number;
   forceResetToken?: number;
+  followBearing?: boolean;
   onCenterChange?: (coords: [number, number]) => void;
   onClickLocation?: (coords: [number, number]) => void;
+  onStepChange?: (step: RouteStep | null) => void;
 }
 
 export default function ClientMap({
@@ -41,151 +88,344 @@ export default function ClientMap({
   to,
   via,
   driverPos,
+  accuracy,
   center = [37.7749, -122.4194],
   zoom = 13,
   interactive = false,
   zoomAdjust = 0,
   forceResetToken,
+  followBearing = false,
   onCenterChange,
   onClickLocation,
+  onStepChange,
 }: ClientMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<LeafletMap | null>(null);
-  const leafletRef = useRef<any>(null);
-  const fromMarkerRef = useRef<LeafletMarker | null>(null);
-  const toMarkerRef = useRef<LeafletMarker | null>(null);
-  const viaMarkerRef = useRef<LeafletMarker | null>(null);
-  const driverPosMarkerRef = useRef<LeafletMarker | null>(null);
-  const routeLineRef = useRef<LeafletPolyline | null>(null);
-  const routeFetchAbortRef = useRef<AbortController | null>(null);
-  const lastFetchFromRef = useRef<[number, number] | null>(null);
-  const lastFetchViaRef = useRef<string>("");
-  const lastFetchToRef = useRef<string>("");
-  const hasSolidRouteRef = useRef(false);
-  const fetchInProgressRef = useRef(false);
+  const mapRef = useRef<any>(null);
+  const mbRef = useRef<any>(null);
+  const fromMkRef = useRef<any>(null);
+  const toMkRef = useRef<any>(null);
+  const viaMkRef = useRef<any>(null);
+  const driverMkRef = useRef<any>(null);
+  const driverElRef = useRef<HTMLDivElement | null>(null);
+  const prevPosRef = useRef<[number, number] | null>(null);
+  const routeAbortRef = useRef<AbortController | null>(null);
+  const lastFromRef = useRef<[number, number] | null>(null);
+  const lastViaRef = useRef<string>("");
+  const lastToRef = useRef<string>("");
+  const hasSolidRef = useRef(false);
+  const fetchingRef = useRef(false);
+  const hasInitCenteredRef = useRef(false);
   const baseZoomRef = useRef<number>(zoom);
+  const stepsRef = useRef<any[]>([]);
+  const stepIdxRef = useRef(-1);
+  const storedHeading = parseFloat(localStorage.getItem("wego_heading") ?? "0") || 0;
+  const bearingRef = useRef<number>(storedHeading);
+  const compassHeadingRef = useRef<number | null>(null);
+  const lastGpsMovedRef = useRef<number>(0);
+  const followBearingRef = useRef(followBearing);
   const [mapReady, setMapReady] = useState(false);
   const centerRef = useRef<[number, number]>(center);
   const zoomRef = useRef<number>(zoom);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!containerRef.current || mapRef.current) return undefined;
-
-    import("leaflet")
-      .then(({ default: L }) => {
-        if (!containerRef.current || mapRef.current || cancelled) return;
-
-        leafletRef.current = L;
-
-        const hasRoute = !!from && !!to;
-        const mapCenter: [number, number] = hasRoute
-          ? [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]
-          : center;
-
-        const map = L.map(containerRef.current, {
-          center: mapCenter,
-          zoom,
-          zoomControl: false,
-          attributionControl: false,
-          scrollWheelZoom: interactive,
-          dragging: interactive,
-          touchZoom: interactive,
-          doubleClickZoom: interactive,
-        });
-
-        mapRef.current = map;
-        setMapReady(true);
-
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
-          subdomains: "abcd",
-          maxZoom: 19,
-        }).addTo(map);
-
-        setTimeout(() => map.invalidateSize({ animate: false }), 100);
-      })
-      .catch((e) => console.error("[Map]", e));
-
-    return () => {
-      cancelled = true;
-      routeFetchAbortRef.current?.abort();
-      routeLineRef.current?.remove();
-      fromMarkerRef.current?.remove();
-      toMarkerRef.current?.remove();
-      viaMarkerRef.current?.remove();
-      driverPosMarkerRef.current?.remove();
-      mapRef.current?.remove();
-      routeLineRef.current = null;
-      fromMarkerRef.current = null;
-      toMarkerRef.current = null;
-      viaMarkerRef.current = null;
-      driverPosMarkerRef.current = null;
-      mapRef.current = null;
-      leafletRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map) return;
-
-    if (interactive) {
-      map.dragging.enable();
-      map.touchZoom.enable();
-      map.doubleClickZoom.enable();
-      map.scrollWheelZoom.enable();
-    } else {
-      map.dragging.disable();
-      map.touchZoom.disable();
-      map.doubleClickZoom.disable();
-      map.scrollWheelZoom.disable();
-    }
-  }, [interactive, mapReady]);
-
   const onCenterChangeRef = useRef(onCenterChange);
-  useEffect(() => {
-    onCenterChangeRef.current = onCenterChange;
-  }, [onCenterChange]);
+  const onClickRef = useRef(onClickLocation);
+  const onStepRef = useRef(onStepChange);
+  const accuracyRef = useRef<number | null>(accuracy ?? null);
+  const posBufferRef = useRef<[number, number][]>([]);
+  const snapAbortRef = useRef<AbortController | null>(null);
+  const lastSnapRef = useRef<{ pos: [number, number]; time: number } | null>(null);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map) return;
+  const isInteractingRef = useRef(false);
+  const isTrackingRef = useRef(true);
+  const lastCameraUpdateRef = useRef<number>(0);
+  const lastProgrammaticRef = useRef(0);
 
-    const emitCenter = () => {
-      if (!onCenterChangeRef.current) return;
-      const next = map.getCenter();
-      const dist = Math.abs(next.lat - centerRef.current[0]) + Math.abs(next.lng - centerRef.current[1]);
-      const zoomDiff = Math.abs(map.getZoom() - zoomRef.current);
-      if (dist > 0.0001 || zoomDiff > 0) {
-        onCenterChangeRef.current([next.lat, next.lng]);
-      }
-    };
+  useEffect(() => { accuracyRef.current = accuracy ?? null; }, [accuracy]);
 
-    map.on("moveend", emitCenter);
-    return () => { map.off("moveend", emitCenter); };
-  }, [mapReady]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map || !onClickLocation) return;
-
-    const handleClick = (event: LeafletMouseEvent) => {
-      onClickLocation([event.latlng.lat, event.latlng.lng]);
-    };
-
-    map.on("click", handleClick);
-    return () => { map.off("click", handleClick); };
-  }, [mapReady, onClickLocation]);
-
+  useEffect(() => { onCenterChangeRef.current = onCenterChange; }, [onCenterChange]);
+  useEffect(() => { onClickRef.current = onClickLocation; }, [onClickLocation]);
+  useEffect(() => { onStepRef.current = onStepChange; }, [onStepChange]);
   useEffect(() => { centerRef.current = center; }, [center]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
+  // Smoothly ease/animate the camera to the new driver position and bearing
+  const animateCamera = (targetCenter: [number, number] | null, targetBearing: number | null) => {
+    const map = mapRef.current;
+    if (!map) return; // use ref — avoids stale mapReady closure when called from compass useEffect
+    if (isInteractingRef.current || !isTrackingRef.current) return;
+
+    const options: any = {
+      pitch: 0,
+      duration: 1000,
+      essential: true,
+    };
+
+    if (targetCenter) {
+      options.center = [targetCenter[1], targetCenter[0]];
+    }
+
+    if (targetBearing !== null) {
+      options.bearing = targetBearing;
+    }
+
+    const now = Date.now();
+    if (now - lastCameraUpdateRef.current > 100) {
+      lastCameraUpdateRef.current = now;
+      lastProgrammaticRef.current = now + 200; // guard window: zoomstart fires synchronously inside easeTo
+      map.easeTo(options);
+    }
+  };
+
+  // Track map interaction to pause programmatic transitions when user is touching/panning
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+
+    const startInteract = () => {
+      if (Date.now() < lastProgrammaticRef.current) return; // programmatic camera move in progress
+      isInteractingRef.current = true;
+      isTrackingRef.current = false;
+    };
+    const endInteract = () => {
+      isInteractingRef.current = false;
+    };
+
+    map.on("dragstart", startInteract);
+    map.on("zoomstart", startInteract);
+    map.on("rotatestart", startInteract);
+    map.on("pitchstart", startInteract);
+
+    map.on("dragend", endInteract);
+    map.on("zoomend", endInteract);
+    map.on("rotateend", endInteract);
+    map.on("pitchend", endInteract);
+
+    return () => {
+      map.off("dragstart", startInteract);
+      map.off("zoomstart", startInteract);
+      map.off("rotatestart", startInteract);
+      map.off("pitchstart", startInteract);
+
+      map.off("dragend", endInteract);
+      map.off("zoomend", endInteract);
+      map.off("rotateend", endInteract);
+      map.off("pitchend", endInteract);
+    };
+  }, [mapReady]);
+
+  // Handle follow bearing changes
+  useEffect(() => {
+    followBearingRef.current = followBearing;
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+
+    isTrackingRef.current = true;
+
+    if (followBearing) {
+      if (driverElRef.current) driverElRef.current.style.transform = "rotate(0deg)";
+      animateCamera(driverPos ?? centerRef.current, bearingRef.current);
+    } else {
+      if (driverElRef.current) driverElRef.current.style.transform = `rotate(${bearingRef.current}deg)`;
+      map.easeTo({ bearing: 0, pitch: 0, duration: 600 });
+    }
+  }, [followBearing, mapReady]);
+
+  // — device compass — always listen to both events; absolute takes priority over relative
+  useEffect(() => {
+    let lastAbsTime = 0;
+
+    function processHeading(heading: number) {
+      compassHeadingRef.current = heading;
+      localStorage.setItem("wego_heading", String(Math.round(heading)));
+
+      if (followBearingRef.current) {
+        bearingRef.current = heading;
+        if (driverElRef.current) driverElRef.current.style.transform = "rotate(0deg)";
+        isTrackingRef.current = true; // compass owns the camera — override any prior user-pan lock
+        animateCamera(null, heading);
+      } else {
+        if (Date.now() - lastGpsMovedRef.current > 3000) {
+          bearingRef.current = heading;
+          if (driverElRef.current) driverElRef.current.style.transform = `rotate(${heading}deg)`;
+        }
+      }
+    }
+
+    function handleAbsolute(e: DeviceOrientationEvent) {
+      if (typeof e.alpha !== "number") return;
+      lastAbsTime = Date.now();
+      processHeading((360 - e.alpha) % 360);
+    }
+
+    function handleRelative(e: DeviceOrientationEvent & { webkitCompassHeading?: number }) {
+      if (Date.now() - lastAbsTime < 200) return;
+      let heading: number | null = null;
+      if (typeof e.webkitCompassHeading === "number") heading = e.webkitCompassHeading;
+      else if (typeof e.alpha === "number") heading = (360 - e.alpha) % 360;
+      if (heading === null) return;
+      processHeading(heading);
+    }
+
+    window.addEventListener("deviceorientationabsolute", handleAbsolute as any);
+    window.addEventListener("deviceorientation", handleRelative as any);
+    return () => {
+      window.removeEventListener("deviceorientationabsolute", handleAbsolute as any);
+      window.removeEventListener("deviceorientation", handleRelative as any);
+    };
+  }, []);
+
+  // — init map —
+  useEffect(() => {
+    let dead = false;
+    if (!containerRef.current || mapRef.current) return;
+
+    if (!TOKEN) {
+      console.error("[Map] VITE_MAPBOX_TOKEN is not set");
+      return;
+    }
+
+    const mb = mapboxgl;
+    mbRef.current = mb;
+    mb.accessToken = TOKEN;
+
+    const initCenter: [number, number] = from && to
+      ? [(from[1] + to[1]) / 2, (from[0] + to[0]) / 2]
+      : [center[1], center[0]];
+
+    const map = new mb.Map({
+      container: containerRef.current,
+      style: "mapbox://styles/mapbox/navigation-night-v1",
+      center: initCenter,
+      zoom,
+      pitch: 0,
+      maxPitch: 60,
+      attributionControl: false,
+      accessToken: TOKEN,
+    });
+    mapRef.current = map;
+
+    setTimeout(() => map.resize(), 100);
+
+    // Request compass permission on first tap anywhere on the map (iOS 13+)
+    containerRef.current?.addEventListener("pointerdown", () => {
+      const oe = (window as any).DeviceOrientationEvent;
+      if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
+    }, { once: true });
+
+    map.once("load", () => {
+      if (dead) return;
+
+      map.addSource("route", {
+        type: "geojson",
+        data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} },
+      });
+      map.addLayer({
+        id: "route",
+        type: "line",
+        source: "route",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#F59E0B", "line-width": 4, "line-opacity": 0.9 },
+      });
+
+      map.addSource("route-dash", {
+        type: "geojson",
+        data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} },
+      });
+      map.addLayer({
+        id: "route-dash",
+        type: "line",
+        source: "route-dash",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": "#F59E0B",
+          "line-width": 3,
+          "line-opacity": 0.35,
+          "line-dasharray": [2, 2],
+        },
+      });
+
+      map.addSource("accuracy-circle", {
+        type: "geojson",
+        data: { type: "Feature", geometry: { type: "Polygon", coordinates: [[]] }, properties: {} },
+      });
+      map.addLayer({
+        id: "accuracy-circle-fill",
+        type: "fill",
+        source: "accuracy-circle",
+        paint: { "fill-color": "#3B82F6", "fill-opacity": 0.12 },
+      });
+      map.addLayer({
+        id: "accuracy-circle-border",
+        type: "line",
+        source: "accuracy-circle",
+        paint: { "line-color": "#3B82F6", "line-width": 1.5, "line-opacity": 0.5 },
+      });
+
+      setMapReady(true);
+    });
+
+    map.on("moveend", () => {
+      const c = map.getCenter();
+      onCenterChangeRef.current?.([c.lat, c.lng]);
+    });
+
+    map.on("click", (e: any) => {
+      onClickRef.current?.([e.lngLat.lat, e.lngLat.lng]);
+    });
+
+    return () => {
+      dead = true;
+      routeAbortRef.current?.abort();
+      snapAbortRef.current?.abort();
+      fromMkRef.current?.remove();
+      toMkRef.current?.remove();
+      viaMkRef.current?.remove();
+      driverMkRef.current?.remove();
+      mapRef.current?.remove();
+      mapRef.current = null;
+      mbRef.current = null;
+      fromMkRef.current = null;
+      toMkRef.current = null;
+      viaMkRef.current = null;
+      driverMkRef.current = null;
+    };
+  }, []);
+
+  // — interactive toggle —
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    const fn = interactive ? "enable" : "disable";
+    map.dragPan[fn]();
+    map.scrollZoom[fn]();
+    map.touchZoomRotate[fn]();
+    map.doubleClickZoom[fn]();
+    map.keyboard[fn]();
+  }, [interactive, mapReady]);
+
+  // — forceReset —
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map || !forceResetToken) return;
-    map.flyTo(centerRef.current, zoomRef.current, { animate: true, duration: 3.0 });
+    
+    isTrackingRef.current = true;
+    lastProgrammaticRef.current = Date.now() + 2500;
+
+    map.flyTo({
+      center: [centerRef.current[1], centerRef.current[0]],
+      zoom: zoomRef.current,
+      bearing: followBearingRef.current ? bearingRef.current : 0,
+      pitch: 0,
+      duration: 2000,
+      essential: true,
+    });
   }, [forceResetToken, mapReady]);
+
+  // — zoomAdjust —
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    map.setZoom(baseZoomRef.current + zoomAdjust);
+  }, [zoomAdjust, mapReady]);
 
   const fromKey = from ? `${from[0].toFixed(5)},${from[1].toFixed(5)}` : "";
   const toKey = to ? `${to[0].toFixed(5)},${to[1].toFixed(5)}` : "";
@@ -193,200 +433,273 @@ export default function ClientMap({
   const centerKey = `${center[0].toFixed(5)},${center[1].toFixed(5)}`;
   const driverPosKey = driverPos ? `${driverPos[0].toFixed(5)},${driverPos[1].toFixed(5)}` : "";
 
-  // Route + static markers — only re-fetches OSRM when driver moves >150 m or via changes
+  // — route + static markers —
   useEffect(() => {
     const map = mapRef.current;
-    const L = leafletRef.current;
-    if (!mapReady || !map || !L) return;
+    const mb = mbRef.current;
+    if (!mapReady || !map || !mb) return;
 
-    const movedFarEnough = !!(from && lastFetchFromRef.current &&
-      haversineM(from[0], from[1], lastFetchFromRef.current[0], lastFetchFromRef.current[1]) > ROUTE_REFETCH_METERS);
-    const viaChanged = viaKey !== lastFetchViaRef.current;
-    const toChanged = toKey !== lastFetchToRef.current;
+    const movedFar = !!(from && lastFromRef.current &&
+      haversineM(from[0], from[1], lastFromRef.current[0], lastFromRef.current[1]) > REFETCH_M);
     const needsRefetch =
-      toChanged ||
-      viaChanged ||
-      movedFarEnough ||
-      (!hasSolidRouteRef.current && !fetchInProgressRef.current);
+      toKey !== lastToRef.current ||
+      viaKey !== lastViaRef.current ||
+      movedFar ||
+      (!hasSolidRef.current && !fetchingRef.current);
 
-    toMarkerRef.current?.remove();
-    toMarkerRef.current = null;
+    const setSource = (id: string, coords: number[][]) =>
+      (mapRef.current?.getSource(id) as any)?.setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+        properties: {},
+      });
+
+    // destination marker
+    toMkRef.current?.remove();
+    toMkRef.current = null;
     if (to) {
-      toMarkerRef.current = L.marker(to, {
-        icon: L.divIcon({
-          className: "",
-          html: '<div style="width:14px;height:14px;border-radius:50%;background:white;border:3px solid #1e293b;box-shadow:0 2px 8px rgba(0,0,0,0.4)"></div>',
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-        }),
-      }).addTo(map);
+      toMkRef.current = new mb.Marker({ element: dotEl("white", "#1e293b") })
+        .setLngLat([to[1], to[0]])
+        .addTo(map);
     }
 
-    // Via (stop) marker
-    viaMarkerRef.current?.remove();
-    viaMarkerRef.current = null;
+    // via marker
+    viaMkRef.current?.remove();
+    viaMkRef.current = null;
     if (via) {
-      viaMarkerRef.current = L.marker(via, {
-        icon: L.divIcon({
-          className: "",
-          html: '<div style="width:14px;height:14px;border-radius:50%;background:#f59e0b;border:3px solid white;box-shadow:0 2px 8px rgba(245,158,11,0.6)"></div>',
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-        }),
-      }).addTo(map);
+      viaMkRef.current = new mb.Marker({ element: dotEl("#f59e0b", "white", "rgba(245,158,11,0.6)") })
+        .setLngLat([via[1], via[0]])
+        .addTo(map);
     }
 
+    // from marker (hidden when driverPos is separate)
     if (!driverPos) {
-      fromMarkerRef.current?.remove();
-      fromMarkerRef.current = null;
+      fromMkRef.current?.remove();
+      fromMkRef.current = null;
       if (from) {
-        fromMarkerRef.current = L.marker(from, {
-          icon: L.divIcon({
-            className: "",
-            html: '<div style="width:14px;height:14px;border-radius:50%;background:#F59E0B;border:3px solid white;box-shadow:0 2px 8px rgba(245,158,11,0.6)"></div>',
-            iconSize: [14, 14],
-            iconAnchor: [7, 7],
-          }),
-        }).addTo(map);
+        fromMkRef.current = new mb.Marker({ element: dotEl("#F59E0B", "white", "rgba(245,158,11,0.6)") })
+          .setLngLat([from[1], from[0]])
+          .addTo(map);
       }
     }
 
     if (from && to) {
       if (needsRefetch) {
-        lastFetchFromRef.current = [from[0], from[1]];
-        lastFetchViaRef.current = viaKey;
-        lastFetchToRef.current = toKey;
-        hasSolidRouteRef.current = false;
-        fetchInProgressRef.current = true;
+        lastFromRef.current = from;
+        lastViaRef.current = viaKey;
+        lastToRef.current = toKey;
+        hasSolidRef.current = false;
+        fetchingRef.current = true;
+        stepsRef.current = [];
+        stepIdxRef.current = -1;
+        onStepRef.current?.(null);
 
-        routeLineRef.current?.remove();
-        routeLineRef.current = null;
+        // dashed placeholder
+        const pts = via
+          ? [[from[1], from[0]], [via[1], via[0]], [to[1], to[0]]]
+          : [[from[1], from[0]], [to[1], to[0]]];
+        setSource("route", []);
+        setSource("route-dash", pts);
 
-        const same =
-          Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
-
-        const placeholderPoints: [number, number][] = via ? [from, via, to] : [from, to];
-        routeLineRef.current = L.polyline(placeholderPoints, {
-          color: "#F59E0B",
-          weight: 3,
-          opacity: 0.35,
-          dashArray: "8,6",
-        }).addTo(map);
-
+        const same = Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
+        lastProgrammaticRef.current = Date.now() + 500;
         if (same) {
-          const cur = map.getCenter();
-          const needsMove =
-            Math.abs(cur.lat - from[0]) > 0.00001 ||
-            Math.abs(cur.lng - from[1]) > 0.00001 ||
-            map.getZoom() !== zoom;
-          if (needsMove) map.setView(from, zoom, { animate: false });
+          map.flyTo({ center: [from[1], from[0]], zoom, animate: false });
         } else {
-          const boundsPoints: [number, number][] = via ? [from, via, to] : [from, to];
-          map.fitBounds(boundsPoints, { padding: [48, 48], maxZoom: 14, animate: false });
+          const bounds = new mb.LngLatBounds();
+          pts.forEach(([lng, lat]) => bounds.extend([lng, lat]));
+          map.fitBounds(bounds, { padding: 48, maxZoom: 14, animate: false });
         }
 
-        routeFetchAbortRef.current?.abort();
-        const controller = new AbortController();
-        routeFetchAbortRef.current = controller;
+        routeAbortRef.current?.abort();
+        const ctrl = new AbortController();
+        routeAbortRef.current = ctrl;
+        const tid = setTimeout(() => { if (!hasSolidRef.current) ctrl.abort(); }, 8000);
 
-        // Abort automatically after 8 s — public OSRM can be slow/down
-        const timeoutId = setTimeout(() => {
-          if (!hasSolidRouteRef.current) controller.abort();
-        }, 8000);
-
-        const waypoints = via
+        const wpts = via
           ? `${from[1]},${from[0]};${via[1]},${via[0]};${to[1]},${to[0]}`
           : `${from[1]},${from[0]};${to[1]},${to[0]}`;
 
         fetch(
-          `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`,
-          { signal: controller.signal }
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${wpts}?steps=true&geometries=geojson&overview=full&access_token=${TOKEN}`,
+          { signal: ctrl.signal },
         )
           .then((r) => r.json())
           .then((data) => {
-            fetchInProgressRef.current = false;
-            const coords = data.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
-            if (!coords || !mapRef.current || !leafletRef.current) return;
-            routeLineRef.current?.remove();
-            const LL = leafletRef.current;
-            const latLngs: [number, number][] = coords.map(([lng, lat]) => [lat, lng]);
-            routeLineRef.current = LL.polyline(latLngs, {
-              color: "#F59E0B",
-              weight: 4,
-              opacity: 0.9,
-            }).addTo(mapRef.current);
-            mapRef.current.fitBounds(routeLineRef.current.getBounds(), {
-              padding: [48, 48],
-              maxZoom: 14,
-              animate: false,
-            });
-            hasSolidRouteRef.current = true;
+            fetchingRef.current = false;
+            const route = data.routes?.[0];
+            if (!route || !mapRef.current) return;
+
+            setSource("route", route.geometry.coordinates);
+            setSource("route-dash", []);
+
+            const bounds = new mb.LngLatBounds();
+            (route.geometry.coordinates as [number, number][]).forEach((c) => bounds.extend(c));
+            lastProgrammaticRef.current = Date.now() + 500;
+            mapRef.current.fitBounds(bounds, { padding: 48, maxZoom: 14, animate: false });
+
+            const steps: any[] = [];
+            for (const leg of route.legs ?? []) steps.push(...(leg.steps ?? []));
+            stepsRef.current = steps;
+            hasSolidRef.current = true;
+
+            if (steps.length > 0) {
+              stepIdxRef.current = 0;
+              const s = steps[0];
+              onStepRef.current?.({
+                instruction: s.maneuver.instruction,
+                type: s.maneuver.type,
+                modifier: s.maneuver.modifier,
+                distance: s.distance,
+                duration: s.duration,
+              });
+            }
           })
-          .catch((err) => {
-            fetchInProgressRef.current = false;
-            if (err.name !== "AbortError") console.warn("[Map] OSRM unavailable, showing estimated route");
+          .catch((e) => {
+            fetchingRef.current = false;
+            if (e.name !== "AbortError") console.warn("[Map] Directions unavailable, showing estimated route");
           })
-          .finally(() => clearTimeout(timeoutId));
+          .finally(() => clearTimeout(tid));
       }
     } else {
-      routeLineRef.current?.remove();
-      routeLineRef.current = null;
-      hasSolidRouteRef.current = false;
-      fetchInProgressRef.current = false;
-      lastFetchFromRef.current = null;
-      lastFetchViaRef.current = "";
-      lastFetchToRef.current = "";
-
-      const cur = map.getCenter();
-      const needsMove =
-        Math.abs(cur.lat - center[0]) > 0.0001 ||
-        Math.abs(cur.lng - center[1]) > 0.0001 ||
-        map.getZoom() !== zoom;
-      if (needsMove) map.setView(center, zoom, { animate: true });
+      setSource("route", []);
+      setSource("route-dash", []);
+      hasSolidRef.current = false;
+      fetchingRef.current = false;
+      lastFromRef.current = null;
+      lastViaRef.current = "";
+      lastToRef.current = "";
+      stepsRef.current = [];
+      stepIdxRef.current = -1;
+      if (!hasInitCenteredRef.current) {
+        hasInitCenteredRef.current = true;
+        lastProgrammaticRef.current = Date.now() + 500;
+        map.flyTo({ center: [center[1], center[0]], zoom, animate: false });
+      }
     }
 
     baseZoomRef.current = map.getZoom();
-    setTimeout(() => map.invalidateSize({ animate: false }), 0);
-
-    return () => { routeFetchAbortRef.current?.abort(); };
+    return () => { routeAbortRef.current?.abort(); };
   }, [centerKey, fromKey, mapReady, toKey, viaKey, zoom]);
 
-  // Driver dot — smooth movement via setLatLng, no route redraw
+  // — driver arrow marker + bearing + step advance —
   useEffect(() => {
     const map = mapRef.current;
-    const L = leafletRef.current;
-    if (!mapReady || !map || !L) return;
+    const mb = mbRef.current;
+    if (!mapReady || !map || !mb) return;
 
     if (!driverPos) {
-      driverPosMarkerRef.current?.remove();
-      driverPosMarkerRef.current = null;
+      driverMkRef.current?.remove();
+      driverMkRef.current = null;
+      driverElRef.current = null;
+      prevPosRef.current = null;
       return;
     }
 
-    if (driverPosMarkerRef.current) {
-      driverPosMarkerRef.current.setLatLng(driverPos);
+    // GPS supplies travel-direction bearing when moving; compass owns bearing in heading-up mode
+    let currentBearing = bearingRef.current;
+    if (prevPosRef.current) {
+      const dist = haversineM(prevPosRef.current[0], prevPosRef.current[1], driverPos[0], driverPos[1]);
+      if (dist > 2) {
+        lastGpsMovedRef.current = Date.now();
+        if (!followBearingRef.current) {
+          // Only let GPS overwrite the bearing when heading-up is OFF
+          currentBearing = calcBearing(prevPosRef.current[0], prevPosRef.current[1], driverPos[0], driverPos[1]);
+          bearingRef.current = currentBearing;
+        }
+      }
+    }
+    prevPosRef.current = driverPos;
+
+    if (driverMkRef.current) {
+      driverMkRef.current.setLngLat([driverPos[1], driverPos[0]]);
     } else {
-      driverPosMarkerRef.current = L.marker(driverPos, {
-        icon: L.divIcon({
-          className: "",
-          html: '<div style="width:14px;height:14px;border-radius:50%;background:#F59E0B;border:3px solid white;box-shadow:0 2px 8px rgba(245,158,11,0.6)"></div>',
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-        }),
-      }).addTo(map);
+      const { wrapper, inner } = navArrowEl(currentBearing);
+      driverElRef.current = inner;
+      driverMkRef.current = new mb.Marker({ element: wrapper, anchor: "center" })
+        .setLngLat([driverPos[1], driverPos[0]])
+        .addTo(map);
+    }
+
+    // Keep camera following driver position; bearing is controlled by compass when heading-up is on
+    if (followBearingRef.current) {
+      if (driverElRef.current) driverElRef.current.style.transform = "rotate(0deg)";
+      animateCamera(driverPos, null); // bearing comes from compass via processHeading
+    } else {
+      if (driverElRef.current) driverElRef.current.style.transform = `rotate(${currentBearing}deg)`;
+      animateCamera(driverPos, 0);
+    }
+
+    const r = accuracyRef.current;
+    const src = mapRef.current?.getSource("accuracy-circle") as any;
+    if (src) {
+      src.setData({
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: r && r > 0 ? [circlePolygon(driverPos[0], driverPos[1], r)] : [[]],
+        },
+        properties: {},
+      });
+    }
+
+    const steps = stepsRef.current;
+    const idx = stepIdxRef.current;
+    const next = idx + 1;
+    if (steps.length > 0 && idx >= 0 && next < steps.length) {
+      const [lng, lat] = steps[next].maneuver.location;
+      if (haversineM(driverPos[0], driverPos[1], lat, lng) < ADVANCE_M) {
+        stepIdxRef.current = next;
+        const s = steps[next];
+        onStepRef.current?.({
+          instruction: s.maneuver.instruction,
+          type: s.maneuver.type,
+          modifier: s.maneuver.modifier,
+          distance: s.distance,
+          duration: s.duration,
+        });
+      }
+    }
+
+    // Road snapping — snap marker to nearest road via Map Matching API
+    posBufferRef.current = [...posBufferRef.current.slice(-4), driverPos];
+    const snapNow = Date.now();
+    const lastSnap = lastSnapRef.current;
+    const movedSinceSnap = lastSnap
+      ? haversineM(driverPos[0], driverPos[1], lastSnap.pos[0], lastSnap.pos[1])
+      : 999;
+
+    if (posBufferRef.current.length >= 2 && movedSinceSnap > 10 && (!lastSnap || snapNow - lastSnap.time > 3000)) {
+      lastSnapRef.current = { pos: driverPos, time: snapNow };
+      snapAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      snapAbortRef.current = ctrl;
+      const snapPos = driverPos;
+      const pts = posBufferRef.current.map(([lat, lng]) => `${lng},${lat}`).join(";");
+
+      fetch(
+        `https://api.mapbox.com/matching/v5/mapbox/driving/${pts}?access_token=${TOKEN}`,
+        { signal: ctrl.signal },
+      )
+        .then((r) => r.json())
+        .then((data) => {
+          if (!driverMkRef.current || data.code !== "Ok") return;
+          // Discard stale snap if driver has moved far since request was sent
+          if (prevPosRef.current && haversineM(snapPos[0], snapPos[1], prevPosRef.current[0], prevPosRef.current[1]) > 30) return;
+          const tracepoints = data.tracepoints as Array<{ location: [number, number] } | null> | undefined;
+          if (!tracepoints?.length) return;
+          for (let i = tracepoints.length - 1; i >= 0; i--) {
+            if (tracepoints[i]) { driverMkRef.current.setLngLat(tracepoints[i]!.location); break; }
+          }
+        })
+        .catch(() => {});
     }
   }, [driverPosKey, mapReady]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map) return;
-    map.setZoom(baseZoomRef.current + zoomAdjust, { animate: true });
-  }, [zoomAdjust, mapReady]);
 
   return (
     <div
       ref={containerRef}
-      className={`${className} leaflet-fill ${interactive ? "cursor-grab active:cursor-grabbing" : ""}`}
+      className={`${className} ${interactive ? "cursor-grab active:cursor-grabbing" : ""}`}
     />
   );
 }

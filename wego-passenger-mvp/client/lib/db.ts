@@ -18,6 +18,21 @@ import { db } from "./firebase";
 
 export type RideStatus = "pending" | "accepted" | "arrived" | "inProgress" | "completed" | "cancelled" | "reserved";
 export type RideType = "ride" | "courier" | "food";
+export type RoadIssueType = "closure" | "accident" | "traffic" | "hazard" | "pothole" | "other";
+
+export async function reportRoadIssue(opts: {
+  userId: string;
+  type: RoadIssueType;
+  lat: number;
+  lng: number;
+}): Promise<void> {
+  await addDoc(collection(db, "roadReports"), {
+    userId: opts.userId,
+    type: opts.type,
+    location: new GeoPoint(opts.lat, opts.lng),
+    createdAt: serverTimestamp(),
+  });
+}
 
 export interface Ride {
   id: string;
@@ -61,6 +76,8 @@ export interface Ride {
   disputedAt: Date | null;
   chargeBlocked: boolean;
   driverAlertSeenAt: Date | null;
+  earlyEnd?: boolean;
+  proratedFare?: number;
 }
 
 export interface ChatMessage {
@@ -122,6 +139,8 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     disputedAt: toDate(data.disputedAt),
     chargeBlocked: (data.chargeBlocked as boolean) ?? false,
     driverAlertSeenAt: toDate(data.driverAlertSeenAt),
+    earlyEnd: (data.earlyEnd as boolean | undefined) ?? undefined,
+    proratedFare: (data.proratedFare as number | undefined) ?? undefined,
   };
 }
 
@@ -267,11 +286,12 @@ export async function createReservedRide(opts: {
 
 // ── Cancel a ride ──────────────────────────────────────────────────────────
 
-export async function cancelRide(rideId: string): Promise<void> {
+export async function cancelRide(rideId: string, cancellationFee?: number): Promise<void> {
   try {
     await updateDoc(doc(db, "rides", rideId), {
       status: "cancelled",
       cancelledAt: serverTimestamp(),
+      ...(cancellationFee !== undefined ? { cancellationFee } : {}),
     });
   } catch (err) {
     console.error("cancelRide failed:", err);
