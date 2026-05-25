@@ -48,9 +48,19 @@ export default function Earnings() {
       <div className="max-w-2xl mx-auto space-y-4">
 
         {/* Header */}
-        <div className="space-y-1 mb-2">
-          <h1 className="text-3xl font-bold text-foreground">Transparency Ledger</h1>
-          <p className="text-muted-foreground text-sm">Your earnings with full breakdown</p>
+        <div className="flex items-start justify-between mb-2">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold text-foreground">Transparency Ledger</h1>
+            <p className="text-muted-foreground text-sm">Your earnings with full breakdown</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/history")}
+            className="flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-xl text-xs font-semibold text-foreground active:scale-95 transition-transform whitespace-nowrap"
+          >
+            <History size={13} className="text-primary" />
+            History
+          </button>
         </div>
 
         {/* Loading shimmer */}
