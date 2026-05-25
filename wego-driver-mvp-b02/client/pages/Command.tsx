@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plane, Music, Target, Clock, ChevronUp, ChevronDown,
   Package, UtensilsCrossed, MapPin, CheckCircle, X, Search,
-  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation, CornerUpRight, AlertTriangle, Compass, CalendarDays,
+  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation, CornerUpRight, AlertTriangle, Compass, History,
   type LucideIcon,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
@@ -337,11 +337,11 @@ export default function Command() {
           </button>
           <button
             type="button"
-            onClick={() => navigate("/scheduled-rides")}
-            aria-label="Trip ahead"
+            onClick={() => navigate("/history")}
+            aria-label="Trip history"
             className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <CalendarDays size={18} className="text-primary" />
+            <History size={18} className="text-primary" />
           </button>
         </div>
 
