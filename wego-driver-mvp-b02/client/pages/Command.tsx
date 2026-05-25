@@ -481,10 +481,6 @@ export default function Command() {
 
           {/* Daily Opportunities */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Daily Opportunities</p>
-              <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><Clock size={11} /><span>Updated hourly</span></div>
-            </div>
             <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
               {(liveOpps.length > 0 ? liveOpps : FALLBACK_OPPORTUNITIES).map((opp) => {
                 const Icon = ICON_MAP[opp.iconName] ?? Target;
