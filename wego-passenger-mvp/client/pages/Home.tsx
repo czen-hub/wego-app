@@ -315,18 +315,6 @@ const handleTouchStart = (e: React.TouchEvent) => {
                 <X size={15} />
               </button>
             )}
-            {!drawerOpen && !query && (
-              <div className="flex items-center gap-1 text-muted-foreground pointer-events-none">
-                <span className="text-[11px]">Open</span>
-                <ChevronUp size={14} />
-              </div>
-            )}
-            {drawerOpen && !query && (
-              <div className="flex items-center gap-1 text-muted-foreground pointer-events-none">
-                <span className="text-[11px]">Close</span>
-                <ChevronDown size={14} />
-              </div>
-            )}
           </div>
 
           {/* Service tabs */}

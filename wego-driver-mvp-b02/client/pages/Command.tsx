@@ -459,25 +459,20 @@ export default function Command() {
         >
           <div className="w-10 h-1 bg-muted-foreground/25 rounded-full mx-auto mb-3" />
 
-          <div className="flex items-center bg-background border border-border rounded-full px-1 py-1 gap-0">
+          <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3">
             {/* Left: Preferences icon */}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setPrefsOpen(true); }}
-              className="p-2 rounded-full active:scale-95 transition-transform flex-shrink-0 hover:bg-muted/30"
+              className="flex-shrink-0 active:scale-95 transition-transform"
               aria-label="Open preferences"
             >
-              <SlidersHorizontal size={15} className="text-primary" />
+              <SlidersHorizontal size={18} className="text-primary" />
             </button>
 
-            {/* Divider */}
-            <div className="w-px h-4 bg-border flex-shrink-0" />
+            {/* Middle: label */}
+            <span className="flex-1 text-base font-medium text-muted-foreground select-none">Daily Opportunities</span>
 
-            {/* Right: open/close indicator */}
-            <div className="flex-1 flex items-center justify-end gap-1 px-3 py-1 text-muted-foreground pointer-events-none">
-              <span className="text-[11px]">{drawerOpen ? "Close" : "Open"}</span>
-              {drawerOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-            </div>
           </div>
         </div>
 
