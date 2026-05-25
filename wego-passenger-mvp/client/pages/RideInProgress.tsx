@@ -13,7 +13,7 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 async function geocodeAddress(address: string, proximity?: [number, number]): Promise<[number, number] | null> {
   try {
     const prox = proximity ? `&proximity=${proximity[1]},${proximity[0]}` : "";
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?types=address,place,poi&language=en&limit=1${prox}&access_token=${MAPBOX_TOKEN}`;
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?types=address,place,poi&language=en&country=us&limit=1${prox}&access_token=${MAPBOX_TOKEN}`;
     const res = await fetch(url);
     const data = await res.json();
     const feat = data.features?.[0];
@@ -91,7 +91,8 @@ export default function RideInProgress() {
   const [stopCalculating, setStopCalculating] = useState(false);
   const [stopModalOpen, setStopModalOpen] = useState(false);
   const [stopAddress, setStopAddress] = useState("");
-  const [stopSuggestions, setStopSuggestions] = useState<{ name: string; sub: string; lat: number; lng: number }[]>([]);
+  const [stopSuggestions, setStopSuggestions] = useState<{ name: string; sub: string; lat: number; lng: number; mapboxId?: string }[]>([]);
+  const stopSessionRef = useRef(crypto.randomUUID());
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedStopCoords, setSelectedStopCoords] = useState<[number, number] | null>(null);
   const [stopIsEditing, setStopIsEditing] = useState(false);
@@ -459,14 +460,15 @@ export default function RideInProgress() {
           ? [liveRide.dropoffLocation.latitude, liveRide.dropoffLocation.longitude] as [number, number]
           : null);
         const proxParam = prox ? `&proximity=${prox[1]},${prox[0]}` : "";
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?types=address,place,poi&language=en&limit=5${proxParam}&access_token=${MAPBOX_TOKEN}`;
+        const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(query)}&session_token=${stopSessionRef.current}&language=en&country=us&limit=6${proxParam}&access_token=${MAPBOX_TOKEN}`;
         const res = await fetch(url);
         const data = await res.json();
-        const suggestions = (data.features ?? []).map((f: any) => ({
-          name: f.text ?? query,
-          sub: (f.place_name ?? "").replace(`${f.text}, `, ""),
-          lat: f.center[1] as number,
-          lng: f.center[0] as number,
+        const suggestions = (data.suggestions ?? []).map((s: any) => ({
+          name: s.name ?? query,
+          sub: s.place_formatted ?? "",
+          lat: 0,
+          lng: 0,
+          mapboxId: s.mapbox_id,
         }));
         setStopSuggestions(suggestions);
         setShowSuggestions(suggestions.length > 0);
@@ -1437,12 +1439,22 @@ export default function RideInProgress() {
                       key={i}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
+                      onClick={async () => {
                         setStopAddress(s.name);
-                        setSelectedStopCoords([s.lat, s.lng]);
                         setShowSuggestions(false);
                         setStopSuggestions([]);
-                        calculateFareDeltaPreview([s.lat, s.lng]);
+                        let coords: [number, number] = [s.lat, s.lng];
+                        if (s.mapboxId) {
+                          try {
+                            const r = await fetch(`https://api.mapbox.com/search/searchbox/v1/retrieve/${s.mapboxId}?session_token=${stopSessionRef.current}&access_token=${MAPBOX_TOKEN}`);
+                            const d = await r.json();
+                            const center = d.features?.[0]?.geometry?.coordinates as [number, number] | undefined;
+                            if (center) coords = [center[1], center[0]];
+                          } catch {}
+                          stopSessionRef.current = crypto.randomUUID();
+                        }
+                        setSelectedStopCoords(coords);
+                        calculateFareDeltaPreview(coords);
                       }}
                       className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 hover:bg-muted/30 border-b border-border/50 last:border-b-0 active:bg-muted/50 transition-colors"
                     >
