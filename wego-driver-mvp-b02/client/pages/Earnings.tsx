@@ -107,16 +107,6 @@ export default function Earnings() {
               </div>
             </div>
 
-            {/* History button */}
-            <button
-              type="button"
-              onClick={() => navigate("/history")}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-card border border-border rounded-xl text-xs font-semibold text-foreground active:scale-95 transition-transform"
-            >
-              <History size={13} className="text-primary" />
-              History
-            </button>
-
             {/* Where Your 12% Goes */}
             <div className="space-y-1.5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Where Your 12% Goes</p>

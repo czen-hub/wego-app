@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plane, Music, Target, Clock, ChevronUp, ChevronDown,
   Package, UtensilsCrossed, MapPin, CheckCircle, X, Search,
-  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation, CornerUpRight, AlertTriangle, Compass,
+  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation, CornerUpRight, AlertTriangle, Compass, CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
@@ -325,8 +325,8 @@ export default function Command() {
         )}
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
 
-        {/* Preferences button — left side of map */}
-        <div className="absolute bottom-[160px] left-4 z-10">
+        {/* Left side map buttons */}
+        <div className="absolute bottom-[160px] left-4 z-10 flex flex-col gap-2">
           <button
             type="button"
             onClick={() => setPrefsOpen(true)}
@@ -334,6 +334,14 @@ export default function Command() {
             className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
             <SlidersHorizontal size={18} className="text-primary" />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/scheduled-rides")}
+            aria-label="Trip ahead"
+            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <CalendarDays size={18} className="text-primary" />
           </button>
         </div>
 
