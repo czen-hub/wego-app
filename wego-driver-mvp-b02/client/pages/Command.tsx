@@ -325,6 +325,18 @@ export default function Command() {
         )}
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
 
+        {/* Preferences button — left side of map */}
+        <div className="absolute bottom-[160px] left-4 z-10">
+          <button
+            type="button"
+            onClick={() => setPrefsOpen(true)}
+            aria-label="Open preferences"
+            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <SlidersHorizontal size={18} className="text-primary" />
+          </button>
+        </div>
+
         {/* Recenter + Nav buttons */}
         <div className="absolute bottom-[160px] right-4 z-10 flex flex-col gap-2">
           <button
@@ -460,19 +472,7 @@ export default function Command() {
           <div className="w-10 h-1 bg-muted-foreground/25 rounded-full mx-auto mb-3" />
 
           <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3">
-            {/* Left: Preferences icon */}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setPrefsOpen(true); }}
-              className="flex-shrink-0 active:scale-95 transition-transform"
-              aria-label="Open preferences"
-            >
-              <SlidersHorizontal size={18} className="text-primary" />
-            </button>
-
-            {/* Middle: label */}
             <span className="flex-1 text-base font-medium text-muted-foreground select-none">Daily Opportunities</span>
-
           </div>
         </div>
 
