@@ -110,7 +110,7 @@ export default function RideInProgress() {
   const [mapResetToken, setMapResetToken] = useState(0);
   const [headingUp, setHeadingUp] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
-  const [autoCloseIn, setAutoCloseIn] = useState(8);
+  const [autoCloseIn, setAutoCloseIn] = useState(10);
   const autoCloseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMapMoveRef = useRef<number>(0);
   const [contactWindowSecs, setContactWindowSecs] = useState(300);
@@ -286,7 +286,7 @@ export default function RideInProgress() {
           clearInterval(autoCloseTimerRef.current!);
           autoCloseTimerRef.current = null;
           navigate("/");
-          return 8;
+          return 10;
         }
         return n - 1;
       });

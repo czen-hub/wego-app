@@ -111,7 +111,7 @@ function formatTime(hour: number, minute: number) {
   return `${h}:${m} ${ampm}`;
 }
 
-// Demand multiplier based on pickup hour — mirrors how Corp 1 prices advance reservations
+// Demand multiplier based on pickup hour — mirrors how Corp prices advance reservations
 function demandMultiplier(hour: number): number {
   if (hour >= 0  && hour < 5)  return 0.78; // overnight — very low demand
   if (hour >= 5  && hour < 7)  return 0.88; // early morning
@@ -480,12 +480,12 @@ export default function ReserveRide() {
           {destination.trim() && (
             <div className="grid grid-cols-2 gap-2 pt-1">
               <div className="bg-background/60 border border-border rounded-lg px-3 py-2 text-center">
-                <p className="text-[10px] text-muted-foreground font-semibold">Corp 1 Priority</p>
+                <p className="text-[10px] text-muted-foreground font-semibold">Corp Priority</p>
                 <p className="text-base font-bold text-muted-foreground line-through">${uberPriority.toFixed(2)}</p>
                 <p className="text-[9px] text-muted-foreground/60">Fixed · cancel &lt;1hr</p>
               </div>
               <div className="bg-background/60 border border-border rounded-lg px-3 py-2 text-center">
-                <p className="text-[10px] text-muted-foreground font-semibold">Corp 1 Saver</p>
+                <p className="text-[10px] text-muted-foreground font-semibold">Corp Saver</p>
                 <p className="text-base font-bold text-muted-foreground line-through">${uberSaver.toFixed(2)}</p>
                 <p className="text-[9px] text-muted-foreground/60">Non-refundable · 10-min window</p>
               </div>
@@ -544,18 +544,18 @@ export default function ReserveRide() {
                 </div>
               </div>
 
-              {/* vs Corp 1 */}
+              {/* vs Corp */}
               <div className="bg-muted/20 rounded-lg p-3 space-y-1.5 text-xs">
                 <p className="font-semibold text-foreground text-[11px] uppercase tracking-wide flex items-center gap-1">
                   <Info size={10} /> How WeGo compares
                 </p>
                 <div className="space-y-1 text-muted-foreground">
                   <div className="flex justify-between">
-                    <span>Corp 1 Priority</span>
+                    <span>Corp Priority</span>
                     <span className="text-right">Fixed price · free cancel &lt;1hr · <span className="text-red-400">~38% more expensive</span></span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span>Corp 1 Saver</span>
+                    <span>Corp Saver</span>
                     <span className="text-right"><span className="text-red-400">Non-refundable</span> · 10-min pickup window</span>
                   </div>
                   <div className="flex justify-between gap-2">

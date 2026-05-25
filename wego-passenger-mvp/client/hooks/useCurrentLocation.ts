@@ -4,12 +4,14 @@ const DEFAULT_COORDS: [number, number] = [37.3541, -121.9552]; // Santa Clara
 
 interface UseCurrentLocationResult {
   coords: [number, number] | null;
+  accuracy: number | null;
   error: string | null;
   loading: boolean;
 }
 
 export function useCurrentLocation(): UseCurrentLocationResult {
   const [coords, setCoords] = useState<[number, number] | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,6 +26,7 @@ export function useCurrentLocation(): UseCurrentLocationResult {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         setCoords([position.coords.latitude, position.coords.longitude]);
+        setAccuracy(position.coords.accuracy);
         setError(null);
         setLoading(false);
       },
@@ -49,5 +52,5 @@ export function useCurrentLocation(): UseCurrentLocationResult {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  return { coords, error, loading };
+  return { coords, accuracy, error, loading };
 }

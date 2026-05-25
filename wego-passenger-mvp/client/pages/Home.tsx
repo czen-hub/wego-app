@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, MapPin, ChevronUp, ChevronDown, Clock, Building2, X, Home as HomeIcon, Briefcase, Navigation } from "lucide-react";
+import { Search, MapPin, ChevronUp, ChevronDown, Clock, Building2, X, Home as HomeIcon, Briefcase, Navigation, Compass, Car, Package, Utensils, CalendarDays } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
@@ -30,52 +30,23 @@ function useSavedPlace(key: "home" | "work") {
 }
 
 const SERVICES = [
-  { id: "ride",    label: "Ride",    emoji: "🚗", path: null },
-  { id: "courier", label: "Courier", emoji: "📦", path: "/courier" },
-  { id: "food",    label: "Food",    emoji: "🍔", path: "/food" },
-  { id: "reserve", label: "Reserve", emoji: "📅", path: "/reserve" },
+  { id: "ride",    label: "Ride",    Icon: Car,          path: null },
+  { id: "courier", label: "Courier", Icon: Package,      path: "/courier" },
+  { id: "food",    label: "Food",    Icon: Utensils,     path: "/food" },
+  { id: "reserve", label: "Reserve", Icon: CalendarDays, path: "/reserve" },
 ] as const;
 
-const QUICK_PICKS = [
-  { id: "airport",  label: "SFO Airport",   sublabel: "San Francisco Intl", icon: "✈" },
-  { id: "downtown", label: "Downtown SF",   sublabel: "Market & 5th St",    icon: "🏙" },
-  { id: "oakland",  label: "Oakland",       sublabel: "Jack London Square",  icon: "🌉" },
-];
-
-
-// Location suggestions pool for search hints
-const LOCATION_SUGGESTIONS = [
-  { label: "San Jose Airport (SJC)",       sublabel: "1701 Airport Blvd, San Jose" },
-  { label: "San Jose Downtown",             sublabel: "S 1st St, San Jose" },
-  { label: "San Jose Diridon Station",      sublabel: "65 Cahill St, San Jose" },
-  { label: "SFO Airport",                   sublabel: "San Francisco Intl Terminal" },
-  { label: "SFO Terminal 2",               sublabel: "San Francisco Intl" },
-  { label: "San Francisco Caltrain",        sublabel: "700 4th St, San Francisco" },
-  { label: "Oakland International Airport", sublabel: "1 Airport Dr, Oakland" },
-  { label: "Berkeley BART Station",         sublabel: "2160 Shattuck Ave, Berkeley" },
-  { label: "Stanford University",           sublabel: "450 Serra Mall, Stanford" },
-  { label: "Google Campus",                 sublabel: "1600 Amphitheatre Pkwy, Mountain View" },
-  { label: "Apple Park",                    sublabel: "One Apple Park Way, Cupertino" },
-  { label: "Union Square",                  sublabel: "333 Post St, San Francisco" },
-  { label: "Fisherman's Wharf",             sublabel: "Jefferson St, San Francisco" },
-  { label: "Chase Center",                  sublabel: "1 Warriors Way, San Francisco" },
-  { label: "Oracle Park",                   sublabel: "24 Willie Mays Plaza, San Francisco" },
-  { label: "Caltrain Station",              sublabel: "700 4th St, San Francisco" },
-  { label: "Downtown Oakland",              sublabel: "Broadway & 14th St, Oakland" },
-  { label: "Palo Alto Caltrain",            sublabel: "95 University Ave, Palo Alto" },
-  { label: "Santa Clara Convention Center", sublabel: "5001 Great America Pkwy, Santa Clara" },
-  { label: "Santa Clara Downtown",          sublabel: "El Camino Real, Santa Clara" },
-  { label: "Japantown",                     sublabel: "Post St, San Francisco" },
-];
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 
 export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { coords: currentCoords, loading: locationLoading } = useCurrentLocation();
+  const { coords: currentCoords, accuracy, loading: locationLoading } = useCurrentLocation();
   const [recentRides, setRecentRides] = useState<Ride[]>([]);
   const [ridesLoaded, setRidesLoaded] = useState(false);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [mapResetToken, setMapResetToken] = useState(0);
+  const [headingUp, setHeadingUp] = useState(false);
   const lastMapMoveRef = useRef<number>(0);
 
   useEffect(() => {
@@ -93,7 +64,7 @@ export default function Home() {
     return unsub;
   }, [user]);
 
-  // After 5 seconds of map idle, trigger ClientMap to fly back to GPS location
+  // After 10 seconds of map idle, trigger ClientMap to fly back to GPS location
   useEffect(() => {
     const interval = setInterval(() => {
       const t = lastMapMoveRef.current;
@@ -104,8 +75,7 @@ export default function Home() {
     }, 500);
     return () => clearInterval(interval);
   }, []);
-  const [pickupPin, setPickupPin] = useState<[number, number] | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const touchStartY = useRef(0);
@@ -114,6 +84,7 @@ export default function Home() {
   const [editingPlace, setEditingPlace] = useState<"home" | "work" | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
+  const searchSessionRef = useRef<string>(crypto.randomUUID());
 
   const openEditPlace = (which: "home" | "work") => {
     const current = which === "home" ? home.value : work.value;
@@ -131,56 +102,89 @@ export default function Home() {
     }
     setEditingPlace(null);
     setEditDraft("");
+    setPlaceResults([]);
   };
 
-  const [geocodeResults, setGeocodeResults] = useState<{ label: string; sublabel: string; coords: [number, number] }[]>([]);
+  const [geocodeResults, setGeocodeResults] = useState<{ label: string; sublabel: string; fullAddress: string; mapboxId: string; isBusiness: boolean }[]>([]);
   const [geocoding, setGeocoding] = useState(false);
+  const [placeResults, setPlaceResults] = useState<{ label: string; sublabel: string; fullAddress: string }[]>([]);
 
-  const staticSuggestions = query.trim().length >= 2
-    ? LOCATION_SUGGESTIONS.filter((s) =>
-        s.label.toLowerCase().includes(query.toLowerCase()) ||
-        s.sublabel.toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 4)
-    : [];
+  // ±1.5° bbox around GPS (~150 mile box) keeps results within the user's state
+  const gpsBbox = currentCoords
+    ? `&bbox=${(currentCoords[1] - 1.5).toFixed(4)},${(currentCoords[0] - 1.5).toFixed(4)},${(currentCoords[1] + 1.5).toFixed(4)},${(currentCoords[0] + 1.5).toFixed(4)}`
+    : "";
 
-  // Live Nominatim geocoding bounded to Bay Area
+  // Main search — Mapbox SearchBox suggest (finds businesses, airports, addresses)
   useEffect(() => {
     if (query.trim().length < 2) { setGeocodeResults([]); return; }
     let cancelled = false;
     const timer = setTimeout(async () => {
       setGeocoding(true);
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + " CA")}&format=json&limit=5&countrycodes=us&bounded=1&viewbox=-124.0,39.8,-119.5,36.5`;
-        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+        const prox = currentCoords ? `&proximity=${currentCoords[1]},${currentCoords[0]}` : "";
+        const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(query.trim())}&session_token=${searchSessionRef.current}&language=en&country=us&limit=6${prox}&access_token=${MAPBOX_TOKEN}`;
+        const res = await fetch(url);
         const data = await res.json();
         if (!cancelled) {
           setGeocodeResults(
-            data
-              .filter((r: { display_name: string }) =>
-                !staticSuggestions.some((s) => s.label.toLowerCase() === r.display_name.split(",")[0].toLowerCase())
-              )
-              .map((r: { display_name: string; lat: string; lon: string }) => ({
-                label: r.display_name.split(",")[0],
-                sublabel: r.display_name.split(",").slice(1, 3).join(",").trim(),
-                coords: [parseFloat(r.lat), parseFloat(r.lon)] as [number, number],
-              }))
+            (data.suggestions ?? []).map((s: { name: string; place_formatted: string; full_address: string; mapbox_id: string; feature_type: string }) => ({
+              label: s.name,
+              sublabel: s.place_formatted,
+              fullAddress: s.full_address,
+              mapboxId: s.mapbox_id,
+              isBusiness: s.feature_type === "poi",
+            }))
           );
         }
       } catch { if (!cancelled) setGeocodeResults([]); }
       if (!cancelled) setGeocoding(false);
-    }, 500);
+    }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [query]);
+  }, [query, currentCoords]);
 
-  const selectedPickupCoords = pickupPin ?? currentCoords ?? DEFAULT_COORDS;
+  // Saved-place edit — Mapbox SearchBox suggest (saves full_address for geocodability)
+  useEffect(() => {
+    if (!editingPlace || editDraft.trim().length < 2) { setPlaceResults([]); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const prox = currentCoords ? `&proximity=${currentCoords[1]},${currentCoords[0]}` : "";
+        const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(editDraft.trim())}&session_token=${searchSessionRef.current}&language=en&country=us&limit=5${prox}&access_token=${MAPBOX_TOKEN}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!cancelled) {
+          setPlaceResults(
+            (data.suggestions ?? []).map((s: { name: string; place_formatted: string; full_address: string }) => ({
+              label: s.name,
+              sublabel: s.place_formatted,
+              fullAddress: s.full_address,
+            }))
+          );
+        }
+      } catch { if (!cancelled) setPlaceResults([]); }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [editDraft, editingPlace, currentCoords]);
+
+  const selectedPickupCoords = currentCoords ?? DEFAULT_COORDS;
   const pickupState = {
-    pickup: pickupPin ? "Pinned Location" : "Current Location",
+    pickup: "Current Location",
     pickupCoords: selectedPickupCoords,
   };
 
   const handleSearchFocus = () => setDrawerOpen(true);
 
-  const handleSelectDestination = (destination: string, coords?: [number, number]) => {
+  const handleSelectDestination = async (destination: string, mapboxId?: string) => {
+    let coords: [number, number] | undefined;
+    if (mapboxId) {
+      try {
+        const res = await fetch(`https://api.mapbox.com/search/searchbox/v1/retrieve/${mapboxId}?session_token=${searchSessionRef.current}&access_token=${MAPBOX_TOKEN}`);
+        const data = await res.json();
+        const center = data.features?.[0]?.geometry?.coordinates as [number, number] | undefined;
+        if (center) coords = [center[1], center[0]];
+      } catch {}
+      searchSessionRef.current = crypto.randomUUID();
+    }
     navigate("/request", { state: { destination, destinationCoords: coords, ...pickupState } });
   };
 
@@ -207,39 +211,51 @@ const handleTouchStart = (e: React.TouchEvent) => {
             center={selectedPickupCoords}
             zoom={14}
             interactive
+            driverPos={currentCoords ?? undefined}
+            accuracy={accuracy ?? undefined}
             forceResetToken={mapResetToken}
+            followBearing={headingUp}
             onCenterChange={() => { lastMapMoveRef.current = Date.now(); }}
-            onClickLocation={(coords) => { setPickupPin(coords); setDrawerOpen(false); }}
             className="absolute inset-0"
           />
         )}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="relative -mt-9">
-            <MapPin size={38} className="text-primary drop-shadow-[0_8px_18px_rgba(245,158,11,0.45)]" />
-            <div className="absolute left-1/2 top-[31px] h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-primary/30 blur-[1px]" />
-          </div>
-        </div>
-        {pickupPin && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-            <button
-              type="button"
-              onClick={() => setPickupPin(null)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card/90 backdrop-blur-sm border border-primary/30 shadow-lg text-xs font-semibold text-primary active:scale-95 transition-transform"
-            >
-              <MapPin size={11} />
-              Pickup pinned · Tap to reset
-            </button>
-          </div>
-        )}
         <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-b from-transparent via-background/40 to-background/90 pointer-events-none z-10" />
+      </div>
+
+      {/* ── MAP BUTTONS ── */}
+      <div className="absolute bottom-[160px] right-4 z-10 flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            lastMapMoveRef.current = 0;
+            setMapResetToken((n) => n + 1);
+          }}
+          aria-label="Recenter map"
+          className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+        >
+          <Navigation size={18} className="text-primary" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setHeadingUp((h) => !h);
+            const oe = (window as any).DeviceOrientationEvent;
+            if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
+          }}
+          aria-label="Toggle heading-up mode"
+          className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"}`}
+        >
+          <Compass size={18} className={headingUp ? "text-background" : "text-primary"} />
+        </button>
       </div>
 
       {/* ── TOP BRAND BAR ── */}
       <div className="relative z-20 pt-4 px-4 space-y-2">
         <div className="flex justify-center">
-          <div className="glass-card px-6 py-2.5 inline-flex items-center justify-center">
-            <p className="text-sm font-bold text-primary tracking-widest uppercase">WeGo</p>
-          </div>
+          <div className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg">
+              <div className="w-2 h-2 rounded-full bg-primary" />
+              <p className="text-xs font-bold text-primary tracking-widest uppercase">WeGo</p>
+            </div>
         </div>
 
         {/* Active ride banner */}
@@ -322,7 +338,7 @@ const handleTouchStart = (e: React.TouchEvent) => {
                 onClick={() => { if (svc.path) navigate(svc.path); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold whitespace-nowrap border flex-shrink-0 transition-colors active:scale-95 ${svc.path === null ? "bg-primary text-white border-primary" : "bg-background border-border text-foreground"}`}
               >
-                <span>{svc.emoji}</span>
+                <svc.Icon size={14} strokeWidth={2} />
                 {svc.label}
               </button>
             ))}
@@ -335,51 +351,18 @@ const handleTouchStart = (e: React.TouchEvent) => {
           {/* ── Search suggestions ── */}
           {query.trim().length >= 2 && (
             <div className="space-y-1">
-              {/* Static matches */}
-              {staticSuggestions.map((s) => (
-                <div key={s.label} className="flex items-stretch gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => { handleSelectDestination(s.label); setQuery(""); }}
-                    className="flex-1 flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                      <MapPin size={14} className="text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">
-                        {s.label.split(new RegExp(`(${query})`, "gi")).map((part, i) =>
-                          part.toLowerCase() === query.toLowerCase()
-                            ? <span key={i} className="text-primary">{part}</span>
-                            : part
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{s.sublabel}</p>
-                    </div>
-                  </button>
-                  <div className="flex flex-col gap-1">
-                    <button type="button" title="Save as Home" onClick={() => { home.save(s.label); setQuery(""); }}
-                      className="flex-1 w-9 flex items-center justify-center bg-background border border-border rounded-xl text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
-                      <HomeIcon size={13} />
-                    </button>
-                    <button type="button" title="Save as Work" onClick={() => { work.save(s.label); setQuery(""); }}
-                      className="flex-1 w-9 flex items-center justify-center bg-background border border-border rounded-xl text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
-                      <Briefcase size={13} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
               {/* Live geocoded results */}
               {geocodeResults.map((r) => (
                 <div key={r.label + r.sublabel} className="flex items-stretch gap-1.5">
                   <button
                     type="button"
-                    onClick={() => { handleSelectDestination(r.label, r.coords); setQuery(""); }}
+                    onClick={() => { handleSelectDestination(r.label, r.mapboxId); setQuery(""); }}
                     className="flex-1 flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
                   >
                     <div className="w-8 h-8 rounded-full bg-muted/30 border border-border flex items-center justify-center flex-shrink-0">
-                      <MapPin size={14} className="text-muted-foreground" />
+                      {r.isBusiness
+                        ? <Building2 size={14} className="text-muted-foreground" />
+                        : <MapPin size={14} className="text-muted-foreground" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{r.label}</p>
@@ -387,11 +370,11 @@ const handleTouchStart = (e: React.TouchEvent) => {
                     </div>
                   </button>
                   <div className="flex flex-col gap-1">
-                    <button type="button" title="Save as Home" onClick={() => { home.save(r.label); setQuery(""); }}
+                    <button type="button" title="Save as Home" onClick={() => { home.save(r.fullAddress || r.label); setQuery(""); }}
                       className="flex-1 w-9 flex items-center justify-center bg-background border border-border rounded-xl text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
                       <HomeIcon size={13} />
                     </button>
-                    <button type="button" title="Save as Work" onClick={() => { work.save(r.label); setQuery(""); }}
+                    <button type="button" title="Save as Work" onClick={() => { work.save(r.fullAddress || r.label); setQuery(""); }}
                       className="flex-1 w-9 flex items-center justify-center bg-background border border-border rounded-xl text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
                       <Briefcase size={13} />
                     </button>
@@ -400,15 +383,15 @@ const handleTouchStart = (e: React.TouchEvent) => {
               ))}
 
               {/* Loading indicator */}
-              {geocoding && geocodeResults.length === 0 && staticSuggestions.length === 0 && (
+              {geocoding && geocodeResults.length === 0 && (
                 <div className="flex items-center gap-3 p-3 text-muted-foreground">
                   <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
-                  <span className="text-sm">Searching Bay Area…</span>
+                  <span className="text-sm">Searching…</span>
                 </div>
               )}
 
               {/* No results at all */}
-              {!geocoding && geocodeResults.length === 0 && staticSuggestions.length === 0 && (
+              {!geocoding && geocodeResults.length === 0 && (
               <div className="space-y-2">
               <button
                 type="button"
@@ -454,21 +437,38 @@ const handleTouchStart = (e: React.TouchEvent) => {
               <div className="space-y-2">
                 {/* Home */}
                 {editingPlace === "home" ? (
-                  <div className="flex items-center gap-2 p-3 bg-background border border-primary rounded-xl">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                      <HomeIcon size={16} className="text-primary" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 p-3 bg-background border border-primary rounded-xl">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                        <HomeIcon size={16} className="text-primary" />
+                      </div>
+                      <input
+                        ref={editInputRef}
+                        type="text"
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEditPlace(); if (e.key === "Escape") setEditingPlace(null); }}
+                        placeholder="Enter home address"
+                        className="flex-1 bg-transparent text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
+                      />
+                      <button type="button" onClick={saveEditPlace} className="text-xs font-bold text-primary px-2">Save</button>
+                      <button type="button" aria-label="Cancel" onClick={() => setEditingPlace(null)} className="text-muted-foreground"><X size={13} /></button>
                     </div>
-                    <input
-                      ref={editInputRef}
-                      type="text"
-                      value={editDraft}
-                      onChange={(e) => setEditDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") saveEditPlace(); if (e.key === "Escape") setEditingPlace(null); }}
-                      placeholder="Enter home address"
-                      className="flex-1 bg-transparent text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
-                    />
-                    <button type="button" onClick={saveEditPlace} className="text-xs font-bold text-primary px-2">Save</button>
-                    <button type="button" aria-label="Cancel" onClick={() => setEditingPlace(null)} className="text-muted-foreground"><X size={13} /></button>
+                    {placeResults.length > 0 && (
+                      <div className="bg-background border border-border rounded-xl overflow-hidden">
+                        {placeResults.map((r) => (
+                          <button key={r.label + r.sublabel} type="button"
+                            onClick={() => { setEditDraft(r.fullAddress || r.label); home.save(r.fullAddress || r.label); setEditingPlace(null); setPlaceResults([]); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-primary/5 active:bg-primary/10 transition-colors text-left border-b border-border last:border-0">
+                            <MapPin size={13} className="text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{r.label}</p>
+                              <p className="text-xs text-muted-foreground truncate">{r.sublabel}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 transition-all">
@@ -496,21 +496,38 @@ const handleTouchStart = (e: React.TouchEvent) => {
                 )}
                 {/* Work */}
                 {editingPlace === "work" ? (
-                  <div className="flex items-center gap-2 p-3 bg-background border border-primary rounded-xl">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                      <Briefcase size={16} className="text-primary" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 p-3 bg-background border border-primary rounded-xl">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                        <Briefcase size={16} className="text-primary" />
+                      </div>
+                      <input
+                        ref={editInputRef}
+                        type="text"
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEditPlace(); if (e.key === "Escape") setEditingPlace(null); }}
+                        placeholder="Enter work address"
+                        className="flex-1 bg-transparent text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
+                      />
+                      <button type="button" onClick={saveEditPlace} className="text-xs font-bold text-primary px-2">Save</button>
+                      <button type="button" aria-label="Cancel" onClick={() => setEditingPlace(null)} className="text-muted-foreground"><X size={13} /></button>
                     </div>
-                    <input
-                      ref={editInputRef}
-                      type="text"
-                      value={editDraft}
-                      onChange={(e) => setEditDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") saveEditPlace(); if (e.key === "Escape") setEditingPlace(null); }}
-                      placeholder="Enter work address"
-                      className="flex-1 bg-transparent text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
-                    />
-                    <button type="button" onClick={saveEditPlace} className="text-xs font-bold text-primary px-2">Save</button>
-                    <button type="button" aria-label="Cancel" onClick={() => setEditingPlace(null)} className="text-muted-foreground"><X size={13} /></button>
+                    {placeResults.length > 0 && (
+                      <div className="bg-background border border-border rounded-xl overflow-hidden">
+                        {placeResults.map((r) => (
+                          <button key={r.label + r.sublabel} type="button"
+                            onClick={() => { setEditDraft(r.fullAddress || r.label); work.save(r.fullAddress || r.label); setEditingPlace(null); setPlaceResults([]); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-primary/5 active:bg-primary/10 transition-colors text-left border-b border-border last:border-0">
+                            <MapPin size={13} className="text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{r.label}</p>
+                              <p className="text-xs text-muted-foreground truncate">{r.sublabel}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 transition-all">
@@ -536,32 +553,6 @@ const handleTouchStart = (e: React.TouchEvent) => {
                     )}
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* Quick picks — hide while searching */}
-          {!query && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quick Picks</p>
-              <div className="space-y-2">
-                {QUICK_PICKS.map((pick) => (
-                  <button
-                    key={pick.id}
-                    type="button"
-                    onClick={() => handleSelectDestination(pick.label)}
-                    className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-base flex-shrink-0">
-                      {pick.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground">{pick.label}</p>
-                      <p className="text-xs text-muted-foreground">{pick.sublabel}</p>
-                    </div>
-                    <MapPin size={14} className="text-muted-foreground flex-shrink-0" />
-                  </button>
-                ))}
               </div>
             </div>
           )}
@@ -612,6 +603,7 @@ const handleTouchStart = (e: React.TouchEvent) => {
 
         </div>
       </div>
+
     </div>
   );
 }

@@ -2,16 +2,19 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plane, Music, Target, Clock, ChevronUp, ChevronDown,
-  Package, UtensilsCrossed, MapPin, CheckCircle, X,
-  SlidersHorizontal, Car, PawPrint, Eye, EyeOff,
+  Package, UtensilsCrossed, MapPin, CheckCircle, X, Search,
+  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation, CornerUpRight, AlertTriangle, Compass,
   type LucideIcon,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
-import ClientMap from "@/components/ClientMap";
-import { useDispatch } from "@/hooks/useDispatch";
+import { CourierCard, FoodCard } from "@/components/RideRequestCards";
+import ClientMap, { type RouteStep } from "@/components/ClientMap";
+import { useDispatchContext } from "@/context/DispatchContext";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
-import { type Ride, type EarningsEntry, type Opportunity, listenToWeeklyEarnings, listenToOpportunities, getDriverGoal, updateDriverPreferences, getDriverPreferences } from "@/lib/db";
+import { type Ride, type EarningsEntry, type Opportunity, type RoadIssueType, listenToWeeklyEarnings, listenToOpportunities, getDriverGoal, updateDriverPreferences, getDriverPreferences, reportRoadIssue } from "@/lib/db";
+
+const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Plane, Music, Target, Package, UtensilsCrossed, Car,
@@ -35,97 +38,59 @@ function Toggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; la
   );
 }
 
-function CourierCard({ ride, onAccept, onDecline }: { ride: Ride; onAccept: () => void; onDecline: () => void }) {
-  return (
-    <div className="glass-card p-5 space-y-4 border border-primary/20">
-      <div className="flex items-center justify-between pb-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-            <Package size={18} className="text-primary" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">Package Delivery</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock size={12} /> {ride.estimatedMinutes} min to pickup</p>
-          </div>
-        </div>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary uppercase tracking-wide">Courier</span>
-      </div>
-      <div className="space-y-3">
-        <div className="flex gap-3">
-          <MapPin size={16} className="text-primary flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Pickup</p><p className="text-sm font-medium text-foreground truncate">{ride.pickupAddress}</p></div>
-        </div>
-        <div className="flex gap-3">
-          <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Dropoff</p><p className="text-sm font-medium text-foreground truncate">{ride.dropoffAddress}</p></div>
-        </div>
-      </div>
-      <div className="bg-card/50 p-3 rounded-lg space-y-2 border border-border/50">
-        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Customer Pays:</span><span className="font-semibold text-foreground">${ride.fare.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-muted-foreground">WeGo Fee (12%):</span><span className="font-semibold text-destructive">-${ride.coopFee.toFixed(2)}</span></div>
-        <div className="border-t border-border/50 pt-2 flex justify-between text-sm"><span className="text-primary font-semibold">Your Take:</span><span className="text-lg font-bold text-primary">${ride.driverTake.toFixed(2)}</span></div>
-      </div>
-      <div className="grid grid-cols-2 gap-3 pt-2">
-        <button type="button" onClick={onDecline} className="py-3 px-4 rounded-lg border border-border text-muted-foreground hover:border-destructive transition-all flex items-center justify-center gap-2"><X size={18} /><span className="font-semibold">Decline</span></button>
-        <button type="button" onClick={onAccept} className="py-3 px-4 rounded-lg bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2"><CheckCircle size={18} /><span>Accept</span></button>
-      </div>
-    </div>
-  );
-}
-
-function FoodCard({ ride, onAccept, onDecline }: { ride: Ride; onAccept: () => void; onDecline: () => void }) {
-  return (
-    <div className="glass-card p-5 space-y-4 border border-primary/20">
-      <div className="flex items-center justify-between pb-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-            <UtensilsCrossed size={18} className="text-primary" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">Food Delivery</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock size={12} /> {ride.estimatedMinutes} min to restaurant</p>
-          </div>
-        </div>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary uppercase tracking-wide">Food</span>
-      </div>
-      <div className="space-y-3">
-        <div className="flex gap-3">
-          <MapPin size={16} className="text-primary flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Pickup</p><p className="text-sm font-medium text-foreground truncate">{ride.pickupAddress}</p></div>
-        </div>
-        <div className="flex gap-3">
-          <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground">Dropoff — {ride.passengerName}</p><p className="text-sm font-medium text-foreground truncate">{ride.dropoffAddress}</p></div>
-        </div>
-      </div>
-      <div className="bg-card/50 p-3 rounded-lg space-y-2 border border-border/50">
-        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Delivery Fee:</span><span className="font-semibold text-foreground">${ride.fare.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-muted-foreground">WeGo Fee (12%):</span><span className="font-semibold text-destructive">-${ride.coopFee.toFixed(2)}</span></div>
-        <div className="border-t border-border/50 pt-2 flex justify-between text-sm"><span className="text-primary font-semibold">Your Take:</span><span className="text-lg font-bold text-primary">${ride.driverTake.toFixed(2)}</span></div>
-      </div>
-      <div className="grid grid-cols-2 gap-3 pt-2">
-        <button type="button" onClick={onDecline} className="py-3 px-4 rounded-lg border border-border text-muted-foreground hover:border-destructive transition-all flex items-center justify-center gap-2"><X size={18} /><span className="font-semibold">Decline</span></button>
-        <button type="button" onClick={onAccept} className="py-3 px-4 rounded-lg bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2"><CheckCircle size={18} /><span>Accept</span></button>
-      </div>
-    </div>
-  );
-}
 
 export default function Command() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile } = useAuth();
-  const dispatch = useDispatch();
+  const dispatch = useDispatchContext();
   const { isOnline, setOnline, incomingRides, activeRide, locationError, rideListenerError } = dispatch;
-  const { coords: currentCoords, loading: locationLoading } = useCurrentLocation();
+  const { coords: currentCoords, accuracy, loading: locationLoading } = useCurrentLocation();
   const mapCenter: [number, number] = currentCoords ?? [37.3541, -121.9552];
 
   const [mapResetToken, setMapResetToken] = useState(0);
   const lastMapMoveRef = useRef<number>(0);
+  const [declinedRideId, setDeclinedRideId] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [onlineError, setOnlineError] = useState<string | null>(null);
+  const [offlineBlockOpen, setOfflineBlockOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [navQuery, setNavQuery] = useState("");
+  const [navResults, setNavResults] = useState<{ name: string; coords: [number, number] }[]>([]);
+  const [navDest, setNavDest] = useState<{ coords: [number, number]; name: string } | null>(null);
+  const [navStep, setNavStep] = useState<RouteStep | null>(null);
+  const [navSearching, setNavSearching] = useState(false);
+  const navSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navDestRef = useRef<{ coords: [number, number]; name: string } | null>(null);
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [headingUp, setHeadingUp] = useState(false);
+  const [issueSubmitting, setIssueSubmitting] = useState(false);
+  const [issueDone, setIssueDone] = useState(false);
+  const [acceptRides, setAcceptRides] = useState(true);
+  const [acceptCourier, setAcceptCourier] = useState(false);
+  const [acceptFood, setAcceptFood] = useState(false);
+  const [acceptPets, setAcceptPets] = useState(false);
 
-  // After 10 seconds of map idle, trigger ClientMap to fly back to GPS location
+  const [weeklyGoal, setWeeklyGoal] = useState(20);
+  const [bonusAmount, setBonusAmount] = useState(25);
+  const [liveOpps, setLiveOpps] = useState<Opportunity[]>([]);
+  const [earningsVisible, setEarningsVisible] = useState(true);
+  const [todayEntries, setTodayEntries] = useState<EarningsEntry[]>([]);
+  const [weeklyEntries, setWeeklyEntries] = useState<EarningsEntry[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartY = useRef(0);
+  const navigatedRef = useRef(!!(location.state as { tripCompleted?: boolean } | null)?.tripCompleted);
+
+  // Sync navDestRef so the interval below can read it without a stale closure
+  useEffect(() => { navDestRef.current = navDest; }, [navDest]);
+
+  // After 10 seconds of map idle, fly back to GPS — skip when route navigation is active
   useEffect(() => {
     const interval = setInterval(() => {
+      if (navDestRef.current) return;
       const t = lastMapMoveRef.current;
       if (t > 0 && Date.now() - t >= 10000) {
         lastMapMoveRef.current = 0;
@@ -134,17 +99,6 @@ export default function Command() {
     }, 500);
     return () => clearInterval(interval);
   }, []);
-
-  const [declinedRideId, setDeclinedRideId] = useState<string | null>(null);
-  const [accepting, setAccepting] = useState(false);
-  const [acceptError, setAcceptError] = useState<string | null>(null);
-  const [onlineError, setOnlineError] = useState<string | null>(null);
-  const [offlineBlockOpen, setOfflineBlockOpen] = useState(false);
-
-  const [acceptRides, setAcceptRides] = useState(true);
-  const [acceptCourier, setAcceptCourier] = useState(false);
-  const [acceptFood, setAcceptFood] = useState(false);
-  const [acceptPets, setAcceptPets] = useState(false);
 
   const pendingRide = incomingRides.find((r) => {
     if (r.id === declinedRideId) return false;
@@ -177,9 +131,7 @@ export default function Command() {
       return next;
     });
   };
-  const [weeklyGoal, setWeeklyGoal] = useState(20);
-  const [bonusAmount, setBonusAmount] = useState(25);
-  const [liveOpps, setLiveOpps] = useState<Opportunity[]>([]);
+
 
   useEffect(() => {
     if (!user) return;
@@ -193,9 +145,7 @@ export default function Command() {
     return listenToOpportunities(setLiveOpps);
   }, []);
 
-  const [earningsVisible, setEarningsVisible] = useState(true);
-  const [todayEntries, setTodayEntries] = useState<EarningsEntry[]>([]);
-  const [weeklyEntries, setWeeklyEntries] = useState<EarningsEntry[]>([]);
+
   const weeklyDone = weeklyEntries.length;
 
   useEffect(() => {
@@ -207,11 +157,7 @@ export default function Command() {
     });
     return unsub;
   }, [user]);
-  const [drawerOpen, setDrawerOpen] = useState(true);
-  const [prefsOpen, setPrefsOpen] = useState(false);
-  const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const touchStartY = useRef(0);
-  const navigatedRef = useRef(!!(location.state as { tripCompleted?: boolean } | null)?.tripCompleted);
+
 
   // If driver already has an active ride (e.g., app reopened mid-trip), redirect
   useEffect(() => {
@@ -324,6 +270,33 @@ export default function Command() {
     if (delta < -40) setDrawerOpen(false);
   };
 
+  const searchPlaces = (q: string) => {
+    setNavQuery(q);
+    if (navSearchTimerRef.current) clearTimeout(navSearchTimerRef.current);
+    if (q.trim().length < 2) { setNavResults([]); return; }
+    navSearchTimerRef.current = setTimeout(async () => {
+      setNavSearching(true);
+      try {
+        const loc = currentCoords ?? mapCenter;
+        const prox = `&proximity=${loc[1]},${loc[0]}`;
+        const res = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?types=address,place,poi&language=en${prox}&access_token=${TOKEN}`
+        );
+        const data = await res.json();
+        setNavResults(
+          (data.features ?? []).slice(0, 5).map((f: any) => ({
+            name: f.place_name as string,
+            coords: [f.center[1], f.center[0]] as [number, number],
+          }))
+        );
+      } catch {
+        setNavResults([]);
+      } finally {
+        setNavSearching(false);
+      }
+    }, 350);
+  };
+
   return (
     <div className="relative h-full overflow-hidden">
 
@@ -339,34 +312,91 @@ export default function Command() {
             zoom={14}
             className="absolute inset-0"
             interactive
+            driverPos={currentCoords ?? undefined}
+            accuracy={accuracy ?? undefined}
+            from={navDest && currentCoords ? currentCoords : undefined}
+            to={navDest?.coords}
             forceResetToken={mapResetToken}
+            followBearing={headingUp}
             onCenterChange={() => { lastMapMoveRef.current = Date.now(); }}
             onClickLocation={() => setDrawerOpen(false)}
+            onStepChange={setNavStep}
           />
         )}
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
+
+        {/* Recenter + Nav buttons */}
+        <div className="absolute bottom-[160px] right-4 z-10 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              lastMapMoveRef.current = 0;
+              setMapResetToken((n) => n + 1);
+            }}
+            aria-label="Recenter map"
+            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <Navigation size={18} className="text-primary" />
+          </button>
+          <button
+            type="button"
+            onClick={() => navDest ? (setNavDest(null), setNavStep(null)) : setNavOpen(true)}
+            aria-label={navDest ? "Cancel navigation" : "Navigate to destination"}
+            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${navDest ? "bg-destructive" : "bg-primary"}`}
+          >
+            {navDest ? <X size={20} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={20} strokeWidth={2.5} className="text-background" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setIssueDone(false); setIssueOpen(true); }}
+            aria-label="Report road issue"
+            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <AlertTriangle size={18} className="text-amber-500" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setHeadingUp((h) => !h);
+              const oe = (window as any).DeviceOrientationEvent;
+              if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
+            }}
+            aria-label="Toggle heading-up mode"
+            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"}`}
+          >
+            <Compass size={18} className={headingUp ? "text-background" : "text-primary"} />
+          </button>
+        </div>
       </div>
 
       {/* ── ONLINE / OFFLINE BADGE — top center, always visible, tappable ── */}
       <div className="absolute top-4 left-0 right-0 z-20 flex flex-col items-center gap-2">
-        {isOnline ? (
-          <button
-            type="button"
-            onClick={handleToggleOnline}
-            className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg active:scale-95 transition-transform"
-          >
-            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-xs font-bold text-primary uppercase tracking-widest">Online</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleToggleOnline}
-            className="flex items-center gap-2 px-5 py-3 bg-amber-500 rounded-2xl shadow-xl active:scale-95 transition-transform"
-          >
-            <div className="w-2.5 h-2.5 rounded-full bg-white opacity-80" />
-            <span className="text-sm font-bold text-white">Offline — Tap to go online</span>
-          </button>
+        <button
+          type="button"
+          onClick={handleToggleOnline}
+          className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg active:scale-95 transition-transform"
+        >
+          <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-primary animate-pulse" : "bg-slate-400"}`} />
+          <span className={`text-xs font-bold uppercase tracking-widest ${isOnline ? "text-primary" : "text-muted-foreground"}`}>
+            {isOnline ? "Online" : "Offline"}
+          </span>
+        </button>
+        {navDest && (
+          <div className="w-[calc(100%-32px)] flex items-center gap-2 px-3 py-2 bg-card/95 backdrop-blur-sm border border-primary/30 rounded-xl shadow-lg">
+            <Navigation size={13} className="text-primary flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              {navStep && <p className="text-xs font-semibold text-foreground truncate">{navStep.instruction}</p>}
+              <p className="text-[11px] text-muted-foreground truncate">{navDest.name.split(",")[0]}</p>
+            </div>
+            <button
+              type="button"
+              aria-label="Cancel navigation"
+              onClick={() => { setNavDest(null); setNavStep(null); }}
+              className="w-5 h-5 rounded-full bg-muted/60 flex items-center justify-center flex-shrink-0"
+            >
+              <X size={10} />
+            </button>
+          </div>
         )}
         {onlineError && (
           <div className="bg-destructive text-destructive-foreground text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
@@ -417,7 +447,7 @@ export default function Command() {
       {/* ── BOTTOM SHEET ── */}
       <div
         className={`absolute bottom-0 left-0 right-0 z-20 bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ease-out max-h-[72%] ${
-          drawerOpen ? "translate-y-0" : "translate-y-[calc(100%-76px)]"
+          drawerOpen ? "translate-y-0" : "translate-y-[calc(100%-104px)]"
         }`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -534,6 +564,114 @@ export default function Command() {
       {acceptError && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-2 bg-destructive text-destructive-foreground text-sm font-semibold px-4 py-3 rounded-2xl shadow-xl pointer-events-none max-w-[90vw] text-center">
           {acceptError}
+        </div>
+      )}
+
+      {/* ── ROAD ISSUE MODAL ── */}
+      {issueOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center px-4 pb-8 bg-black/60" onClick={() => setIssueOpen(false)}>
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle size={16} className="text-amber-500" />
+              <p className="text-sm font-bold text-foreground">Report Road Issue</p>
+            </div>
+            {issueDone ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-primary">
+                <CheckCircle size={18} />
+                <span className="text-sm font-semibold">Report submitted — thanks!</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { type: "closure",  label: "Road Closure",  emoji: "🚧" },
+                  { type: "accident", label: "Accident",      emoji: "💥" },
+                  { type: "traffic",  label: "Heavy Traffic", emoji: "🚗" },
+                  { type: "hazard",   label: "Hazard",        emoji: "⚠️"  },
+                  { type: "pothole",  label: "Pothole",       emoji: "🕳️"  },
+                  { type: "other",    label: "Other",         emoji: "📍"  },
+                ] as { type: RoadIssueType; label: string; emoji: string }[]).map(({ type, label, emoji }) => (
+                  <button
+                    key={type}
+                    type="button"
+                    disabled={issueSubmitting}
+                    onClick={async () => {
+                      if (!user || !currentCoords) return;
+                      setIssueSubmitting(true);
+                      try {
+                        await reportRoadIssue({ driverId: user.uid, type, lat: currentCoords[0], lng: currentCoords[1] });
+                        setIssueDone(true);
+                        setTimeout(() => setIssueOpen(false), 1500);
+                      } finally {
+                        setIssueSubmitting(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 py-3 px-3 rounded-xl border border-border bg-muted/20 active:scale-95 transition-transform disabled:opacity-50"
+                  >
+                    <span className="text-lg">{emoji}</span>
+                    <span className="text-xs font-semibold text-foreground">{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── IN-APP NAVIGATION SEARCH ── */}
+      {navOpen && (
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setNavOpen(false); setNavQuery(""); setNavResults([]); }} />
+          <div className="relative w-full max-w-[430px] mx-auto bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col max-h-[80vh]">
+            {/* Search input */}
+            <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-border">
+              <Search size={16} className="text-muted-foreground flex-shrink-0" />
+              <input
+                autoFocus
+                type="text"
+                value={navQuery}
+                onChange={(e) => searchPlaces(e.target.value)}
+                placeholder="Search destination..."
+                className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none"
+              />
+              {navSearching && <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />}
+              <button
+                type="button"
+                aria-label="Close search"
+                onClick={() => { setNavOpen(false); setNavQuery(""); setNavResults([]); }}
+              >
+                <X size={18} className="text-muted-foreground" />
+              </button>
+            </div>
+            {/* Results */}
+            <div className="overflow-y-auto flex-1 pb-8">
+              {navResults.length === 0 && navQuery.length >= 2 && !navSearching && (
+                <p className="text-center text-sm text-muted-foreground py-10">No results found</p>
+              )}
+              {navResults.length === 0 && navQuery.length < 2 && (
+                <p className="text-center text-sm text-muted-foreground py-10">Type to search for a destination</p>
+              )}
+              {navResults.map((r, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    setNavDest(r);
+                    setNavStep(null);
+                    setNavOpen(false);
+                    setNavQuery("");
+                    setNavResults([]);
+                  }}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 border-b border-border/50 text-left"
+                >
+                  <MapPin size={16} className="text-primary mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{r.name.split(",")[0]}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{r.name}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

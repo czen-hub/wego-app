@@ -125,7 +125,10 @@ export default function RideHistory() {
             <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/30 pt-2">
               <span>Rider paid ${ride.fare.toFixed(2)}</span>
               <span>WeGo fee −${ride.coopFee.toFixed(2)}</span>
-              {ride.riderRating > 0 && <span>⭐ {ride.riderRating.toFixed(1)}</span>}
+              {ride.passengerRatingGiven > 0
+                ? <span>⭐ {ride.passengerRatingGiven.toFixed(1)}</span>
+                : <span className="text-muted-foreground/50">Not rated</span>
+              }
             </div>
           </div>
         ))}

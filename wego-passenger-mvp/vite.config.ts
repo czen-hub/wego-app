@@ -13,8 +13,16 @@ export default defineConfig(({ mode }) => ({
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "server/**"],
     },
   },
+  optimizeDeps: {
+    exclude: ["mapbox-gl"],
+  },
   build: {
     outDir: "dist/spa",
+    commonjsOptions: { transformMixedEsModules: true },
+    rollupOptions: {
+      external: ["mapbox-gl"],
+      output: { globals: { "mapbox-gl": "mapboxgl" } },
+    },
   },
   plugins: [react(), expressPlugin()],
   resolve: {

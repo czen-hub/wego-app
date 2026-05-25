@@ -351,13 +351,13 @@ export default function ClientMap({
         id: "accuracy-circle-fill",
         type: "fill",
         source: "accuracy-circle",
-        paint: { "fill-color": "#3B82F6", "fill-opacity": 0.12 },
+        paint: { "fill-color": "#3B82F6", "fill-opacity": 0.18 },
       });
       map.addLayer({
         id: "accuracy-circle-border",
         type: "line",
         source: "accuracy-circle",
-        paint: { "line-color": "#3B82F6", "line-width": 1.5, "line-opacity": 0.5 },
+        paint: { "line-color": "#3B82F6", "line-width": 2, "line-opacity": 0.8 },
       });
 
       setMapReady(true);
@@ -633,11 +633,12 @@ export default function ClientMap({
     const r = accuracyRef.current;
     const src = mapRef.current?.getSource("accuracy-circle") as any;
     if (src) {
+      const radius = r && r > 0 ? Math.max(r, 60) : 60;
       src.setData({
         type: "Feature",
         geometry: {
           type: "Polygon",
-          coordinates: r && r > 0 ? [circlePolygon(driverPos[0], driverPos[1], r)] : [[]],
+          coordinates: [circlePolygon(driverPos[0], driverPos[1], radius)],
         },
         properties: {},
       });
@@ -695,6 +696,23 @@ export default function ClientMap({
         .catch(() => {});
     }
   }, [driverPosKey, mapReady]);
+
+  // Redraw accuracy circle whenever accuracy value changes (independent of driverPos updates)
+  useEffect(() => {
+    if (!mapReady || !driverPos) return;
+    const src = mapRef.current?.getSource("accuracy-circle") as any;
+    if (!src) return;
+    const r = accuracy ?? null;
+    const radius = r && r > 0 ? Math.max(r, 60) : 60;
+    src.setData({
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [circlePolygon(driverPos[0], driverPos[1], radius)],
+      },
+      properties: {},
+    });
+  }, [accuracy, driverPosKey, mapReady]);
 
   return (
     <div

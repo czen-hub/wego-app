@@ -1,9 +1,9 @@
-﻿import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Award, CheckCircle, XCircle, Shield, Menu, Star, Gem, Sparkles } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { listenToGovernanceVotes, submitGovernanceVote } from "@/lib/db";
 
-// ── Member tier ────────────────────────────────────────────────────────────
 type Tier = "silver" | "gold" | "platinum";
 
 function getTier(rides: number): Tier {
@@ -51,14 +51,27 @@ const TIER_CONFIG = {
   },
 } as const;
 
-interface InitiativeVote {
+interface Initiative {
   id: string;
   title: string;
   description: string;
   deadline: string;
-  voted?: boolean;
-  voteChoice?: "approve" | "reject";
 }
+
+const INITIATIVES: Initiative[] = [
+  {
+    id: "init-08",
+    title: "Initiative #08: Year 6 AV Fleet Sourcing",
+    description: "Approve allocation of $450K from hardware reserve to purchase 3 additional autonomous vehicles for Q4 2026 deployment.",
+    deadline: "Closes in 5 days",
+  },
+  {
+    id: "init-09",
+    title: "Initiative #09: Adjust Target Pension Floor for Inflation",
+    description: "Update the minimum pension floor calculation to account for 3.2% annual inflation, ensuring purchasing power for retiring members.",
+    deadline: "Closes in 8 days",
+  },
+];
 
 interface PendingVote {
   id: string;
@@ -67,7 +80,7 @@ interface PendingVote {
 
 export default function Governance() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const rides = profile?.totalRides ?? 0;
   const tier  = getTier(rides);
   const cfg   = TIER_CONFIG[tier];
@@ -76,31 +89,27 @@ export default function Governance() {
   const pct    = cfg.nextAt !== null
     ? Math.min(100, Math.round((rides / cfg.nextAt) * 100))
     : 100;
-  const [initiatives, setInitiatives] = useState<InitiativeVote[]>([
-    {
-      id: "init-08",
-      title: "Initiative #08: Year 6 AV Fleet Sourcing",
-      description: "Approve allocation of $450K from hardware reserve to purchase 3 additional autonomous vehicles for Q4 2026 deployment.",
-      deadline: "Closes in 5 days",
-      voted: false,
-    },
-    {
-      id: "init-09",
-      title: "Initiative #09: Adjust Target Pension Floor for Inflation",
-      description: "Update the minimum pension floor calculation to account for 3.2% annual inflation, ensuring purchasing power for retiring members.",
-      deadline: "Closes in 8 days",
-      voted: false,
-    },
-  ]);
 
+  const [savedVotes, setSavedVotes] = useState<Record<string, "approve" | "reject">>({});
   const [pendingVote, setPendingVote] = useState<PendingVote | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const confirmVote = () => {
-    if (!pendingVote) return;
-    setInitiatives(initiatives.map(init =>
-      init.id === pendingVote.id ? { ...init, voted: true, voteChoice: pendingVote.choice } : init
-    ));
-    setPendingVote(null);
+  useEffect(() => {
+    if (!user) return;
+    return listenToGovernanceVotes(user.uid, setSavedVotes);
+  }, [user]);
+
+  const confirmVote = async () => {
+    if (!pendingVote || !user || submitting) return;
+    setSubmitting(true);
+    try {
+      await submitGovernanceVote(user.uid, pendingVote.id, pendingVote.choice);
+    } catch {
+      // vote will sync from Firestore listener anyway
+    } finally {
+      setSubmitting(false);
+      setPendingVote(null);
+    }
   };
 
   return (
@@ -127,72 +136,64 @@ export default function Governance() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
             Digital Member ID
           </p>
-          <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${cfg.cardGradient} border border-white/10 p-6 space-y-5`}>
-            {/* Background shine pattern */}
+          <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${cfg.cardGradient} border border-white/10 p-4 space-y-3`}>
             <div className="card-shine absolute inset-0 opacity-10" />
 
-            <div className="relative z-10 space-y-5">
-              {/* Top row: verified pill + tier badge */}
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/15 border border-white/30 rounded-full">
-                  <Shield size={14} className="text-white/80" />
-                  <span className="text-xs font-semibold text-white">Active Seat: Verified</span>
+            <div className="relative z-10 space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/15 border border-white/30 rounded-full">
+                  <Shield size={11} className="text-white/80" />
+                  <span className="text-[10px] font-semibold text-white">Verified</span>
                 </div>
-                {/* Tier badge */}
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${cfg.badgeBg}`}>
-                  <Icon size={13} className={cfg.iconColor} />
-                  <span className={`text-xs font-bold ${cfg.badgeText}`}>{cfg.label}</span>
+                <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${cfg.badgeBg}`}>
+                  <Icon size={11} className={cfg.iconColor} />
+                  <span className={`text-[10px] font-bold ${cfg.badgeText}`}>{cfg.label}</span>
                 </div>
               </div>
 
-              {/* Member Info */}
-              <div className="space-y-3">
+              <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-xs text-white/50 mb-1">Member Name</p>
-                  <p className="text-2xl font-bold text-white">{profile?.name || "Member"}</p>
+                  <p className="text-[10px] text-white/50 mb-0.5">Member Name</p>
+                  <p className="text-lg font-bold text-white leading-tight">{profile?.name || "Member"}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-white/50 mb-1">Status</p>
-                  <p className="text-lg font-semibold text-white/90">{profile?.membershipStatus === "founding" ? "Founding Member" : "Member"}</p>
+                <div className="text-right">
+                  <p className="text-[10px] text-white/50 mb-0.5">Status</p>
+                  <p className="text-xs font-semibold text-white/90">{profile?.membershipStatus === "founding" ? "Founding Member" : "Member"}</p>
                 </div>
               </div>
 
-              {/* Divider */}
               <div className="h-px bg-white/10" />
 
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 pt-1">
+              <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <p className="text-xs text-white/50 mb-1">Dues Paid</p>
-                  <p className="text-xl font-bold text-white">$500</p>
+                  <p className="text-[10px] text-white/50 mb-0.5">Dues Paid</p>
+                  <p className="text-sm font-bold text-white">$500</p>
                 </div>
                 <div>
-                  <p className="text-xs text-white/50 mb-1">Rides</p>
-                  <p className="text-xl font-bold text-white">{rides}</p>
+                  <p className="text-[10px] text-white/50 mb-0.5">Rides</p>
+                  <p className="text-sm font-bold text-white">{rides}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-white/50 mb-1">Voting</p>
-                  <p className="text-xl font-bold text-white">1 Share</p>
-                  <p className="text-xs text-white/40">Equal Voice</p>
+                  <p className="text-[10px] text-white/50 mb-0.5">Voting</p>
+                  <p className="text-sm font-bold text-white">1 Share</p>
                 </div>
               </div>
 
-              {/* Tier progress */}
               {toNext !== null ? (
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <div className="flex justify-between text-[10px] text-white/50">
                     <span>{tier.charAt(0).toUpperCase() + tier.slice(1)}</span>
                     <span>{toNext} rides to {cfg.nextLabel}</span>
                   </div>
-                  <div className={`h-1.5 rounded-full ${cfg.progressTrack}`}>
+                  <div className={`h-1 rounded-full ${cfg.progressTrack}`}>
                     {/* eslint-disable-next-line react/forbid-component-props */}
                     <div className={`h-full rounded-full ${cfg.progressColor} transition-all`} style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5">
-                  <Sparkles size={12} className={cfg.iconColor} />
-                  <span className={`text-xs font-semibold ${cfg.badgeText}`}>Maximum tier reached</span>
+                  <Sparkles size={11} className={cfg.iconColor} />
+                  <span className={`text-[10px] font-semibold ${cfg.badgeText}`}>Maximum tier reached</span>
                 </div>
               )}
             </div>
@@ -209,95 +210,99 @@ export default function Governance() {
           </div>
 
           <div className="space-y-3">
-            {initiatives.map((initiative) => (
-              <div
-                key={initiative.id}
-                className="glass-card p-5 border border-border hover:border-primary/30 transition-colors space-y-4 rounded-xl"
-              >
-                {/* Initiative Title */}
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-foreground text-sm leading-snug">
-                    {initiative.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {initiative.description}
-                  </p>
-                </div>
+            {INITIATIVES.map((initiative) => {
+              const voted = initiative.id in savedVotes;
+              const voteChoice = savedVotes[initiative.id];
+              const isPending = pendingVote?.id === initiative.id;
 
-                {/* Deadline */}
-                <div className="flex items-center gap-2 text-xs">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  <span className="text-muted-foreground">{initiative.deadline}</span>
-                </div>
-
-                {/* Vote Status, Confirm Dialog, or Action Buttons */}
-                {initiative.voted ? (
-                  <div className="flex items-center gap-2 p-3 bg-card/50 rounded-lg border border-border/50">
-                    {initiative.voteChoice === "approve" ? (
-                      <>
-                        <CheckCircle size={18} className="text-primary" />
-                        <span className="text-sm font-medium text-primary">You voted to Approve</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle size={18} className="text-destructive" />
-                        <span className="text-sm font-medium text-destructive">You voted to Reject</span>
-                      </>
-                    )}
-                  </div>
-                ) : pendingVote?.id === initiative.id ? (
-                  <div className="space-y-3 p-3 bg-card/50 rounded-lg border border-border/50">
-                    <p className="text-xs text-muted-foreground">
-                      Confirm your vote —{" "}
-                      <span className={pendingVote.choice === "approve" ? "text-primary font-semibold" : "text-destructive font-semibold"}>
-                        {pendingVote.choice === "approve" ? "Approve" : "Reject"}
-                      </span>
-                      . This vote is binding and cannot be changed.
+              return (
+                <div
+                  key={initiative.id}
+                  className="glass-card p-5 border border-border hover:border-primary/30 transition-colors space-y-4 rounded-xl"
+                >
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-foreground text-sm leading-snug">
+                      {initiative.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {initiative.description}
                     </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    <span className="text-muted-foreground">{initiative.deadline}</span>
+                  </div>
+
+                  {voted ? (
+                    <div className="flex items-center gap-2 p-3 bg-card/50 rounded-lg border border-border/50">
+                      {voteChoice === "approve" ? (
+                        <>
+                          <CheckCircle size={18} className="text-primary" />
+                          <span className="text-sm font-medium text-primary">You voted to Approve</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={18} className="text-destructive" />
+                          <span className="text-sm font-medium text-destructive">You voted to Reject</span>
+                        </>
+                      )}
+                    </div>
+                  ) : isPending ? (
+                    <div className="space-y-3 p-3 bg-card/50 rounded-lg border border-border/50">
+                      <p className="text-xs text-muted-foreground">
+                        Confirm your vote —{" "}
+                        <span className={pendingVote.choice === "approve" ? "text-primary font-semibold" : "text-destructive font-semibold"}>
+                          {pendingVote.choice === "approve" ? "Approve" : "Reject"}
+                        </span>
+                        . This vote is binding and cannot be changed.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPendingVote(null)}
+                          className="py-2 px-4 rounded-lg border border-border text-muted-foreground hover:text-foreground font-semibold text-sm transition-all active:scale-95"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmVote}
+                          disabled={submitting}
+                          className={`py-2 px-4 rounded-lg font-semibold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60 ${
+                            pendingVote.choice === "approve"
+                              ? "bg-primary text-white"
+                              : "bg-destructive/10 border border-destructive/50 text-destructive"
+                          }`}
+                        >
+                          <CheckCircle size={15} />
+                          {submitting ? "Saving…" : "Confirm"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => setPendingVote(null)}
-                        className="py-2 px-4 rounded-lg border border-border text-muted-foreground hover:text-foreground font-semibold text-sm transition-all active:scale-95"
+                        onClick={() => setPendingVote({ id: initiative.id, choice: "approve" })}
+                        className="py-2.5 px-4 rounded-lg bg-primary text-white font-semibold text-sm hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
-                        Cancel
+                        <CheckCircle size={16} />
+                        Approve
                       </button>
                       <button
                         type="button"
-                        onClick={confirmVote}
-                        className={`py-2 px-4 rounded-lg font-semibold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                          pendingVote.choice === "approve"
-                            ? "bg-primary text-white"
-                            : "bg-destructive/10 border border-destructive/50 text-destructive"
-                        }`}
+                        onClick={() => setPendingVote({ id: initiative.id, choice: "reject" })}
+                        className="py-2.5 px-4 rounded-lg border-2 border-destructive/30 text-destructive hover:border-destructive/60 hover:bg-destructive/5 font-semibold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
-                        <CheckCircle size={15} />
-                        Confirm
+                        <XCircle size={16} />
+                        Reject
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPendingVote({ id: initiative.id, choice: "approve" })}
-                      className="py-2.5 px-4 rounded-lg bg-primary text-white font-semibold text-sm hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle size={16} />
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPendingVote({ id: initiative.id, choice: "reject" })}
-                      className="py-2.5 px-4 rounded-lg border-2 border-destructive/30 text-destructive hover:border-destructive/60 hover:bg-destructive/5 font-semibold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      <XCircle size={16} />
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -316,7 +321,7 @@ export default function Governance() {
               <span>All votes are binding on cooperative policy decisions</span>
             </li>
             <li className="flex gap-2">
-              <span className="text-secondary flex-shrink-0">•</span>
+              <span className="text-primary flex-shrink-0">•</span>
               <span>Complete transparency: all initiatives are logged on the cooperative ledger</span>
             </li>
           </ul>
@@ -331,7 +336,7 @@ export default function Governance() {
             </p>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Unlike Corp 1 or Corp 2, WeGo cannot remove you by algorithm alone. Every deactivation requires:
+            Unlike Corp, WeGo cannot remove you by algorithm alone. Every deactivation requires:
           </p>
           <ul className="space-y-2">
             {[

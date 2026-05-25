@@ -109,7 +109,7 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     driverCar: (data.driverCar as string) ?? "",
     driverPlate: (data.driverPlate as string) ?? "",
     pickupAddress: (data.pickupAddress as string) ?? "",
-    dropoffAddress: (data.dropoffAddress as string) ?? "",
+    dropoffAddress: ((data.dropoffAddress as string) ?? "").replace(/\s*\([+-]?\d+\.\d+,\s*[+-]?\d+\.\d+\)\s*$/, "").trim(),
     pickupLocation: (data.pickupLocation as GeoPoint | null) ?? null,
     dropoffLocation: (data.dropoffLocation as GeoPoint | null) ?? null,
     fare: (data.fare as number) ?? 0,

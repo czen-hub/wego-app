@@ -25,6 +25,7 @@ interface DriverProfile {
   vehicleYear: string;
   licensePlate: string;
   membershipStatus: "founding" | "standard" | "leave";
+  referralCode: string;
 }
 
 interface AuthContextType {
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               vehicleYear: data.vehicleYear ?? "",
               licensePlate: data.licensePlate ?? "",
               membershipStatus: data.membershipStatus ?? "standard",
+              referralCode: data.referralCode ?? "",
             });
           }
         } catch {
@@ -98,6 +100,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password);
+      const initials = name.replace(/\s+/g, "").slice(0, 2).toUpperCase();
+      const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+      const referralCode = `WEGO-${initials}${suffix}`;
       await setDoc(doc(db, "drivers", newUser.uid), {
         name,
         email,
@@ -106,8 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isOnline: false,
         rating: 5.0,
         totalRides: 0,
-        weeklyEarnings: 0,
         membershipStatus: "standard",
+        referralCode,
         memberSince: serverTimestamp(),
         createdAt: serverTimestamp(),
       });

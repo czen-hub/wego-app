@@ -61,7 +61,7 @@ export default function ScheduledRides() {
           estimatedTime: ride.estimatedMinutes,
           type: ride.type,
           rideId: ride.id,
-          isAdvanced: true,
+          isAdvanced: ride.isAdvanced ?? false,
           pickupCoords: ride.pickupLocation
             ? [ride.pickupLocation.latitude, ride.pickupLocation.longitude] as [number, number]
             : undefined,

@@ -77,7 +77,7 @@ export default function TripInProgress() {
   const [passengerRating, setPassengerRating] = useState(0);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
-  const [autoCloseIn, setAutoCloseIn] = useState(8);
+  const [autoCloseIn, setAutoCloseIn] = useState(10);
   const autoCloseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [earlyEndData, setEarlyEndData] = useState<{ proratedFare: number } | null>(null);
   const [contactWindowSecs, setContactWindowSecs] = useState(300);
@@ -338,7 +338,7 @@ export default function TripInProgress() {
           clearInterval(autoCloseTimerRef.current!);
           autoCloseTimerRef.current = null;
           navigate("/", { state: { tripCompleted: true } });
-          return 8;
+          return 10;
         }
         return n - 1;
       });

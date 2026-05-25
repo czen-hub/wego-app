@@ -210,27 +210,32 @@ export default function RideHistory() {
                             <p className="text-xs font-medium text-foreground">
                               {ride.driverName || "WeGo Driver"}
                             </p>
-                            <div className="flex items-center gap-0.5">
-                              {[1, 2, 3, 4, 5].map((s) => (
-                                <Star
-                                  key={s}
-                                  size={9}
-                                  className={
-                                    s <= Math.round(ride.driverRating)
-                                      ? "text-yellow-400"
-                                      : "text-muted-foreground/30"
-                                  }
-                                  fill={
-                                    s <= Math.round(ride.driverRating)
-                                      ? "currentColor"
-                                      : "none"
-                                  }
-                                />
-                              ))}
-                              <span className="text-[10px] text-muted-foreground ml-0.5">
-                                {ride.driverRating.toFixed(2)}
-                              </span>
-                            </div>
+                            {ride.passengerRatingGiven > 0 ? (
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-[10px] text-muted-foreground mr-0.5">You rated:</span>
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <Star
+                                    key={s}
+                                    size={9}
+                                    className={
+                                      s <= ride.passengerRatingGiven
+                                        ? "text-yellow-400"
+                                        : "text-muted-foreground/30"
+                                    }
+                                    fill={
+                                      s <= ride.passengerRatingGiven
+                                        ? "currentColor"
+                                        : "none"
+                                    }
+                                  />
+                                ))}
+                                <span className="text-[10px] text-muted-foreground ml-0.5">
+                                  {ride.passengerRatingGiven}/5
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground/50">Not rated</span>
+                            )}
                           </div>
                         </div>
                         <div className="text-right">

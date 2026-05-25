@@ -22,6 +22,8 @@ import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { requestRide } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 
+const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
+
 const WEGO_FEE_PCT = 0.12;
 const WEGO_DISCOUNT = 0.85;
 const MIN_FARE = 10.00;
@@ -347,13 +349,16 @@ export default function RideRequest() {
   const [focusedStopId, setFocusedStopId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
-  const [pickupFocused, setPickupFocused] = useState(false);
-  const [destFocused, setDestFocused] = useState(!routeState.destination);
+  const [pickupSearchOpen, setPickupSearchOpen] = useState(false);
+  const [destSearchOpen, setDestSearchOpen] = useState(false);
+  const [pickupQuery, setPickupQuery] = useState("");
+  const [destQuery, setDestQuery] = useState("");
 
-  const pickupRef = useRef<HTMLInputElement>(null);
-  const destRef = useRef<HTMLInputElement>(null);
-  const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const destBlurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pickupGeoResults, setPickupGeoResults] = useState<{ name: string; sublabel: string; coords: [number, number] }[]>([]);
+  const [destGeoResults, setDestGeoResults] = useState<{ name: string; sublabel: string; coords: [number, number] }[]>([]);
+
+  const pickupSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const destSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopGeocodeTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const stopBlurTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const stopInputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
@@ -494,53 +499,53 @@ export default function RideRequest() {
   const toCoords   = effectiveDestinationCoords ?? LOCATION_COORDS[destination] ?? FALLBACK;
   const viaPoints  = stops.map(s => s.coords).filter((c): c is [number, number] => c !== null);
 
+  // Auto-open destination search when landing with no pre-filled destination
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!routeState.destination) setDestSearchOpen(true); }, []);
+
   // ── Dropdowns ────────────────────────────────────────────────────────────
 
-  const destSuggestions = destination.trim().length >= 1
-    ? LOCATION_SUGGESTIONS.filter(s =>
-        s.label.toLowerCase().includes(destination.toLowerCase()) ||
-        s.sublabel.toLowerCase().includes(destination.toLowerCase())
-      ).slice(0, 5)
-    : LOCATION_SUGGESTIONS.slice(0, 5);
-
-  const showDestDropdown = destFocused;
-
-  const selectDestination = (label: string) => {
+  const selectDestination = (label: string, coords?: [number, number]) => {
     setDestination(label);
-    setPinnedDestinationCoords(null);
-    setDestFocused(false);
-    destRef.current?.blur();
+    setPinnedDestinationCoords(coords ?? LOCATION_COORDS[label] ?? null);
+    setDestGeoResults([]);
+    setDestSearchOpen(false);
   };
 
-  const handleDestBlur = () => {
-    destBlurTimeout.current = setTimeout(() => setDestFocused(false), 150);
+  const geoSearch = (
+    q: string,
+    timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
+    setter: React.Dispatch<React.SetStateAction<{ name: string; sublabel: string; coords: [number, number] }[]>>,
+  ) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (q.trim().length < 2) { setter([]); return; }
+    timerRef.current = setTimeout(async () => {
+      try {
+        const loc = currentCoords ?? FALLBACK;
+        const prox = `&proximity=${loc[1]},${loc[0]}`;
+        const bbox = `&bbox=${(loc[1] - 1.5).toFixed(4)},${(loc[0] - 1.5).toFixed(4)},${(loc[1] + 1.5).toFixed(4)},${(loc[0] + 1.5).toFixed(4)}`;
+        const res = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?types=address,place,poi,neighborhood&language=en&country=us${prox}${bbox}&access_token=${TOKEN}`
+        );
+        const data = await res.json();
+        setter(
+          (data.features ?? []).slice(0, 5).map((f: any) => ({
+            name: f.address ? `${f.address} ${f.text}` : (f.place_name as string).split(",")[0],
+            sublabel: f.place_name as string,
+            coords: [f.center[1], f.center[0]] as [number, number],
+          }))
+        );
+      } catch {
+        setter([]);
+      }
+    }, 350);
   };
-  const handleDestFocus = () => {
-    if (destBlurTimeout.current) clearTimeout(destBlurTimeout.current);
-    setDestFocused(true);
-  };
 
-  const suggestions = pickup.trim().length >= 1 && pickup !== "Current Location"
-    ? LOCATION_SUGGESTIONS.filter(s =>
-        s.label.toLowerCase().includes(pickup.toLowerCase()) ||
-        s.sublabel.toLowerCase().includes(pickup.toLowerCase())
-      ).slice(0, 5)
-    : [];
-
-  const showDropdown = pickupFocused && (suggestions.length > 0 || pickup === "Current Location" || pickup.trim().length === 0);
-
-  const selectPickup = (label: string) => {
+  const selectPickup = (label: string, coords?: [number, number]) => {
     setPickup(label);
-    setPinnedPickupCoords(LOCATION_COORDS[label] ?? null);
-    setPickupFocused(false);
-    pickupRef.current?.blur();
-  };
-
-  const handleBlur = () => { blurTimeout.current = setTimeout(() => setPickupFocused(false), 150); };
-  const handleFocus = () => {
-    if (blurTimeout.current) clearTimeout(blurTimeout.current);
-    setPickupFocused(true);
-    if (pickup === "Current Location") pickupRef.current?.select();
+    setPinnedPickupCoords(coords ?? LOCATION_COORDS[label] ?? null);
+    setPickupGeoResults([]);
+    setPickupSearchOpen(false);
   };
 
   // ── Submit ───────────────────────────────────────────────────────────────
@@ -626,43 +631,18 @@ export default function RideRequest() {
             </div>
             <div className="flex-1 min-w-0 pb-3">
               <p className="text-xs text-muted-foreground mb-0.5">Pickup</p>
-              <input
-                ref={pickupRef}
-                type="text"
-                value={pickup}
-                title="Pickup location"
-                placeholder="Enter pickup address"
-                onChange={(e) => { setPickup(e.target.value); setPinnedPickupCoords(null); }}
-                onFocus={handleFocus}
-                onBlur={handleBlur}
-                className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${pickupFocused ? "border-primary" : "border-transparent"}`}
-              />
-              {showDropdown && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                  <button type="button" onMouseDown={() => selectPickup("Current Location")}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/50">
-                    <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                      <Navigation size={13} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-primary">Use Current Location</p>
-                      <p className="text-xs text-muted-foreground">{currentLocationError ?? "GPS detected location"}</p>
-                    </div>
-                  </button>
-                  {suggestions.map((s) => (
-                    <button key={s.label} type="button" onMouseDown={() => selectPickup(s.label)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0">
-                      <div className="w-7 h-7 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
-                        <MapPin size={13} className="text-muted-foreground" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
-                        <p className="text-xs text-muted-foreground truncate">{s.sublabel}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setPickupQuery(pickup === "Current Location" ? "" : pickup);
+                  setPickupGeoResults([]);
+                  setPickupSearchOpen(true);
+                  if (pickup && pickup !== "Current Location") geoSearch(pickup, pickupSearchTimerRef, setPickupGeoResults);
+                }}
+                className="w-full text-left text-sm font-semibold text-foreground pb-1 border-b border-transparent truncate active:opacity-70"
+              >
+                {pickup || "Enter pickup address"}
+              </button>
             </div>
           </div>
 
@@ -694,34 +674,22 @@ export default function RideRequest() {
               <div className="w-3 h-3 rounded-full border-2 border-foreground flex-shrink-0" />
             </div>
             <div className="flex-1 min-w-0 pb-1">
-              <div className="pt-0 relative">
+              <div className="pt-0">
                 <p className="text-xs text-muted-foreground mb-0.5">Dropoff</p>
-                <input
-                  ref={destRef}
-                  type="text"
-                  value={destination}
-                  placeholder="Where to?"
-                  onChange={(e) => { setDestination(e.target.value); setPinnedDestinationCoords(null); }}
-                  onFocus={handleDestFocus}
-                  onBlur={handleDestBlur}
-                  className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${destFocused ? "border-primary" : "border-transparent"}`}
-                />
-                {showDestDropdown && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                    {destSuggestions.map((s) => (
-                      <button key={s.label} type="button" onMouseDown={() => selectDestination(s.label)}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0">
-                        <div className="w-7 h-7 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
-                          <MapPin size={13} className="text-muted-foreground" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
-                          <p className="text-xs text-muted-foreground truncate">{s.sublabel}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDestQuery(destination);
+                    setDestGeoResults([]);
+                    setDestSearchOpen(true);
+                    if (destination) geoSearch(destination, destSearchTimerRef, setDestGeoResults);
+                  }}
+                  className="w-full text-left text-sm font-semibold pb-1 border-b border-transparent truncate active:opacity-70"
+                >
+                  {destination
+                    ? <span className="text-foreground">{destination}</span>
+                    : <span className="text-muted-foreground font-normal">Where to?</span>}
+                </button>
               </div>
             </div>
           </div>
@@ -771,7 +739,7 @@ export default function RideRequest() {
                   <>
                     <span className="text-sm text-muted-foreground line-through">${(uberX + tollTotal + plannedStopFee).toFixed(2)}</span>
                     <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      Save ${(uberX - fare).toFixed(2)} vs Corp 1 X
+                      Save ${(uberX - fare).toFixed(2)} vs Corp X
                     </span>
                   </>
                 ) : (
@@ -881,6 +849,110 @@ export default function RideRequest() {
         </button>
         <p className="text-xs text-center text-muted-foreground pb-2">No cancellation fee if cancelled within 2 minutes</p>
       </div>
+
+      {/* ── PICKUP SEARCH OVERLAY ── */}
+      {pickupSearchOpen && (
+        <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
+            <button type="button" aria-label="Close" onClick={() => setPickupSearchOpen(false)}>
+              <ChevronLeft size={22} className="text-foreground" />
+            </button>
+            <input
+              autoFocus
+              type="text"
+              value={pickupQuery}
+              onChange={(e) => {
+                setPickupQuery(e.target.value);
+                geoSearch(e.target.value, pickupSearchTimerRef, setPickupGeoResults);
+              }}
+              placeholder="Search pickup location…"
+              className="flex-1 bg-transparent text-base font-medium text-foreground focus:outline-none"
+            />
+            {pickupQuery.length > 0 && (
+              <button type="button" aria-label="Clear search" onClick={() => { setPickupQuery(""); setPickupGeoResults([]); }}>
+                <X size={18} className="text-muted-foreground" />
+              </button>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <button type="button" onClick={() => selectPickup("Current Location")}
+              className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border">
+              <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                <Navigation size={18} className="text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-primary">Use Current Location</p>
+                <p className="text-xs text-muted-foreground">{currentLocationError ?? "GPS detected location"}</p>
+              </div>
+            </button>
+            {pickupGeoResults.map((r) => (
+              <button key={r.sublabel} type="button" onClick={() => selectPickup(r.name, r.coords)}
+                className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/50">
+                <div className="w-10 h-10 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
+                  <MapPin size={18} className="text-muted-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{r.name}</p>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">{r.sublabel}</p>
+                </div>
+              </button>
+            ))}
+            {pickupGeoResults.length === 0 && pickupQuery.length >= 2 && (
+              <p className="text-sm text-muted-foreground text-center py-10">Searching…</p>
+            )}
+            {pickupQuery.length < 2 && pickupGeoResults.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-10">Type to search for a pickup location</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── DESTINATION SEARCH OVERLAY ── */}
+      {destSearchOpen && (
+        <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
+            <button type="button" aria-label="Close" onClick={() => setDestSearchOpen(false)}>
+              <ChevronLeft size={22} className="text-foreground" />
+            </button>
+            <input
+              autoFocus
+              type="text"
+              value={destQuery}
+              onChange={(e) => {
+                setDestQuery(e.target.value);
+                geoSearch(e.target.value, destSearchTimerRef, setDestGeoResults);
+              }}
+              placeholder="Where to?"
+              className="flex-1 bg-transparent text-base font-medium text-foreground focus:outline-none"
+            />
+            {destQuery.length > 0 && (
+              <button type="button" aria-label="Clear search" onClick={() => { setDestQuery(""); setDestGeoResults([]); }}>
+                <X size={18} className="text-muted-foreground" />
+              </button>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {destGeoResults.map((r) => (
+              <button key={r.sublabel} type="button" onClick={() => selectDestination(r.name, r.coords)}
+                className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/50">
+                <div className="w-10 h-10 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
+                  <MapPin size={18} className="text-muted-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{r.name}</p>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">{r.sublabel}</p>
+                </div>
+              </button>
+            ))}
+            {destGeoResults.length === 0 && destQuery.length >= 2 && (
+              <p className="text-sm text-muted-foreground text-center py-10">Searching…</p>
+            )}
+            {destQuery.length < 2 && (
+              <p className="text-sm text-muted-foreground text-center py-10">Type your destination</p>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

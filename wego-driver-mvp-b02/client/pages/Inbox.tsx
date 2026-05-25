@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Bell, Star, AlertCircle, Info, ChevronRight, Check, Tag } from "lucide-react";
+import { Bell, Star, AlertCircle, Info, ChevronRight, ChevronLeft, Check, Tag } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { listenToMessages, markMessageRead as markMsgRead, type Message as DbMessage } from "@/lib/db";
+import { listenToMessages, markMessageRead as markMsgRead, markAllMessagesRead, type Message as DbMessage } from "@/lib/db";
 
 type MessageType = "wego" | "rider" | "alert" | "system" | "promo";
 type Tab = "all" | "messages" | "alerts" | "promotions";
@@ -117,7 +117,11 @@ export default function Inbox() {
     setSelected({ ...msg, read: true });
   };
 
-  const markAllRead = () => setMessages((prev) => prev.map((m) => ({ ...m, read: true })));
+  const markAllRead = () => {
+    const unreadIds = messages.filter((m) => !m.read).map((m) => m.id);
+    setMessages((prev) => prev.map((m) => ({ ...m, read: true })));
+    if (unreadIds.length) markAllMessagesRead(unreadIds).catch(() => {});
+  };
 
   if (selected) {
     return (
@@ -126,9 +130,10 @@ export default function Inbox() {
           <button
             type="button"
             onClick={() => setSelected(null)}
-            className="text-sm text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
+            aria-label="Back to Inbox"
+            className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-sm active:scale-95 transition-transform"
           >
-            ← Back to Inbox
+            <ChevronLeft size={20} className="text-foreground" />
           </button>
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">

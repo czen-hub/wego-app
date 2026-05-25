@@ -1,9 +1,11 @@
 ﻿import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Moon, Sun, Bell, BellOff, Car, Map, Shield, ChevronRight,
+  Moon, Sun, Bell, BellOff, Car, Map, Shield, ChevronRight, ChevronLeft,
   LogOut, User, Phone, Mail, Star, HelpCircle, FileText,
   Camera, Upload, CheckCircle, Eye, EyeOff, Lock, Pencil, Users, Copy
 } from "lucide-react";
+import { toast } from "sonner";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { updatePassword, updateEmail, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
@@ -178,14 +180,14 @@ type ModalId =
 const DRIVER_FAQS = [
   { q: "What are the cancellation fees if a passenger cancels?", a: "You are protected by distance-based cancellation fees that go 100% to you — WeGo keeps none of it.\n\n• Free: passenger cancels within 5 min of booking (driver not yet dispatched)\n• $5.00: passenger cancels while you are nearby (< 5 miles en route)\n• $9.00: passenger cancels while you are 5–10 miles en route\n• $14.00: passenger cancels after you drove 10+ miles including highway\n• Distance fee + $3.00: passenger cancels after you have already arrived (e.g. drove 10+ miles = $14 + $3 = $17)\n\nFees are credited to your account within 24 hours." },
   { q: "What do I do if a passenger is a no-show?", a: "After arriving at the pickup location you have a free wait window:\n• 5 minutes for standard on-demand rides\n• 8 minutes for advance/Reserve bookings\n\nAfter the free window, a $0.50/min wait meter runs for up to 2 more minutes. If the passenger still hasn't appeared, tap 'Passenger No-Show' in the app. You'll receive the full arrived cancellation fee (distance fee + $3.00) and the ride is closed. You are never penalised for a no-show — 100% of the fee goes to you." },
-  { q: "What is my take-home per ride?", a: "You keep 88% of every fare. WeGo takes 12% — this covers the app, dispatch infrastructure, and cooperative operations (pension fund, insurance pool, AV fleet).\n\nExample: $65 fare → you earn $57.20. Compare to Corp 1/Corp 2 where drivers typically keep ~45% effective pay after all platform deductions — WeGo pays you roughly 96% more per dollar of gross fare." },
-  { q: "Do I earn extra for advance/scheduled rides?", a: "Yes — every Reserve (advance booking) ride includes a flat $8.00 scheduling bonus that goes 100% to you. WeGo keeps none of it.\n\nExample: $38 base fare → you earn $33.44 (88%) + $8.00 advance fee = $41.44 total.\n\nPassengers still pay $15–25 less than they would on Corp 1 Reserve, so drivers get better booking volume without sacrificing pay.\n\nThe advance fee is your compensation for committing your schedule to a specific pickup time." },
+  { q: "What is my take-home per ride?", a: "You keep 88% of every fare. WeGo takes 12% — this covers the app, dispatch infrastructure, and cooperative operations (pension fund, insurance pool, AV fleet).\n\nExample: $65 fare → you earn $57.20. Compare to Corp where drivers typically keep ~45% effective pay after all platform deductions — WeGo pays you roughly 96% more per dollar of gross fare." },
+  { q: "Do I earn extra for advance/scheduled rides?", a: "Yes — every Reserve (advance booking) ride includes a flat $8.00 scheduling bonus that goes 100% to you. WeGo keeps none of it.\n\nExample: $38 base fare → you earn $33.44 (88%) + $8.00 advance fee = $41.44 total.\n\nPassengers still pay $15–25 less than they would on Corp Reserve, so drivers get better booking volume without sacrificing pay.\n\nThe advance fee is your compensation for committing your schedule to a specific pickup time." },
   { q: "Do I get paid for mid-trip stops or extra wait time?", a: "Yes — both are compensated 100% and go directly to you.\n\n• Stop fee: $2.00 per stop when a passenger requests a mid-route stop (e.g. coffee, ATM). Tap 'Log Passenger Stop' in the app each time.\n\n• Wait meter: If a passenger takes longer than the free wait window at pickup, a $0.50/min meter runs (after 5 min for standard rides, after 8 min for advance bookings). This is added to the final fare and goes 100% to you.\n\nBoth fees appear as separate line items on the passenger's receipt so everything is transparent." },
   { q: "Can I receive tips?", a: "Yes — 100% of tips go directly to you. WeGo never takes a cut of tips. Passengers are prompted to tip after ride completion and can also tip from their Ride History within 24 hours. Tips are deposited with your next weekly payout and appear as a separate line item in your Earnings tab." },
   { q: "How does the $75/month membership due work?", a: "The $75/month breaks down as:\n• $20 — group commercial insurance contribution\n• $15 — app infrastructure & technology\n• $10 — operations reserve\n• $25 — directly into your Retirement Trust\n• $5 — cooperative dividend reserve\n\nThe $45/month covering insurance and operations is tax-deductible as a business expense. The $25 going into your Retirement Trust is legally protected in a separate ERISA trust — management cannot access or redirect it." },
   { q: "When do I get paid?", a: "Earnings are deposited every Monday for the prior week's completed rides. You can view your real-time running total in the Earnings tab at any time. Cancellation fees appear as a separate line item within 24 hours of the event. Tips are included in the same Monday deposit." },
   { q: "What happens if I stop driving for a period?", a: "Your cooperative seat is preserved for up to 6 months on approved leave. During an approved pause your $75/month dues are not charged, and your vesting clock is preserved (not reset). After 6 months of inactivity without a formal leave, your seat enters a suspended state — you retain your pension credits but lose active voting rights until you return. Contact the member services committee to formally request a leave." },
-  { q: "Can I be deactivated by an algorithm?", a: "No. Unlike Corp 1 or Corp 2, WeGo cannot deactivate you algorithmically. Every deactivation requires:\n• Documented human review of the specific incident\n• Written notice with the stated reason\n• 30-day appeal right to the member-elected board committee\n• Management cannot override a board appeal decision\n\nThis protection is written into the cooperative's founding constitution and requires a 75% supermajority to amend." },
+  { q: "Can I be deactivated by an algorithm?", a: "No. Unlike Corp, WeGo cannot deactivate you algorithmically. Every deactivation requires:\n• Documented human review of the specific incident\n• Written notice with the stated reason\n• 30-day appeal right to the member-elected board committee\n• Management cannot override a board appeal decision\n\nThis protection is written into the cooperative's founding constitution and requires a 75% supermajority to amend." },
   { q: "How do I dispute a rating or complaint?", a: "Go to Settings → Support or contact the member services committee directly. All complaints are reviewed by a human within 48 hours. Ratings from cancelled rides or unverified complaints are not counted against your score. You will always receive written notice of the complaint and the outcome." },
   { q: "What if a passenger reports a lost item?", a: "You may be contacted through the app for up to 24 hours after a ride if a passenger reports a lost item. Check your vehicle and respond through the in-app message. If you find the item, coordinate return directly with the passenger — you keep any reasonable retrieval arrangement you agree to. WeGo does not charge a lost item fee or take a cut of retrieval arrangements." },
   { q: "What is RideCheck and what does it mean for me?", a: "RideCheck is WeGo's passive safety monitoring system. If the app detects an unusually long stop during a trip, it may send a check-in to you and the passenger asking if everything is okay. Tap the green 'All Good' button to dismiss it — this takes about 2 seconds and prevents an automatic safety flag. If there is a genuine emergency, the app connects both parties to 911. RideCheck does not affect your rating or payout for normal ride activity." },
@@ -193,6 +195,7 @@ const DRIVER_FAQS = [
 ];
 
 export default function Settings() {
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { logOut, profile, user } = useAuth();
   const isDark = theme === "dark";
@@ -256,11 +259,14 @@ export default function Settings() {
   const [signOutConfirm, setSignOutConfirm] = useState(false);
   const close = () => setModal(null);
   const [codeCopied, setCodeCopied] = useState(false);
+  const referralCode = profile?.referralCode || "";
   const handleCopyCode = () => {
-    navigator.clipboard?.writeText("WEGO-MT42");
+    if (!referralCode) return;
+    navigator.clipboard?.writeText(referralCode).catch(() => {});
     setCodeCopied(true);
     setTimeout(() => setCodeCopied(false), 2000);
   };
+  const memberSinceYear = profile?.memberSince ? profile.memberSince.getFullYear() : null;
 
   // Derived display strings
   const vehicleDisplay = vehicle.make
@@ -269,56 +275,89 @@ export default function Settings() {
   const insuranceDisplay = insurance.company ? `${insurance.company} · ${insurance.policy || "No policy #"}` : "Tap to add insurance";
   const inspectionDisplay = inspection.date ? `Last: ${inspection.date}` : "No inspection on record";
 
-  // Helpers for Firestore updates (silent fail when Firebase not configured)
   const updateProfile = async (fields: Record<string, unknown>) => {
     if (!user?.uid) return;
-    await updateDoc(doc(db, "drivers", user.uid), fields).catch(() => {});
+    await updateDoc(doc(db, "drivers", user.uid), fields);
   };
 
-  // Handlers
   const saveProfile = async () => {
+    const prev = profileName;
     setProfileName(profileDraft);
-    await updateProfile({ name: profileDraft });
-    close();
+    try {
+      await updateProfile({ name: profileDraft });
+      toast.success("Profile updated");
+      close();
+    } catch {
+      setProfileName(prev);
+      toast.error("Failed to save. Please try again.");
+    }
   };
   const saveVehicle = async () => {
+    const prev = vehicle;
     setVehicle(vehicleDraft);
-    await updateProfile({
-      vehicleMake: vehicleDraft.make,
-      vehicleModel: vehicleDraft.model,
-      vehicleYear: vehicleDraft.year,
-      licensePlate: vehicleDraft.plate,
-    });
-    close();
+    try {
+      await updateProfile({
+        vehicleMake: vehicleDraft.make,
+        vehicleModel: vehicleDraft.model,
+        vehicleYear: vehicleDraft.year,
+        licensePlate: vehicleDraft.plate,
+      });
+      toast.success("Vehicle info saved");
+      close();
+    } catch {
+      setVehicle(prev);
+      toast.error("Failed to save. Please try again.");
+    }
   };
   const saveInsurance = async () => {
+    const prev = insurance;
     setInsurance(insuranceDraft);
-    if (insuranceFile && user) {
-      const storageRef = ref(storage, `drivers/${user.uid}/insurance/${insuranceFile.name}`);
-      const snapshot = await uploadBytes(storageRef, insuranceFile);
-      const url = await getDownloadURL(snapshot.ref);
-      setInsuranceDoc(url);
-      await updateProfile({ insuranceDocUrl: url, insuranceExpiry: insuranceDraft.expiry });
-      setInsuranceFile(null);
+    try {
+      if (insuranceFile && user) {
+        const storageRef = ref(storage, `drivers/${user.uid}/insurance/${insuranceFile.name}`);
+        const snapshot = await uploadBytes(storageRef, insuranceFile);
+        const url = await getDownloadURL(snapshot.ref);
+        setInsuranceDoc(url);
+        await updateProfile({ insuranceDocUrl: url, insuranceExpiry: insuranceDraft.expiry });
+        setInsuranceFile(null);
+      }
+      toast.success("Insurance saved");
+      close();
+    } catch {
+      setInsurance(prev);
+      toast.error("Failed to save. Please try again.");
     }
-    close();
   };
   const saveInspection = async () => {
+    const prev = inspection;
     setInspection(inspectionDraft);
-    if (inspectionFile && user) {
-      const storageRef = ref(storage, `drivers/${user.uid}/inspection/${inspectionFile.name}`);
-      const snapshot = await uploadBytes(storageRef, inspectionFile);
-      const url = await getDownloadURL(snapshot.ref);
-      setInspectionDoc(url);
-      await updateProfile({ inspectionDocUrl: url, inspectionDate: inspectionDraft.date });
-      setInspectionFile(null);
+    try {
+      if (inspectionFile && user) {
+        const storageRef = ref(storage, `drivers/${user.uid}/inspection/${inspectionFile.name}`);
+        const snapshot = await uploadBytes(storageRef, inspectionFile);
+        const url = await getDownloadURL(snapshot.ref);
+        setInspectionDoc(url);
+        await updateProfile({ inspectionDocUrl: url, inspectionDate: inspectionDraft.date });
+        setInspectionFile(null);
+      }
+      toast.success("Inspection record saved");
+      close();
+    } catch {
+      setInspection(prev);
+      toast.error("Failed to save. Please try again.");
     }
-    close();
   };
   const savePhone = async () => {
+    const prev = phone;
     setPhone(phoneDraft);
-    await updateProfile({ phone: phoneDraft });
-    close();
+    try {
+      await updateProfile({ phone: phoneDraft });
+      toast.success("Phone number updated");
+      close();
+    } catch {
+      setPhone(prev);
+      toast.error("Failed to save. Please try again.");
+    }
   };
   const saveEmail = async () => {
     if (!emailDraft.trim()) { setEmailError("Enter a new email address."); return; }
@@ -384,6 +423,14 @@ export default function Settings() {
 
           {/* Header */}
           <div>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              aria-label="Back"
+              className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-sm active:scale-95 transition-transform mb-3"
+            >
+              <ChevronLeft size={20} className="text-foreground" />
+            </button>
             <h1 className="text-3xl font-bold text-foreground">Settings</h1>
             <p className="text-muted-foreground">Manage your driver preferences</p>
           </div>
@@ -528,7 +575,7 @@ export default function Settings() {
               <p className="text-xs text-muted-foreground leading-relaxed">Share your referral code — earn <span className="text-primary font-semibold">+$50</span> when they complete their first 10 rides.</p>
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-background border border-border rounded-lg px-3 py-2 flex items-center justify-between">
-                  <span className="text-sm font-bold text-primary tracking-widest">WEGO-MT42</span>
+                  <span className="text-sm font-bold text-primary tracking-widest">{referralCode || "—"}</span>
                   <button
                     type="button"
                     onClick={handleCopyCode}
@@ -540,10 +587,7 @@ export default function Settings() {
                   </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Users size={13} className="text-primary flex-shrink-0" />
-                <span>2 referrals pending · $100 earned so far</span>
-              </div>
+              <p className="text-xs text-muted-foreground">Referral earnings paid out weekly with your rides.</p>
             </div>
           </Section>
 
@@ -569,7 +613,9 @@ export default function Settings() {
             )}
           </Section>
 
-          <p className="text-center text-xs text-muted-foreground pb-2">WeGo Driver v2.4.1 · Member since 2023</p>
+          <p className="text-center text-xs text-muted-foreground pb-2">
+            WeGo Driver v2.4.1{memberSinceYear ? ` · Member since ${memberSinceYear}` : ""}
+          </p>
         </div>
       </div>
 

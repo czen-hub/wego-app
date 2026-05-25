@@ -5,9 +5,9 @@ import { useAuth } from "@/context/AuthContext";
 import { listenToCompletedRides, type Ride } from "@/lib/db";
 
 function calcStats(rs: Ride[]) {
-  const gross = rs.reduce((s, r) => s + r.fare + (r.stopFeeTotal ?? 0), 0);
+  const gross = rs.reduce((s, r) => s + r.fare, 0);
   const coop  = rs.reduce((s, r) => s + r.coopFee, 0);
-  const take  = rs.reduce((s, r) => s + r.driverTake + (r.stopFeeTotal ?? 0), 0);
+  const take  = rs.reduce((s, r) => s + r.driverTake, 0);
   return { gross, coop, take, count: rs.length };
 }
 
@@ -74,82 +74,71 @@ export default function Earnings() {
         {/* ── THIS WEEK hero ── */}
         {hasWeek && (
           <>
-            <div className="p-6 border border-primary/20 rounded-xl space-y-3 bg-primary/5">
+            <div className="p-4 border border-primary/20 rounded-xl space-y-3 bg-primary/5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">This Week · Live</p>
-              <div className="space-y-1">
-                <p className="text-6xl font-bold text-primary leading-tight">${week.take.toFixed(2)}</p>
-                <p className="text-sm text-muted-foreground">Your net take-home earnings</p>
+              <div>
+                <p className="text-3xl font-bold text-primary leading-tight">${week.take.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Net take-home earnings</p>
               </div>
-              <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border/30">
+              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border/30">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Rides</p>
-                  <p className="text-2xl font-bold text-foreground">{week.count}</p>
+                  <p className="text-xs text-muted-foreground mb-0.5">Rides</p>
+                  <p className="text-lg font-bold text-foreground">{week.count}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Gross</p>
-                  <p className="text-2xl font-bold text-foreground">${week.gross.toFixed(0)}</p>
+                  <p className="text-xs text-muted-foreground mb-0.5">Gross</p>
+                  <p className="text-lg font-bold text-foreground">${week.gross.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">WeGo Fee</p>
+                  <p className="text-xs text-muted-foreground mb-0.5">WeGo Fee</p>
                   <p className="text-lg font-bold text-destructive">-${week.coop.toFixed(2)}</p>
                 </div>
               </div>
             </div>
 
             {/* WeGo Advantage */}
-            <div className="p-5 border border-primary/20 rounded-xl space-y-4 bg-primary/5">
-              <p className="text-xs font-semibold text-primary uppercase tracking-wide">The WeGo Advantage — This Week</p>
-              <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+            <div className="p-4 border border-border rounded-xl">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">WeGo vs Corp This Week</p>
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Corp 1 / Corp 2 (~48% cut)</p>
-                  <p className="text-xl font-bold text-muted-foreground line-through decoration-red-400">${standardPayout.toFixed(2)}</p>
+                  <p className="text-[10px] text-muted-foreground mb-0.5">Corp (~48% cut)</p>
+                  <p className="text-base font-semibold text-muted-foreground line-through decoration-red-400">${standardPayout.toFixed(2)}</p>
                 </div>
-                <div className="h-8 w-px bg-border flex-shrink-0" />
+                <div className="h-6 w-px bg-border flex-shrink-0" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-0.5">WeGo (88%)</p>
+                  <p className="text-base font-semibold text-foreground">${week.take.toFixed(2)}</p>
+                </div>
+                <div className="h-6 w-px bg-border flex-shrink-0" />
                 <div className="text-right">
-                  <p className="text-[10px] font-semibold text-primary uppercase tracking-wide mb-0.5">You kept extra</p>
-                  <p className="text-xl font-bold text-primary">+${wegoAdvantage.toFixed(2)}</p>
+                  <p className="text-[10px] text-primary mb-0.5">You kept extra</p>
+                  <p className="text-base font-bold text-primary">+${wegoAdvantage.toFixed(2)}</p>
                 </div>
               </div>
             </div>
 
             {/* Where Your 12% Goes */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Where Your 12% Goes</p>
-              <div className="p-5 space-y-3 border border-border rounded-xl">
-                <div className="flex items-start gap-3 pb-3 border-b border-border/50">
-                  <div className="p-2 bg-primary/10 rounded-lg flex-shrink-0">
-                    <TrendingUp size={18} className="text-primary" />
+              <div className="border border-border rounded-xl divide-y divide-border/50">
+                {[
+                  { icon: <TrendingUp size={14} className="text-primary" />, label: "Hardware Reserve Fund", sub: "AV fleet acquisition", val: hardwareReserve },
+                  { icon: <Cpu size={14} className="text-primary" />,        label: "Platform Ops",           sub: "App & infrastructure",  val: platformOps },
+                  { icon: <Shield size={14} className="text-primary" />,     label: "Group Insurance",        sub: "Member coverage",        val: insurance },
+                ].map(({ icon, label, sub, val }) => (
+                  <div key={label} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="flex-shrink-0">{icon}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground">{label}</p>
+                      <p className="text-[10px] text-muted-foreground">{sub}</p>
+                    </div>
+                    <p className="text-xs font-semibold text-primary flex-shrink-0">${val.toFixed(2)}</p>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-foreground">Hardware Reserve Fund</p>
-                    <p className="text-xs text-muted-foreground">Autonomous vehicle fleet acquisition</p>
-                    <p className="text-lg font-bold text-primary mt-1">${hardwareReserve.toFixed(2)}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 pb-3 border-b border-border/50">
-                  <div className="p-2 bg-primary/10 rounded-lg flex-shrink-0">
-                    <Cpu size={18} className="text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-foreground">Platform Ops & Engineering</p>
-                    <p className="text-xs text-muted-foreground">App development and infrastructure</p>
-                    <p className="text-lg font-bold text-primary mt-1">${platformOps.toFixed(2)}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg flex-shrink-0">
-                    <Shield size={18} className="text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-foreground">Group Insurance Subsidies</p>
-                    <p className="text-xs text-muted-foreground">Member health & liability coverage</p>
-                    <p className="text-lg font-bold text-primary mt-1">${insurance.toFixed(2)}</p>
-                  </div>
-                </div>
+                ))}
               </div>
-              <div className="bg-card/30 p-3 rounded-lg border border-border/50 flex justify-between items-center">
-                <p className="text-xs text-muted-foreground">Total WeGo fee this week:</p>
-                <p className="text-sm font-bold text-foreground">${week.coop.toFixed(2)}</p>
+              <div className="flex justify-between items-center px-1">
+                <p className="text-xs text-muted-foreground">Total WeGo fee this week</p>
+                <p className="text-xs font-semibold text-foreground">${week.coop.toFixed(2)}</p>
               </div>
             </div>
           </>
@@ -175,31 +164,31 @@ export default function Earnings() {
 
         {/* ── ALL-TIME summary (shown when no week rides but has history) ── */}
         {noWeek && hasAllTime && (
-          <div className="p-5 border border-primary/20 rounded-xl space-y-3 bg-primary/5">
+          <div className="p-4 border border-primary/20 rounded-xl space-y-3 bg-primary/5">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">All-Time Earnings</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Rides</p>
-                <p className="text-2xl font-bold text-foreground">{all.count}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Rides</p>
+                <p className="text-lg font-bold text-foreground">{all.count}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Total Earned</p>
-                <p className="text-xl font-bold text-primary">${all.take.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Total Earned</p>
+                <p className="text-lg font-bold text-primary">${all.take.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">WeGo Fee Paid</p>
-                <p className="text-lg font-bold text-muted-foreground">-${all.coop.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">WeGo Fee</p>
+                <p className="text-base font-semibold text-muted-foreground">-${all.coop.toFixed(2)}</p>
               </div>
             </div>
-            <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between gap-4 mt-2">
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/30">
               <div>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Corp 1 / Corp 2 would have paid</p>
-                <p className="text-xl font-bold text-muted-foreground line-through decoration-red-400">${(all.gross * 0.52).toFixed(2)}</p>
+                <p className="text-[10px] text-muted-foreground mb-0.5">Corp would have paid</p>
+                <p className="text-base font-semibold text-muted-foreground line-through decoration-red-400">${(all.gross * 0.52).toFixed(2)}</p>
               </div>
-              <div className="h-8 w-px bg-border flex-shrink-0" />
+              <div className="h-6 w-px bg-border flex-shrink-0" />
               <div className="text-right">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-wide mb-0.5">Extra kept with WeGo</p>
-                <p className="text-xl font-bold text-primary">+${(all.take - all.gross * 0.52).toFixed(2)}</p>
+                <p className="text-[10px] text-primary mb-0.5">Extra kept with WeGo</p>
+                <p className="text-base font-bold text-primary">+${(all.take - all.gross * 0.52).toFixed(2)}</p>
               </div>
             </div>
           </div>

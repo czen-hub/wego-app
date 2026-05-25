@@ -8,7 +8,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { DispatchProvider } from "@/context/DispatchContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import GlobalRideAlert from "@/components/GlobalRideAlert";
 import { Loader2 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import Login from "./pages/Login";
@@ -35,10 +37,11 @@ const queryClient = new QueryClient({
 });
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => (
-  <div className="w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden">
+  <div className="relative w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden">
     <div className="flex-1 overflow-y-auto">
       <ErrorBoundary>{children}</ErrorBoundary>
     </div>
+    <ErrorBoundary><GlobalRideAlert /></ErrorBoundary>
     <BottomNav />
   </div>
 );
@@ -73,6 +76,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <DispatchProvider>
             <ErrorBoundary>
               <Routes>
                 <Route
@@ -137,7 +141,7 @@ const App = () => (
                   path="/trip"
                   element={
                     <ProtectedRoute>
-                      <div className="w-full max-w-[430px] mx-auto h-screen bg-background overflow-hidden">
+                      <div className="w-full max-w-[430px] mx-auto h-screen bg-background overflow-y-auto">
                         <TripInProgress />
                       </div>
                     </ProtectedRoute>
@@ -178,6 +182,7 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </ErrorBoundary>
+            </DispatchProvider>
           </BrowserRouter>
         </AuthProvider>
       </ThemeProvider>
