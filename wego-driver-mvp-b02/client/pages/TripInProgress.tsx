@@ -115,6 +115,7 @@ export default function TripInProgress() {
   const [stopViaCoords, setStopViaCoords] = useState<[number, number] | null>(null);
   const lastPendingStopKeyRef = useRef<string | null>(null);
   const pinSubmittingRef = useRef(false);
+  const approachNotifFiredRef = useRef(false);
   const [mapResetToken, setMapResetToken] = useState(0);
   const [headingUp, setHeadingUp] = useState(false);
   const lastMapMoveRef = useRef<number>(0);
@@ -318,6 +319,33 @@ export default function TripInProgress() {
   const completeLabel = isDelivery ? "Delivery Complete" : "Complete Trip";
   const hasPickupIssueAlert = pickupIssueAlert.active;
   const pickupIssueNeedsAcknowledgement = hasPickupIssueAlert && !pickupIssueAlert.driverAlertSeen;
+
+  // Request notification permission when trip goes in-progress
+  useEffect(() => {
+    if (phase !== "in-progress") return;
+    approachNotifFiredRef.current = false;
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, [phase]);
+
+  // Fire a notification when driver is ~300m (~30s) from dropoff
+  useEffect(() => {
+    if (phase !== "in-progress" || !driverCoords || !trip?.dropoffCoords) return;
+    if (approachNotifFiredRef.current) return;
+    const dist = haversineMeters(driverCoords[0], driverCoords[1], trip.dropoffCoords[0], trip.dropoffCoords[1]);
+    if (dist > 300) return;
+    approachNotifFiredRef.current = true;
+    if ("Notification" in window && Notification.permission === "granted") {
+      const notif = new Notification("WeGo — Approaching Dropoff", {
+        body: `Return to WeGo to complete ${trip.riderName.split(" ")[0]}'s trip.`,
+        icon: "/favicon.ico",
+        requireInteraction: true,
+        tag: "wego-approach",
+      });
+      notif.onclick = () => { window.focus(); notif.close(); };
+    }
+  }, [driverCoords, phase, trip?.dropoffCoords]);
 
   // Zoom in to driver's position ~4s after GPS first arrives (overrides initial fitBounds)
   // MUST be before any early returns to satisfy hooks rules
@@ -979,6 +1007,18 @@ export default function TripInProgress() {
                 <span className="text-sm font-bold text-primary">+${stopEarnings.toFixed(2)}</span>
               </div>
             )}
+            {trip.dropoffCoords && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${trip.dropoffCoords[0]},${trip.dropoffCoords[1]}&travelmode=driving`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 rounded-xl bg-card border border-border text-foreground font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
+              >
+                <Navigation size={16} className="text-primary" />
+                Navigate with Google Maps
+              </a>
+            )}
+
             <button type="button" onClick={() => {
                 setPhase("complete");
                 if (trip.rideId) {
