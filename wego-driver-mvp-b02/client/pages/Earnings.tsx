@@ -110,10 +110,10 @@ export default function Earnings() {
             <button
               type="button"
               onClick={() => navigate("/history")}
-              className="w-full flex items-center justify-between px-4 py-3 bg-card border border-border rounded-xl active:scale-[0.99] transition-transform"
+              className="w-full flex items-center gap-3 px-4 py-2.5 bg-card border border-border rounded-xl active:scale-[0.99] transition-transform"
             >
-              <span className="text-sm font-semibold text-foreground">Trip History</span>
-              <History size={14} className="text-muted-foreground" />
+              <History size={14} className="text-primary flex-shrink-0" />
+              <span className="text-xs font-medium text-foreground">Trip History</span>
             </button>
 
             {/* Where Your 12% Goes */}
