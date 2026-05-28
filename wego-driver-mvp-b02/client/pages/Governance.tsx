@@ -271,7 +271,7 @@ export default function Governance() {
                           disabled={submitting}
                           className={`py-2 px-4 rounded-lg font-semibold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60 ${
                             pendingVote.choice === "approve"
-                              ? "bg-primary text-white"
+                              ? "bg-primary text-primary-foreground"
                               : "bg-destructive/10 border border-destructive/50 text-destructive"
                           }`}
                         >
@@ -285,7 +285,7 @@ export default function Governance() {
                       <button
                         type="button"
                         onClick={() => setPendingVote({ id: initiative.id, choice: "approve" })}
-                        className="py-2.5 px-4 rounded-lg bg-primary text-white font-semibold text-sm hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        className="py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 btn-glow"
                       >
                         <CheckCircle size={16} />
                         Approve

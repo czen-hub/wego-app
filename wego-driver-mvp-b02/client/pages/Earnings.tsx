@@ -95,7 +95,7 @@ export default function Earnings() {
                   type="button"
                   onClick={() => { setWithdrawDone(false); setWithdrawModalOpen(true); }}
                   disabled={!loaded || week.take <= 0}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl active:scale-95 transition-transform disabled:opacity-40 flex-shrink-0"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl active:scale-95 transition-transform disabled:opacity-40 flex-shrink-0 btn-glow"
                 >
                   <ArrowDownToLine size={15} />
                   Request Payout
@@ -288,7 +288,7 @@ export default function Earnings() {
                 <h2 className="text-lg font-bold text-foreground">Payout Requested</h2>
                 <p className="text-sm text-muted-foreground">Your request for <span className="text-primary font-semibold">${week.take.toFixed(2)}</span> has been submitted. Funds will arrive in <span className="font-medium text-foreground">{bankAccount.bankName} ****{bankAccount.accountNumberLast4}</span> within 1–2 business days.</p>
                 <button type="button" onClick={() => setWithdrawModalOpen(false)}
-                  className="w-full py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform mt-1">
+                  className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-95 transition-transform btn-glow mt-1">
                   Done
                 </button>
               </div>
@@ -343,7 +343,7 @@ export default function Earnings() {
                         setWithdrawing(false);
                       }
                     }}
-                    className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-95 transition-transform btn-glow disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {withdrawing
                       ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Processing…</>

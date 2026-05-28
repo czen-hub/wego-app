@@ -853,7 +853,7 @@ export default function TripInProgress() {
           type="button"
           aria-label="Cancel Trip"
           onClick={() => setCancelModalOpen(true)}
-          className="absolute top-4 left-4 z-[1000] w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center shadow-lg active:scale-95"
+          className="absolute top-4 left-4 z-[1000] w-10 h-10 rounded-xl bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center shadow-lg active:scale-95 transition-transform"
         >
           <ChevronLeft size={20} className="text-foreground" />
         </button>
@@ -1130,7 +1130,7 @@ export default function TripInProgress() {
               setPhase("waiting");
               if (trip.rideId) updateRideStatus(trip.rideId, "arrived").catch(() => {});
             }}
-            className="w-full py-4 rounded-2xl bg-primary text-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-primary/30">
+            className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform btn-glow">
             <CheckCircle size={22} />
             {arrivedLabel}
           </button>
@@ -1176,7 +1176,7 @@ export default function TripInProgress() {
                 }
               }}
               disabled={pickupIssueNeedsAcknowledgement}
-              className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl ${pickupIssueNeedsAcknowledgement ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-none cursor-not-allowed" : "bg-primary text-foreground shadow-primary/30"}`}>
+              className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl ${pickupIssueNeedsAcknowledgement ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-none cursor-not-allowed" : "bg-primary text-primary-foreground btn-glow"}`}>
               <CheckCircle size={22} />
               {pickupIssueNeedsAcknowledgement ? "Acknowledge Safety Alert First" : (trip.type === "food" ? "Food Picked Up" : "Passenger is Here")}
             </button>
@@ -1259,7 +1259,7 @@ export default function TripInProgress() {
               className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl ${
                 pickupIssueNeedsAcknowledgement
                   ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-none cursor-not-allowed"
-                  : "bg-primary text-white shadow-primary/30"
+                  : "bg-primary text-primary-foreground btn-glow"
               }`}>
               <CheckCircle size={22} />
               {pickupIssueNeedsAcknowledgement ? "Acknowledge Safety Alert First" : isCompleting ? "Completing…" : completeLabel}

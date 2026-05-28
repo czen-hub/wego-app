@@ -888,7 +888,7 @@ export default function Command() {
                 Stay Online
               </button>
               <button type="button" onClick={() => { setOfflineBlockOpen(false); navigate("/trip", { replace: true, state: { riderName: activeRide?.passengerName, pickupLocation: activeRide?.pickupAddress, dropoffLocation: activeRide?.dropoffAddress, riderPayment: activeRide?.fare, coopFee: activeRide?.coopFee, driverTake: activeRide?.driverTake, estimatedTime: activeRide?.estimatedMinutes, isAdvanced: activeRide?.isAdvanced, type: activeRide?.type, rideId: activeRide?.id, pickupCoords: activeRide?.pickupLocation ? [activeRide.pickupLocation.latitude, activeRide.pickupLocation.longitude] as [number,number] : undefined, dropoffCoords: activeRide?.dropoffLocation ? [activeRide.dropoffLocation.latitude, activeRide.dropoffLocation.longitude] as [number,number] : undefined } }); }}
-                className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform">
+                className="py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm active:scale-95 transition-transform btn-glow">
                 Back to Trip
               </button>
             </div>

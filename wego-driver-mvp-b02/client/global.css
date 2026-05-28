@@ -1,5 +1,5 @@
 /** @import must precede all other statements */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -100,7 +100,7 @@
   body {
     @apply text-foreground;
     background-color: #000000;
-    font-family: "Inter", sans-serif;
+    font-family: "Plus Jakarta Sans", sans-serif;
   }
 
   #root {
@@ -152,6 +152,18 @@
 
   .glass-card {
     @apply bg-card border border-border rounded-2xl;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 20px hsl(var(--primary) / 0.35);
+  }
+
+  .shadow-float {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .shadow-card {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
   }
 
   .leaflet-fill {

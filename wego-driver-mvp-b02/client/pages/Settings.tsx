@@ -94,7 +94,7 @@ function SaveButton({ onClick, label = "Save Changes" }: { onClick: () => void; 
     <button
       type="button"
       onClick={onClick}
-      className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all duration-200"
+      className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-2xl active:scale-95 transition-transform btn-glow"
     >
       {label}
     </button>
@@ -507,52 +507,57 @@ export default function Settings() {
               type="button"
               onClick={() => navigate(-1)}
               aria-label="Back"
-              className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-sm active:scale-95 transition-transform mb-3"
+              className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center active:scale-95 transition-transform mb-3"
             >
-              <ChevronLeft size={20} className="text-foreground" />
+              <ChevronLeft size={18} className="text-foreground" />
             </button>
             <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-            <p className="text-muted-foreground">Manage your driver preferences</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Manage your driver preferences</p>
           </div>
 
-          {/* Profile card */}
-          <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
-            {/* Avatar — tap to change photo */}
-            <button
-              type="button"
-              onClick={() => profilePicRef.current?.click()}
-              className="relative w-14 h-14 rounded-full flex-shrink-0 group"
-              aria-label="Change profile photo"
-            >
-              {profilePic ? (
-                <img src={profilePic} alt="Profile" className="w-14 h-14 rounded-full object-cover border-2 border-primary/40" />
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
-                  <User size={26} className="text-primary" />
+          {/* Profile hero */}
+          <div className="bg-gradient-to-b from-primary/10 via-primary/4 to-transparent rounded-2xl px-4 pt-5 pb-4">
+            <div className="flex items-start gap-4 mb-4">
+              <button
+                type="button"
+                onClick={() => profilePicRef.current?.click()}
+                className="relative w-20 h-20 rounded-2xl flex-shrink-0 overflow-hidden group bg-primary flex items-center justify-center shadow-[0_4px_16px_hsl(var(--primary)/0.30)]"
+                aria-label="Change profile photo"
+              >
+                {profilePic ? (
+                  <img src={profilePic} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl font-bold text-primary-foreground">
+                    {(profileName || "?").charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
+                  <Camera size={18} className="text-white" />
                 </div>
-              )}
-              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
-                <Camera size={16} className="text-white" />
-              </div>
-            </button>
-            <input ref={profilePicRef} type="file" accept="image/*" aria-label="Upload profile photo" className="hidden" onChange={handleProfilePic} />
+              </button>
+              <input ref={profilePicRef} type="file" accept="image/*" aria-label="Upload profile photo" className="hidden" onChange={handleProfilePic} />
 
-            <div className="flex-1 min-w-0">
-              <p className="text-base font-semibold text-foreground">{profileName}</p>
-              <div className="flex items-center gap-1 mt-0.5">
-                <Star size={12} className="text-yellow-500 fill-yellow-500" />
-                <span className="text-xs text-muted-foreground">{profile?.rating?.toFixed(2) ?? "5.00"} · {profile?.totalRides ?? 0} rides</span>
+              <div className="flex-1 min-w-0 pt-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold text-foreground leading-tight truncate">{profileName || "—"}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{email}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setProfileDraft(profileName); setModal("editProfile"); }}
+                    className="px-3 py-1.5 bg-secondary border border-border rounded-xl text-xs font-semibold text-foreground flex-shrink-0 active:scale-95 transition-transform"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <Star size={13} className="text-primary fill-primary flex-shrink-0" />
+                  <span className="text-sm font-semibold text-foreground">{profile?.rating?.toFixed(2) ?? "5.00"}</span>
+                  <span className="text-xs text-muted-foreground">· {profile?.totalRides ?? 0} ride{(profile?.totalRides ?? 0) !== 1 ? "s" : ""}</span>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">{email}</p>
             </div>
-
-            <button
-              type="button"
-              onClick={() => { setProfileDraft(profileName); setModal("editProfile"); }}
-              className="flex items-center gap-1 text-xs text-primary hover:opacity-80 transition-opacity font-medium flex-shrink-0"
-            >
-              <Pencil size={12} /> Edit
-            </button>
           </div>
 
           {/* Appearance */}
@@ -972,7 +977,7 @@ export default function Settings() {
             type="button"
             onClick={handleSaveBankAccount}
             disabled={bankSaving}
-            className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-2xl active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2 btn-glow"
           >
             {bankSaving ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Saving…</> : (bankAccount ? "Update Bank Account" : "Save Bank Account")}
           </button>
@@ -989,7 +994,7 @@ export default function Settings() {
           <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 text-center space-y-2 mt-2">
             <p className="text-sm font-semibold text-foreground">Still need help?</p>
             <p className="text-xs text-muted-foreground">Contact the member services committee — we respond within 24 hours.</p>
-            <button type="button" onClick={() => { window.location.href = "mailto:support@wegoapp.com"; }} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold active:scale-95 transition-transform">
+            <button type="button" onClick={() => { window.location.href = "mailto:support@wego.coop"; }} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold active:scale-95 transition-transform btn-glow">
               Contact Support
             </button>
           </div>

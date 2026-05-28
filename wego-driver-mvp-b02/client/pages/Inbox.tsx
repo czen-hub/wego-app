@@ -145,7 +145,7 @@ export default function Inbox() {
             type="button"
             onClick={() => setSelected(null)}
             aria-label="Back to Inbox"
-            className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+            className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center active:scale-95 transition-transform"
           >
             <ChevronLeft size={20} className="text-foreground" />
           </button>
@@ -180,7 +180,7 @@ export default function Inbox() {
                     />
                     <button type="button" aria-label="Send reply" onClick={sendReply} disabled={!replyText.trim()}
                       className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform flex-shrink-0">
-                      <Send size={16} className="text-white" />
+                      <Send size={16} className="text-primary-foreground" />
                     </button>
                   </div>
                 )}
@@ -226,14 +226,14 @@ export default function Inbox() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
                   activeTab === tab.id
-                    ? "bg-primary text-white"
+                    ? "bg-primary text-primary-foreground"
                     : "bg-card border border-border text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {tab.label}
                 {count > 0 && (
                   <span className={`text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none ${
-                    activeTab === tab.id ? "bg-white/30 text-white" : "bg-primary text-white"
+                    activeTab === tab.id ? "bg-white/30 text-primary-foreground" : "bg-primary text-primary-foreground"
                   }`}>
                     {count}
                   </span>
