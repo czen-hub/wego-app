@@ -26,25 +26,34 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav className="bg-card border-t border-border bottom-nav-safe">
-      <div className="flex justify-around items-stretch pt-1">
+    <nav className="bg-background border-t border-border bottom-nav-safe">
+      <div className="flex justify-around items-stretch pt-1.5 pb-0.5">
         {navItems.map(({ path, icon: Icon, label, matchPaths }) => {
           const active = matchPaths.includes(pathname);
           return (
             <Link
               key={path}
               to={path}
-              className="relative flex-1 flex flex-col items-center gap-1 py-2 select-none"
+              className="flex-1 flex flex-col items-center gap-1 select-none"
             >
-              {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-0.5 rounded-full bg-primary" />
-              )}
-              <Icon
-                size={20}
-                strokeWidth={active ? 2.5 : 1.75}
-                className={`transition-colors duration-200 ${active ? "text-primary" : "text-muted-foreground"}`}
-              />
-              <span className={`text-[10px] font-semibold transition-colors duration-200 ${active ? "text-primary" : "text-muted-foreground"}`}>
+              <div
+                className={`flex items-center justify-center w-12 h-8 rounded-xl transition-colors duration-200 ${
+                  active ? "bg-primary/10" : ""
+                }`}
+              >
+                <Icon
+                  size={19}
+                  strokeWidth={active ? 2.25 : 1.75}
+                  className={`transition-colors duration-200 ${
+                    active ? "text-primary" : "text-muted-foreground"
+                  }`}
+                />
+              </div>
+              <span
+                className={`text-[10px] font-semibold tracking-wide pb-1 transition-colors duration-200 ${
+                  active ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
                 {label}
               </span>
             </Link>

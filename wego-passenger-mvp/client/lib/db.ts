@@ -78,6 +78,8 @@ export interface Ride {
   driverAlertSeenAt: Date | null;
   earlyEnd?: boolean;
   proratedFare?: number;
+  tipAmount?: number;
+  tipGiven?: boolean;
 }
 
 export interface ChatMessage {
@@ -108,7 +110,7 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     driverRating: (data.driverRating as number) ?? 5.0,
     driverCar: (data.driverCar as string) ?? "",
     driverPlate: (data.driverPlate as string) ?? "",
-    pickupAddress: (data.pickupAddress as string) ?? "",
+    pickupAddress: ((data.pickupAddress as string) ?? "").replace(/\s*\([+-]?\d+\.\d+,\s*[+-]?\d+\.\d+\)\s*$/, "").trim(),
     dropoffAddress: ((data.dropoffAddress as string) ?? "").replace(/\s*\([+-]?\d+\.\d+,\s*[+-]?\d+\.\d+\)\s*$/, "").trim(),
     pickupLocation: (data.pickupLocation as GeoPoint | null) ?? null,
     dropoffLocation: (data.dropoffLocation as GeoPoint | null) ?? null,
@@ -141,6 +143,8 @@ function rideFromDoc(id: string, data: Record<string, unknown>): Ride {
     driverAlertSeenAt: toDate(data.driverAlertSeenAt),
     earlyEnd: (data.earlyEnd as boolean | undefined) ?? undefined,
     proratedFare: (data.proratedFare as number | undefined) ?? undefined,
+    tipAmount: (data.tipAmount as number | undefined),
+    tipGiven: (data.tipGiven as boolean) ?? false,
   };
 }
 
@@ -377,7 +381,7 @@ export function listenToRideHistory(
     let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
     rides = rides.filter(r => r.status === "completed");
     rides.sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
-    callback(rides.slice(0, 20));
+    callback(rides.slice(0, 100));
   }, (err) => console.error("listenToRideHistory:", err));
 }
 
@@ -526,4 +530,18 @@ export function estimateFare(distanceMiles: number, type: RideType = "ride"): nu
   const base = type === "food" ? 3.0 : 2.5;
   const perMile = type === "ride" ? 1.85 : 1.65;
   return Math.max(base + distanceMiles * perMile, 7);
+}
+
+export async function incrementPassengerRideCount(passengerId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, "passengers", passengerId), { totalRides: increment(1) });
+  } catch {}
+}
+
+export async function submitTip(rideId: string, tipAmount: number): Promise<void> {
+  await updateDoc(doc(db, "rides", rideId), {
+    tipAmount,
+    tipGiven: true,
+    driverTake: increment(tipAmount),
+  });
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, ChevronLeft, Clock, Shield, Info, Navigation, ExternalLink, Plus, X } from "lucide-react";
+import { MapPin, ChevronLeft, Clock, Shield, Navigation, ExternalLink, Plus, X } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -79,10 +79,11 @@ function formatPinnedAddress(label: string, coords: [number, number] | null) {
 
 async function geocode(address: string): Promise<[number, number] | null> {
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=us`;
-    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?types=address,place,poi&language=en&country=us&limit=1&access_token=${TOKEN}`;
+    const res = await fetch(url);
     const data = await res.json();
-    if (data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    const feat = data.features?.[0];
+    if (feat) return [feat.center[1] as number, feat.center[0] as number];
   } catch {}
   return null;
 }
@@ -262,7 +263,7 @@ function SortableStop({ stop, index, focused, onFocus, onBlur, onChange, onSelec
           {...attributes}
           {...listeners}
           aria-label="Drag to reorder stop"
-          className="w-3 h-3 bg-amber-400 rotate-45 touch-none cursor-grab active:cursor-grabbing flex-shrink-0 active:scale-110 transition-transform"
+          className="w-3 h-3 bg-primary rounded-sm touch-none cursor-grab active:cursor-grabbing flex-shrink-0 active:scale-110 transition-transform"
         />
         <div className="w-px flex-1 min-h-[2.5rem] bg-border flex-shrink-0" />
       </div>
@@ -271,7 +272,7 @@ function SortableStop({ stop, index, focused, onFocus, onBlur, onChange, onSelec
       <div className="flex-1 min-w-0 pb-1">
         <div className="flex items-start gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-amber-500 mb-0.5">Stop {index + 1}</p>
+            <p className="text-xs text-primary mb-0.5">Stop {index + 1}</p>
             <div className="relative">
               <input
                 ref={inputRef}
@@ -281,15 +282,15 @@ function SortableStop({ stop, index, focused, onFocus, onBlur, onChange, onSelec
                 onChange={e => onChange(stop.id, e.target.value)}
                 onFocus={() => onFocus(stop.id)}
                 onBlur={() => onBlur(stop.id)}
-                className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${focused ? "border-amber-400" : "border-transparent"}`}
+                className={`w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none pb-1 border-b transition-colors ${focused ? "border-primary" : "border-transparent"}`}
               />
               {focused && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
                   {displayResults.map(s => (
                     <button key={s.label + s.sublabel} type="button" onMouseDown={() => onSelect(stop.id, s.label, s.coords)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0">
-                      <div className="w-6 h-6 rounded-full bg-amber-400/10 border border-amber-400/30 flex items-center justify-center flex-shrink-0">
-                        <MapPin size={11} className="text-amber-500" />
+                      <div className="w-8 h-8 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                        <MapPin size={11} className="text-muted-foreground" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
@@ -648,7 +649,7 @@ export default function RideRequest() {
           type="button"
           onClick={() => navigate("/")}
           aria-label="Back"
-          className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center"
+          className="absolute top-4 left-4 z-20 w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center"
         >
           <ChevronLeft size={18} className="text-foreground" />
         </button>
@@ -672,16 +673,16 @@ export default function RideRequest() {
       <div className="flex-1 overflow-y-auto px-4 pt-3 pb-6 space-y-4">
 
         {/* Route card */}
-        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
 
           {/* Pickup row */}
-          <div className="flex gap-3 items-start">
-            <div className="flex flex-col items-center flex-shrink-0 pt-2">
-              <div className="w-3 h-3 rounded-full bg-primary flex-shrink-0" />
-              <div className="w-px flex-1 min-h-[2.5rem] bg-border flex-shrink-0" />
+          <div className="flex gap-2.5 items-stretch px-3 pt-3 pb-1">
+            <div className="flex flex-col items-center flex-shrink-0 pt-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0" />
+              <div className="w-px flex-1 min-h-[14px] bg-border/60 my-1 flex-shrink-0" />
             </div>
-            <div className="flex-1 min-w-0 pb-3">
-              <p className="text-xs text-muted-foreground mb-0.5">Pickup</p>
+            <div className="flex-1 min-w-0 pb-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Pickup</p>
               <button
                 type="button"
                 onClick={() => {
@@ -690,87 +691,82 @@ export default function RideRequest() {
                   setPickupSearchOpen(true);
                   if (pickup && pickup !== "Current Location") geoSearch(pickup, pickupSearchTimerRef, setPickupGeoResults);
                 }}
-                className="w-full text-left text-sm font-semibold text-foreground pb-1 border-b border-transparent truncate active:opacity-70"
+                className="w-full text-left text-sm font-semibold text-foreground truncate active:opacity-70 leading-tight"
               >
                 {pickup || "Enter pickup address"}
               </button>
             </div>
           </div>
 
-          {/* Draggable stops — SortableStop owns its own indicator, no parent left column */}
+          {/* Draggable stops */}
           {stops.length > 0 && (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={stops.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                {stops.map((stop, i) => (
-                  <SortableStop
-                    key={stop.id}
-                    stop={stop}
-                    index={i}
-                    focused={focusedStopId === stop.id}
-                    onFocus={handleStopFocus}
-                    onBlur={handleStopBlur}
-                    onChange={updateStopAddress}
-                    onSelect={selectStop}
-                    onRemove={removeStop}
-                    inputRef={el => { stopInputRefs.current.set(stop.id, el); }}
-                    geoResults={stopGeoResults.get(stop.id) ?? []}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
+            <div className="px-3">
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={stops.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                  {stops.map((stop, i) => (
+                    <SortableStop
+                      key={stop.id}
+                      stop={stop}
+                      index={i}
+                      focused={focusedStopId === stop.id}
+                      onFocus={handleStopFocus}
+                      onBlur={handleStopBlur}
+                      onChange={updateStopAddress}
+                      onSelect={selectStop}
+                      onRemove={removeStop}
+                      inputRef={el => { stopInputRefs.current.set(stop.id, el); }}
+                      geoResults={stopGeoResults.get(stop.id) ?? []}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            </div>
           )}
 
           {/* Dropoff row */}
-          <div className="flex gap-3 items-start">
-            <div className="flex flex-col items-center flex-shrink-0 pt-2">
-              <div className="w-3 h-3 rounded-full border-2 border-foreground flex-shrink-0" />
+          <div className="flex gap-2.5 items-start px-3 pb-3 pt-1">
+            <div className="flex flex-col items-center flex-shrink-0 pt-1.5">
+              <div className="w-2.5 h-2.5 rounded-full border-2 border-foreground flex-shrink-0" />
             </div>
-            <div className="flex-1 min-w-0 pb-1">
-              <div className="pt-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Dropoff</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDestQuery(destination);
-                    setDestGeoResults([]);
-                    setDestSearchOpen(true);
-                    if (destination) geoSearch(destination, destSearchTimerRef, setDestGeoResults);
-                  }}
-                  className="w-full text-left text-sm font-semibold pb-1 border-b border-transparent truncate active:opacity-70"
-                >
-                  {destination
-                    ? <span className="text-foreground">{destination}</span>
-                    : <span className="text-muted-foreground font-normal">Where to?</span>}
-                </button>
-              </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Dropoff</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDestQuery(destination);
+                  setDestGeoResults([]);
+                  setDestSearchOpen(true);
+                  if (destination) geoSearch(destination, destSearchTimerRef, setDestGeoResults);
+                }}
+                className="w-full text-left text-sm font-semibold truncate active:opacity-70 leading-tight"
+              >
+                {destination
+                  ? <span className="text-foreground">{destination}</span>
+                  : <span className="text-muted-foreground font-normal">Where to?</span>}
+              </button>
             </div>
           </div>
 
-          {/* Add Stop button — sits below the full route, outside the dropoff row */}
-
-          {destination.trim() && stops.length < MAX_STOPS && (
-            <button
-              type="button"
-              onClick={addStop}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-amber-400/40 bg-amber-400/5 text-amber-500 text-xs font-semibold hover:bg-amber-400/10 active:scale-95 transition-all w-full justify-center mt-1"
-            >
-              <Plus size={14} />
-              Add Stop {stops.length > 0 ? `(${stops.length}/${MAX_STOPS})` : ""}
-            </button>
-          )}
-
-          {/* Distance row */}
-          <div className="flex items-center gap-4 pt-1 border-t border-border/50">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock size={12} /><span>~{mins} min ride</span>
+          {/* Footer: distance + add stop */}
+          <div className="flex items-center gap-3 px-3 py-2 border-t border-border/40 bg-background/40">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock size={11} /><span>~{mins} min</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <MapPin size={12} /><span>{miles} miles</span>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <MapPin size={11} /><span>{miles} mi</span>
             </div>
             {stops.length > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-500">
-                <span>{stops.length} stop{stops.length > 1 ? "s" : ""} included</span>
-              </div>
+              <span className="text-xs text-muted-foreground">{stops.length} stop{stops.length > 1 ? "s" : ""}</span>
+            )}
+            {destination.trim() && stops.length < MAX_STOPS && (
+              <button
+                type="button"
+                onClick={addStop}
+                className="ml-auto flex items-center gap-1 text-xs text-primary font-semibold active:opacity-70 transition-opacity"
+              >
+                <Plus size={13} />
+                Add Stop
+              </button>
             )}
           </div>
         </div>
@@ -802,16 +798,16 @@ export default function RideRequest() {
 
             {/* Stop fee breakdown */}
             {resolvedStops.length > 0 && (
-              <div className="bg-amber-500/8 border border-amber-400/20 rounded-lg px-3 py-2 space-y-1.5">
+              <div className="bg-muted/10 border border-border/40 rounded-lg px-3 py-2 space-y-1.5">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Base ride fare</span>
                   <span className="text-xs text-muted-foreground">${(fare + tollTotal).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-amber-500 font-medium">
+                  <span className="text-xs text-foreground font-medium">
                     Stop fee × {resolvedStops.length} stop{resolvedStops.length > 1 ? "s" : ""} (100% to driver)
                   </span>
-                  <span className="text-xs font-semibold text-amber-500">+${plannedStopFee.toFixed(2)}</span>
+                  <span className="text-xs font-semibold text-primary">+${plannedStopFee.toFixed(2)}</span>
                 </div>
                 <div className="h-px bg-border/40" />
                 <div className="flex justify-between items-center">
@@ -822,60 +818,36 @@ export default function RideRequest() {
             )}
 
             {bridgeTolls.length > 0 && (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5 space-y-1.5">
-                <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-wide">Bridge Tolls Included</p>
+              <div className="bg-muted/10 border border-border/40 rounded-lg px-3 py-2.5 space-y-1.5">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Bridge Tolls Included</p>
                 {bridgeTolls.map((t) => (
                   <div key={t.name} className="flex items-center justify-between">
-                    <span className="text-xs text-amber-700 dark:text-amber-400">{t.name}</span>
-                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">+${t.toll.toFixed(2)}</span>
+                    <span className="text-xs text-foreground">{t.name}</span>
+                    <span className="text-xs font-semibold text-foreground">+${t.toll.toFixed(2)}</span>
                   </div>
                 ))}
-                <p className="text-[10px] text-amber-600/70">Tolls passed 100% to your driver</p>
+                <p className="text-[10px] text-muted-foreground">Tolls passed 100% to your driver</p>
               </div>
             )}
 
-            <div className="space-y-2 border-t border-border/40 pt-3">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                <Info size={10} /> Where your money goes
-              </p>
-              {tollTotal > 0 && (
-                <div className="flex items-center justify-between pb-1 border-b border-border/30">
-                  <span className="text-xs text-muted-foreground">Base ride fare</span>
-                  <span className="text-xs text-muted-foreground">${fare.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-                    <span className="text-sm text-foreground font-medium">Driver earns</span>
-                    <span className="text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">
-                      {tollTotal > 0 || plannedStopFee > 0 ? "88%+" : "88%"}
-                    </span>
-                  </div>
-                  <span className="text-sm font-bold text-primary">${totalDriverEarns.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground flex-shrink-0" />
-                    <span className="text-sm text-muted-foreground">WeGo Cooperative</span>
-                    <span className="text-xs text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">12%</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">${coopFee.toFixed(2)}</span>
-                </div>
+            <div className="space-y-1 border-t border-border/40 pt-2">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Driver earns ({tollTotal > 0 || plannedStopFee > 0 ? "88%+" : "88%"})</span>
+                <span className="font-semibold text-primary">${totalDriverEarns.toFixed(2)}</span>
               </div>
-              <div className="w-full h-2 bg-muted/30 rounded-full overflow-hidden mt-1">
-                <div className="h-full w-[88%] bg-primary rounded-full" />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>WeGo Cooperative (12%)</span>
+                <span>${coopFee.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-muted-foreground">The 12% cooperative fee funds driver pensions, insurance & AV fleet.</p>
             </div>
+
           </div>
         )}
 
         {/* ETA */}
         {destination.trim() && (
           <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
               <Clock size={18} className="text-primary" />
             </div>
             <div>
@@ -895,7 +867,7 @@ export default function RideRequest() {
           type="button"
           onClick={handleConfirm}
           disabled={confirming || !destination.trim()}
-          className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-primary/30 disabled:opacity-50"
+          className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-lg active:scale-95 transition-transform btn-glow disabled:opacity-50"
         >
           {confirming ? "Requesting…" : destination.trim() ? `Confirm Ride — $${totalCharged.toFixed(2)}` : "Enter a destination"}
         </button>
@@ -906,8 +878,9 @@ export default function RideRequest() {
       {pickupSearchOpen && (
         <div className="absolute inset-0 z-[9999] bg-background flex flex-col">
           <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
-            <button type="button" aria-label="Close" onClick={() => setPickupSearchOpen(false)}>
-              <ChevronLeft size={22} className="text-foreground" />
+            <button type="button" aria-label="Close" onClick={() => setPickupSearchOpen(false)}
+              className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+              <ChevronLeft size={18} className="text-foreground" />
             </button>
             <input
               autoFocus
@@ -929,7 +902,7 @@ export default function RideRequest() {
           <div className="flex-1 overflow-y-auto">
             <button type="button" onClick={() => selectPickup("Current Location")}
               className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border">
-              <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
                 <Navigation size={18} className="text-primary" />
               </div>
               <div>
@@ -940,7 +913,7 @@ export default function RideRequest() {
             {pickupGeoResults.map((r) => (
               <button key={r.sublabel} type="button" onClick={() => selectPickup(r.name, r.coords)}
                 className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/50">
-                <div className="w-10 h-10 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
                   <MapPin size={18} className="text-muted-foreground" />
                 </div>
                 <div className="min-w-0">
@@ -963,8 +936,9 @@ export default function RideRequest() {
       {destSearchOpen && (
         <div className="absolute inset-0 z-[9999] bg-background flex flex-col">
           <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
-            <button type="button" aria-label="Close" onClick={() => setDestSearchOpen(false)}>
-              <ChevronLeft size={22} className="text-foreground" />
+            <button type="button" aria-label="Close" onClick={() => setDestSearchOpen(false)}
+              className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+              <ChevronLeft size={18} className="text-foreground" />
             </button>
             <input
               autoFocus
@@ -987,7 +961,7 @@ export default function RideRequest() {
             {destGeoResults.map((r) => (
               <button key={r.sublabel} type="button" onClick={() => selectDestination(r.name, r.coords)}
                 className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/50">
-                <div className="w-10 h-10 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
                   <MapPin size={18} className="text-muted-foreground" />
                 </div>
                 <div className="min-w-0">

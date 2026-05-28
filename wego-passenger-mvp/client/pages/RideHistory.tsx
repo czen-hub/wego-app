@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from "react";
-import { MapPin, Star, Package, X, Send, Check, MessageSquare, Clock } from "lucide-react";
+import { Star, Package, X, Send, Check, MessageSquare, Clock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { listenToRideHistory, sendRideMessage, type Ride } from "@/lib/db";
+import { listenToRideHistory, sendRideMessage, submitRating, submitTip, type Ride } from "@/lib/db";
 
 interface LostItemState {
   ride: Ride;
@@ -31,6 +31,8 @@ export default function RideHistory() {
   const [loaded, setLoaded] = useState(false);
   const [lostItem, setLostItem] = useState<LostItemState | null>(null);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
+  const [ratingModal, setRatingModal] = useState<{ ride: Ride; rating: number; submitted: boolean } | null>(null);
+  const [tipModal, setTipModal] = useState<{ ride: Ride; amount: number; submitted: boolean } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -135,29 +137,28 @@ export default function RideHistory() {
           {loaded && !isEmpty && (
             <>
               {/* Summary card */}
-              <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 space-y-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Your Impact
-                </p>
-                <div className="bg-card border border-border rounded-xl flex divide-x divide-border overflow-hidden">
-                  <div className="px-4 py-3 flex-shrink-0 text-center">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Rides</p>
-                    <p className="text-2xl font-bold text-foreground">{rides.length}</p>
-                  </div>
-                  <div className="px-4 py-3 flex-1 min-w-0 text-center">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total Spent</p>
-                    <p className="text-2xl font-bold text-foreground">${totalFares.toFixed(0)}</p>
-                  </div>
-                  <div className="px-4 py-3 flex-1 min-w-0 text-center">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">To Drivers</p>
-                    <p className="text-2xl font-bold text-primary">${totalDriverEarned.toFixed(0)}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">88% of fares</p>
-                  </div>
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Your Impact
+                  </p>
+                  <span className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    No Surge, Ever
+                  </span>
                 </div>
-                <div className="bg-card border border-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">Your total spent with WeGo</p>
-                  <p className="text-2xl font-bold text-foreground">${totalFares.toFixed(2)}</p>
-                  <p className="text-xs text-muted-foreground">No surge pricing, ever.</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-card border border-border rounded-xl p-3 text-center">
+                    <p className="text-2xl font-bold text-foreground">{rides.length}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Rides</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-xl p-3 text-center">
+                    <p className="text-2xl font-bold text-foreground">${totalFares.toFixed(0)}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">Spent</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-xl p-3 text-center">
+                    <p className="text-2xl font-bold text-primary">${totalDriverEarned.toFixed(0)}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">To Drivers</p>
+                  </div>
                 </div>
               </div>
 
@@ -176,32 +177,34 @@ export default function RideHistory() {
                     >
                       {/* Header row */}
                       <div className="px-4 py-3 flex items-center justify-between border-b border-border/50">
-                        <p className="text-xs font-semibold text-muted-foreground">
-                          {formatDate(ride.completedAt)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-muted-foreground">
+                            {formatDate(ride.completedAt)}
+                          </p>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground uppercase tracking-wide">
+                            {ride.type === "courier" ? "Courier" : ride.type === "food" ? "Food" : "Ride"}
+                          </span>
+                        </div>
                         <span className="text-xs font-semibold text-foreground">
                           ${ride.fare.toFixed(2)}
                         </span>
                       </div>
 
                       {/* Route */}
-                      <div className="px-4 py-3 space-y-2">
-                        <div className="flex gap-2 items-center">
-                          <MapPin size={13} className="text-primary flex-shrink-0" />
-                          <p className="text-xs text-muted-foreground truncate">
-                            {ride.pickupAddress}
-                          </p>
+                      <div className="px-4 py-3 flex gap-3 items-stretch">
+                        <div className="flex flex-col items-center flex-shrink-0 pt-1">
+                          <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                          <div className="w-px flex-1 min-h-[16px] bg-border/60 my-1 flex-shrink-0" />
+                          <div className="w-2 h-2 rounded-full bg-muted-foreground/40 flex-shrink-0" />
                         </div>
-                        <div className="flex gap-2 items-center">
-                          <MapPin size={13} className="text-primary/50 flex-shrink-0" />
-                          <p className="text-xs font-medium text-foreground truncate">
-                            {ride.dropoffAddress}
-                          </p>
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <p className="text-xs text-muted-foreground truncate leading-tight">{ride.pickupAddress}</p>
+                          <p className="text-xs font-semibold text-foreground truncate leading-tight">{ride.dropoffAddress}</p>
                         </div>
                       </div>
 
                       {/* Driver + fare */}
-                      <div className="px-4 pb-3 flex items-center justify-between">
+                      <div className="px-4 pb-3 pt-2 flex items-center justify-between border-t border-border/40">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                             {(ride.driverName || "?").charAt(0).toUpperCase()}
@@ -212,26 +215,15 @@ export default function RideHistory() {
                             </p>
                             {ride.passengerRatingGiven > 0 ? (
                               <div className="flex items-center gap-0.5">
-                                <span className="text-[10px] text-muted-foreground mr-0.5">You rated:</span>
                                 {[1, 2, 3, 4, 5].map((s) => (
                                   <Star
                                     key={s}
                                     size={9}
-                                    className={
-                                      s <= ride.passengerRatingGiven
-                                        ? "text-yellow-400"
-                                        : "text-muted-foreground/30"
-                                    }
-                                    fill={
-                                      s <= ride.passengerRatingGiven
-                                        ? "currentColor"
-                                        : "none"
-                                    }
+                                    className={s <= ride.passengerRatingGiven ? "text-yellow-400" : "text-muted-foreground/30"}
+                                    fill={s <= ride.passengerRatingGiven ? "currentColor" : "none"}
                                   />
                                 ))}
-                                <span className="text-[10px] text-muted-foreground ml-0.5">
-                                  {ride.passengerRatingGiven}/5
-                                </span>
+                                <span className="text-[10px] text-muted-foreground ml-0.5">{ride.passengerRatingGiven}/5</span>
                               </div>
                             ) : (
                               <span className="text-[10px] text-muted-foreground/50">Not rated</span>
@@ -244,20 +236,43 @@ export default function RideHistory() {
                         </div>
                       </div>
 
-                      {/* Lost item */}
-                      <div className="px-4 pb-3">
+                      {/* Actions */}
+                      <div className="px-4 pb-3 space-y-2">
                         {canContact ? (
-                          <button
-                            type="button"
-                            onClick={() => openLostItem(ride)}
-                            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-primary/40 text-primary text-xs font-semibold active:scale-95 transition-transform"
-                          >
-                            <Package size={13} />
-                            Lost something? Message {driverFirst}
-                          </button>
+                          <>
+                            {(ride.passengerRatingGiven === 0 || !ride.tipGiven) && (
+                              <div className="flex gap-2">
+                                {ride.passengerRatingGiven === 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setRatingModal({ ride, rating: 0, submitted: false })}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-semibold active:scale-95 transition-transform"
+                                  >
+                                    <Star size={12} />Rate {driverFirst}
+                                  </button>
+                                )}
+                                {!ride.tipGiven && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setTipModal({ ride, amount: 0, submitted: false })}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border text-muted-foreground text-xs font-semibold active:scale-95 transition-transform"
+                                  >
+                                    Tip {driverFirst}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openLostItem(ride)}
+                              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-primary/40 text-primary text-xs font-semibold active:scale-95 transition-transform"
+                            >
+                              <Package size={13} />Lost something? Message {driverFirst}
+                            </button>
+                          </>
                         ) : (
                           <p className="text-center text-[10px] text-muted-foreground/50">
-                            Driver contact available within 24 hrs of ride
+                            Contact window expired
                           </p>
                         )}
                       </div>
@@ -401,6 +416,125 @@ export default function RideHistory() {
                   <Send size={15} />
                   Send Message
                 </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── RATING MODAL ── */}
+      {ratingModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRatingModal(null)} />
+          <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl shadow-float px-4 pt-4 pb-8 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star size={16} className="text-primary" />
+                <p className="text-base font-bold text-foreground">Rate Your Ride</p>
+              </div>
+              <button type="button" aria-label="Close" onClick={() => setRatingModal(null)} className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
+                <X size={16} className="text-muted-foreground" />
+              </button>
+            </div>
+            {ratingModal.submitted ? (
+              <div className="space-y-3 py-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center mx-auto">
+                  <Check size={28} className="text-primary" />
+                </div>
+                <p className="text-lg font-bold text-foreground">Thanks for rating!</p>
+                <button type="button" onClick={() => setRatingModal(null)} className="w-full py-3 rounded-2xl bg-primary text-white font-bold text-sm active:scale-95 transition-transform btn-glow">Done</button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3">
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold flex-shrink-0">
+                    {(ratingModal.ride.driverName || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{ratingModal.ride.driverName || "WeGo Driver"}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(ratingModal.ride.completedAt)}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground text-center">How was your ride?</p>
+                <div className="flex justify-center gap-3">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <button key={s} type="button"
+                      aria-label={`Rate ${s} star${s > 1 ? "s" : ""}`}
+                      onClick={() => setRatingModal((prev) => prev ? { ...prev, rating: s } : null)}
+                      className={`transition-transform active:scale-90 ${s <= ratingModal.rating ? "text-yellow-400" : "text-muted-foreground/30"}`}>
+                      <Star size={32} fill={s <= ratingModal.rating ? "currentColor" : "none"} />
+                    </button>
+                  ))}
+                </div>
+                <button type="button" disabled={ratingModal.rating === 0}
+                  onClick={async () => {
+                    try {
+                      await submitRating(ratingModal.ride.id, ratingModal.rating, "passenger");
+                      setRatingModal((prev) => prev ? { ...prev, submitted: true } : null);
+                    } catch {}
+                  }}
+                  className="w-full py-3 rounded-2xl bg-primary text-white font-bold text-sm active:scale-95 transition-transform disabled:opacity-40 btn-glow">
+                  Submit Rating
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TIP MODAL ── */}
+      {tipModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setTipModal(null)} />
+          <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl shadow-float px-4 pt-4 pb-8 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-base font-bold text-foreground">Leave a Tip</p>
+              <button type="button" aria-label="Close" onClick={() => setTipModal(null)} className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
+                <X size={16} className="text-muted-foreground" />
+              </button>
+            </div>
+            {tipModal.submitted ? (
+              <div className="space-y-3 py-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center mx-auto">
+                  <Check size={28} className="text-primary" />
+                </div>
+                <p className="text-lg font-bold text-foreground">Tip Sent!</p>
+                <p className="text-sm text-muted-foreground">
+                  100% of your tip goes directly to {(tipModal.ride.driverName || "your driver").split(" ")[0]}.
+                </p>
+                <button type="button" onClick={() => setTipModal(null)} className="w-full py-3 rounded-2xl bg-primary text-white font-bold text-sm active:scale-95 transition-transform btn-glow">Done</button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3">
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold flex-shrink-0">
+                    {(tipModal.ride.driverName || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{tipModal.ride.driverName || "WeGo Driver"}</p>
+                    <p className="text-xs text-muted-foreground">100% goes directly to your driver</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 2, 5].map((amt) => (
+                    <button key={amt} type="button"
+                      onClick={() => setTipModal((prev) => prev ? { ...prev, amount: amt } : null)}
+                      className={`py-3 rounded-xl text-sm font-bold border transition-colors active:scale-95 ${tipModal.amount === amt ? "bg-primary text-white border-primary" : "bg-card border-border text-foreground"}`}>
+                      ${amt}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" disabled={tipModal.amount === 0}
+                  onClick={async () => {
+                    try {
+                      await submitTip(tipModal.ride.id, tipModal.amount);
+                      setTipModal((prev) => prev ? { ...prev, submitted: true } : null);
+                    } catch {}
+                  }}
+                  className="w-full py-3 rounded-2xl bg-primary text-white font-bold text-sm active:scale-95 transition-transform disabled:opacity-40 btn-glow">
+                  {tipModal.amount > 0 ? `Send $${tipModal.amount} Tip` : "Select an amount"}
+                </button>
+                <p className="text-xs text-muted-foreground text-center">Tips go 100% to your driver — WeGo takes nothing.</p>
               </div>
             )}
           </div>

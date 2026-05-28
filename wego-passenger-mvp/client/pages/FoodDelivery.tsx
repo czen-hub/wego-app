@@ -223,7 +223,7 @@ export default function FoodDelivery() {
           type="button"
           aria-label="Back"
           onClick={() => navigate("/")}
-          className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center active:scale-95 transition-transform"
+          className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center active:scale-95 transition-transform"
         >
           <ChevronLeft size={20} className="text-foreground" />
         </button>
@@ -277,8 +277,8 @@ export default function FoodDelivery() {
                     onMouseDown={() => selectRestaurant(s.label)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0"
                   >
-                    <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                      <UtensilsCrossed size={10} className="text-primary" />
+                    <div className="w-8 h-8 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                      <UtensilsCrossed size={10} className="text-muted-foreground" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
@@ -329,8 +329,8 @@ export default function FoodDelivery() {
                     onMouseDown={() => selectDelivery(s.label)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0"
                   >
-                    <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                      <MapPin size={10} className="text-primary/70" />
+                    <div className="w-8 h-8 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                      <MapPin size={10} className="text-muted-foreground" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{s.label}</p>
@@ -393,7 +393,7 @@ export default function FoodDelivery() {
           type="button"
           disabled={!canSubmit}
           onClick={handleSubmit}
-          className="w-full py-4 rounded-xl bg-primary text-white font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shadow-primary/30 disabled:opacity-40"
+          className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform btn-glow disabled:opacity-40"
         >
           {submitting ? "Placing order…" : "Request Delivery"}
         </button>

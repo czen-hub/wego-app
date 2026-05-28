@@ -149,7 +149,9 @@ export default function Account() {
   // Profile
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<string | null>(() => {
+    try { return localStorage.getItem("wego_profile_photo"); } catch { return null; }
+  });
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [draftEmail, setDraftEmail] = useState(email);
@@ -176,7 +178,11 @@ export default function Account() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = (ev) => setPhoto(ev.target?.result as string);
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      setPhoto(result);
+      try { localStorage.setItem("wego_profile_photo", result); } catch {}
+    };
     reader.readAsDataURL(file);
   };
 
@@ -195,7 +201,12 @@ export default function Account() {
   const [copied, setCopied] = useState(false);
 
   // Payment
-  const [cards, setCards] = useState(INITIAL_CARDS);
+  const [cards, setCards] = useState<{ id: string; label: string; last4: string; isDefault: boolean }[]>(() => {
+    try {
+      const stored = localStorage.getItem("wego_payment_cards");
+      return stored ? JSON.parse(stored) : INITIAL_CARDS;
+    } catch { return INITIAL_CARDS; }
+  });
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [addCardOpen, setAddCardOpen] = useState(false);
   const [newCardNum, setNewCardNum] = useState("");
@@ -204,11 +215,25 @@ export default function Account() {
 
   // Safety
   const [contactsOpen, setContactsOpen] = useState(false);
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    try {
+      const stored = localStorage.getItem("wego_safety_contacts");
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("wego_payment_cards", JSON.stringify(cards));
+  }, [cards]);
+
+  useEffect(() => {
+    localStorage.setItem("wego_safety_contacts", JSON.stringify(contacts));
+  }, [contacts]);
+
   const [newContactName, setNewContactName] = useState("");
   const [newContactPhone, setNewContactPhone] = useState("");
-  const [shareTrip, setShareTrip] = useState(false);
-  const [rideCheck, setRideCheck] = useState(false);
+  const [shareTrip, setShareTrip] = useState(() => localStorage.getItem("wego_share_trip") === "true");
+  const [rideCheck, setRideCheck] = useState(() => localStorage.getItem("wego_ride_check") === "true");
   const [pinRequired, setPinRequired] = useState(() => localStorage.getItem("wego_pin_required") === "true");
 
   // About
@@ -300,39 +325,72 @@ export default function Account() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  const totalRides = profile?.totalRides ?? 0;
+  const rating = (profile?.rating ?? 5.0).toFixed(2);
+  const savedVsCorp = (totalRides * 4.5).toFixed(0);
+
   return (
     <>
-      <div className="bg-background pt-4 px-4 pb-6">
-        <div className="max-w-2xl mx-auto space-y-5">
+      {/* ── PROFILE HERO ── */}
+      <div className="bg-gradient-to-b from-primary/10 via-primary/4 to-transparent px-4 pt-6 pb-5">
+        <div className="flex items-start gap-4 mb-4">
+          {/* Avatar */}
+          <button
+            type="button"
+            onClick={openEditProfile}
+            aria-label="Edit profile"
+            className="w-20 h-20 rounded-2xl bg-primary flex-shrink-0 overflow-hidden flex items-center justify-center text-white text-3xl font-bold shadow-[0_4px_16px_rgba(37,99,235,0.30)]"
+          >
+            {photo
+              ? <img src={photo} alt="Profile" className="w-full h-full object-cover" />
+              : (name.charAt(0) || "?").toUpperCase()
+            }
+          </button>
 
-          <h1 className="text-3xl font-bold text-foreground">Account</h1>
-
-          {/* Profile card */}
-          <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4 shadow-card">
-            <div className="w-16 h-16 rounded-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-primary to-yellow-300 flex items-center justify-center text-black text-2xl font-bold shadow-[0_4px_16px_rgba(245,158,11,0.35)]">
-              {photo
-                ? <img src={photo} alt="Profile" className="w-full h-full object-cover" />
-                : (name.charAt(0) || "?").toUpperCase()
-              }
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xl font-bold text-foreground">{name || "—"}</p>
-              <p className="text-sm text-muted-foreground truncate">{email}</p>
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <Star size={12} className="text-yellow-400 fill-yellow-400 flex-shrink-0" />
-                <span className="text-xs text-muted-foreground">
-                  {(profile?.rating ?? 5.0).toFixed(2)} rating
-                </span>
-                <span className="text-muted-foreground/40 text-xs">·</span>
-                <span className="text-xs text-muted-foreground">
-                  {profile?.totalRides ?? 0} ride{(profile?.totalRides ?? 0) !== 1 ? "s" : ""}
-                </span>
+          {/* Name + meta */}
+          <div className="flex-1 min-w-0 pt-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xl font-bold text-foreground leading-tight truncate">{name || "—"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">{email}</p>
               </div>
+              <button
+                type="button"
+                onClick={openEditProfile}
+                className="px-3 py-1.5 bg-secondary border border-border rounded-xl text-xs font-semibold text-foreground flex-shrink-0 active:scale-95 transition-transform"
+              >
+                Edit
+              </button>
             </div>
-            <button type="button" onClick={openEditProfile} className="text-xs text-primary font-semibold px-1 flex-shrink-0">
-              Edit
-            </button>
+            <div className="flex items-center gap-1.5 mt-2">
+              <Star size={13} className="text-primary fill-primary flex-shrink-0" />
+              <span className="text-sm font-semibold text-foreground">{rating}</span>
+              <span className="text-xs text-muted-foreground">
+                · {totalRides} ride{totalRides !== 1 ? "s" : ""}
+              </span>
+            </div>
           </div>
+        </div>
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-card border border-border rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-foreground">{totalRides}</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mt-0.5">Rides</p>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-primary">${savedVsCorp}</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mt-0.5">Saved</p>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-foreground">{REWARDS_TOTAL}</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mt-0.5">Points</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-background px-4 pb-6">
+        <div className="max-w-2xl mx-auto space-y-5 pt-4">
 
           {/* Appearance */}
           <Section title="Appearance">
@@ -402,13 +460,13 @@ export default function Account() {
               icon={<Shield size={18} />}
               label="Share Trip Status"
               sublabel={shareTrip ? "Live location shared during rides" : "Contacts not notified during rides"}
-              right={<Toggle on={shareTrip} onToggle={() => setShareTrip((v) => !v)} label="Toggle trip sharing" />}
+              right={<Toggle on={shareTrip} onToggle={() => { const n = !shareTrip; setShareTrip(n); localStorage.setItem("wego_share_trip", n ? "true" : "false"); }} label="Toggle trip sharing" />}
             />
             <Row
               icon={<Shield size={18} />}
               label="RideCheck"
               sublabel={rideCheck ? "Check-ins enabled on long rides" : "Periodic check-ins during long rides"}
-              right={<Toggle on={rideCheck} onToggle={() => setRideCheck((v) => !v)} label="Toggle RideCheck" />}
+              right={<Toggle on={rideCheck} onToggle={() => { const n = !rideCheck; setRideCheck(n); localStorage.setItem("wego_ride_check", n ? "true" : "false"); }} label="Toggle RideCheck" />}
             />
             <Row
               icon={<Shield size={18} />}
@@ -505,7 +563,7 @@ export default function Account() {
               <input id="profile-email" type="email" value={draftEmail} onChange={(e) => setDraftEmail(e.target.value)}
                 className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-primary" />
             </div>
-            <button type="button" onClick={saveProfile} className="w-full py-3 rounded-xl bg-primary text-white font-bold text-sm active:scale-95 transition-transform">
+            <button type="button" onClick={saveProfile} className="w-full py-3 rounded-2xl bg-primary text-white font-bold text-sm active:scale-95 transition-transform btn-glow">
               Save Changes
             </button>
           </div>
@@ -904,7 +962,7 @@ export default function Account() {
                 try { await logOut(); }
                 catch { setSignOutError(true); }
               }}
-                className="py-3 rounded-xl bg-red-500 text-white font-semibold text-sm active:scale-95 transition-transform">
+                className="py-3 rounded-xl bg-destructive text-destructive-foreground font-semibold text-sm active:scale-95 transition-transform">
                 Sign Out
               </button>
             </div>

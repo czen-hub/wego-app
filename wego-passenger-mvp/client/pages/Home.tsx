@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, MapPin, ChevronUp, ChevronDown, Clock, Building2, X, Home as HomeIcon, Briefcase, Navigation, Compass, Car, Package, Utensils, CalendarDays } from "lucide-react";
+import {
+  Search, MapPin, Building2, X, Home as HomeIcon, Briefcase,
+  Navigation, Compass, Car, Package, Utensils, CalendarDays,
+  ArrowLeft, Clock,
+} from "lucide-react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import ClientMap from "@/components/ClientMap";
@@ -16,7 +20,7 @@ function formatRelativeDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const DEFAULT_COORDS: [number, number] = [37.3541, -121.9552]; // Santa Clara fallback
+const DEFAULT_COORDS: [number, number] = [37.3541, -121.9552];
 
 function useSavedPlace(key: "home" | "work", userId: string | null) {
   const firestoreField = key === "home" ? "savedHome" : "savedWork";
@@ -41,17 +45,13 @@ function useSavedPlace(key: "home" | "work", userId: string | null) {
     localStorage.setItem(`wego_${key}`, address);
     setValue(address);
     const uid = userIdRef.current;
-    if (uid) {
-      setDoc(doc(db, "passengers", uid), { [firestoreField]: address }, { merge: true }).catch(() => {});
-    }
+    if (uid) setDoc(doc(db, "passengers", uid), { [firestoreField]: address }, { merge: true }).catch(() => {});
   };
   const clear = () => {
     localStorage.removeItem(`wego_${key}`);
     setValue("");
     const uid = userIdRef.current;
-    if (uid) {
-      setDoc(doc(db, "passengers", uid), { [firestoreField]: "" }, { merge: true }).catch(() => {});
-    }
+    if (uid) setDoc(doc(db, "passengers", uid), { [firestoreField]: "" }, { merge: true }).catch(() => {});
   };
   return { value, save, clear };
 }
@@ -91,7 +91,6 @@ export default function Home() {
     return unsub;
   }, [user]);
 
-  // After 10 seconds of map idle, trigger ClientMap to fly back to GPS location
   useEffect(() => {
     const interval = setInterval(() => {
       const t = lastMapMoveRef.current;
@@ -102,10 +101,10 @@ export default function Home() {
     }, 500);
     return () => clearInterval(interval);
   }, []);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const touchStartY = useRef(0);
   const home = useSavedPlace("home", user?.uid ?? null);
   const work = useSavedPlace("work", user?.uid ?? null);
   const [editingPlace, setEditingPlace] = useState<"home" | "work" | null>(null);
@@ -113,9 +112,13 @@ export default function Home() {
   const editInputRef = useRef<HTMLInputElement>(null);
   const searchSessionRef = useRef<string>(crypto.randomUUID());
 
+  useEffect(() => {
+    if (searchOpen) setTimeout(() => inputRef.current?.focus(), 80);
+    else setQuery("");
+  }, [searchOpen]);
+
   const openEditPlace = (which: "home" | "work") => {
-    const current = which === "home" ? home.value : work.value;
-    setEditDraft(current);
+    setEditDraft(which === "home" ? home.value : work.value);
     setEditingPlace(which);
     setTimeout(() => editInputRef.current?.focus(), 50);
   };
@@ -136,12 +139,6 @@ export default function Home() {
   const [geocoding, setGeocoding] = useState(false);
   const [placeResults, setPlaceResults] = useState<{ label: string; sublabel: string; fullAddress: string }[]>([]);
 
-  // ±1.5° bbox around GPS (~150 mile box) keeps results within the user's state
-  const gpsBbox = currentCoords
-    ? `&bbox=${(currentCoords[1] - 1.5).toFixed(4)},${(currentCoords[0] - 1.5).toFixed(4)},${(currentCoords[1] + 1.5).toFixed(4)},${(currentCoords[0] + 1.5).toFixed(4)}`
-    : "";
-
-  // Main search — Mapbox SearchBox suggest (finds businesses, airports, addresses)
   useEffect(() => {
     if (query.trim().length < 2) { setGeocodeResults([]); return; }
     let cancelled = false;
@@ -155,11 +152,8 @@ export default function Home() {
         if (!cancelled) {
           setGeocodeResults(
             (data.suggestions ?? []).map((s: { name: string; place_formatted: string; full_address: string; mapbox_id: string; feature_type: string }) => ({
-              label: s.name,
-              sublabel: s.place_formatted,
-              fullAddress: s.full_address,
-              mapboxId: s.mapbox_id,
-              isBusiness: s.feature_type === "poi",
+              label: s.name, sublabel: s.place_formatted, fullAddress: s.full_address,
+              mapboxId: s.mapbox_id, isBusiness: s.feature_type === "poi",
             }))
           );
         }
@@ -169,7 +163,6 @@ export default function Home() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [query, currentCoords]);
 
-  // Saved-place edit — Mapbox SearchBox suggest (saves full_address for geocodability)
   useEffect(() => {
     if (!editingPlace || editDraft.trim().length < 2) { setPlaceResults([]); return; }
     let cancelled = false;
@@ -179,27 +172,14 @@ export default function Home() {
         const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(editDraft.trim())}&session_token=${searchSessionRef.current}&language=en&country=us&limit=5${prox}&access_token=${MAPBOX_TOKEN}`;
         const res = await fetch(url);
         const data = await res.json();
-        if (!cancelled) {
-          setPlaceResults(
-            (data.suggestions ?? []).map((s: { name: string; place_formatted: string; full_address: string }) => ({
-              label: s.name,
-              sublabel: s.place_formatted,
-              fullAddress: s.full_address,
-            }))
-          );
-        }
+        if (!cancelled) setPlaceResults((data.suggestions ?? []).map((s: { name: string; place_formatted: string; full_address: string }) => ({ label: s.name, sublabel: s.place_formatted, fullAddress: s.full_address })));
       } catch { if (!cancelled) setPlaceResults([]); }
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [editDraft, editingPlace, currentCoords]);
 
   const selectedPickupCoords = currentCoords ?? DEFAULT_COORDS;
-  const pickupState = {
-    pickup: "Current Location",
-    pickupCoords: selectedPickupCoords,
-  };
-
-  const handleSearchFocus = () => setDrawerOpen(true);
+  const pickupState = { pickup: "Current Location", pickupCoords: selectedPickupCoords };
 
   const handleSelectDestination = async (destination: string, mapboxId?: string) => {
     let coords: [number, number] | undefined;
@@ -215,23 +195,15 @@ export default function Home() {
     navigate("/request", { state: { destination, destinationCoords: coords, ...pickupState } });
   };
 
-const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-  };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const delta = touchStartY.current - e.changedTouches[0].clientY;
-    if (delta > 40) setDrawerOpen(true);
-    if (delta < -40) setDrawerOpen(false);
-  };
 
   return (
     <div className="relative h-full overflow-hidden">
 
-      {/* ── MAP BACKGROUND ── */}
+      {/* ── MAP ── */}
       <div className="absolute inset-0 z-0">
         {locationLoading ? (
-          <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
-            <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <div className="absolute inset-0 bg-background flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full border-[3px] border-primary border-t-transparent animate-spin" />
           </div>
         ) : (
           <ClientMap
@@ -246,21 +218,40 @@ const handleTouchStart = (e: React.TouchEvent) => {
             className="absolute inset-0"
           />
         )}
-        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-b from-transparent via-background/40 to-background/90 pointer-events-none z-10" />
+        {/* Bottom fade */}
+        <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-b from-transparent to-background/85 pointer-events-none z-10" />
       </div>
 
-      {/* ── MAP BUTTONS ── */}
-      <div className="absolute bottom-[160px] right-4 z-10 flex flex-col gap-2">
+      {/* ── TOP SEARCH BAR ── */}
+      <div className="absolute top-0 inset-x-0 z-20 px-4 pt-3">
         <button
           type="button"
-          onClick={() => {
-            lastMapMoveRef.current = 0;
-            setMapResetToken((n) => n + 1);
-          }}
-          aria-label="Recenter map"
-          className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          onClick={() => setSearchOpen(true)}
+          className="w-full flex items-center gap-3 bg-card/92 backdrop-blur-md border border-border rounded-2xl px-4 py-3.5 shadow-float active:scale-[0.98] transition-transform"
         >
-          <Navigation size={18} className="text-primary" />
+          <Search size={17} className="text-primary flex-shrink-0" />
+          <span className="flex-1 text-left text-sm font-medium text-muted-foreground">
+            Where to?
+          </span>
+          {activeRide && (
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0" />
+          )}
+        </button>
+      </div>
+
+      {/* ── MAP CONTROLS ── */}
+      <div
+        className={`absolute right-4 z-20 flex flex-col gap-2 transition-all duration-300 ${
+          activeRide ? "bottom-[176px]" : "bottom-[102px]"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => { lastMapMoveRef.current = 0; setMapResetToken((n) => n + 1); }}
+          aria-label="Recenter map"
+          className="w-10 h-10 bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-card flex items-center justify-center active:scale-95 transition-transform"
+        >
+          <Navigation size={17} className="text-primary" />
         </button>
         <button
           type="button"
@@ -270,162 +261,164 @@ const handleTouchStart = (e: React.TouchEvent) => {
             if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
           }}
           aria-label="Toggle heading-up mode"
-          className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"}`}
+          className={`w-10 h-10 rounded-xl shadow-card flex items-center justify-center active:scale-95 transition-all ${
+            headingUp ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"
+          }`}
         >
-          <Compass size={18} className={headingUp ? "text-background" : "text-primary"} />
+          <Compass size={17} className={headingUp ? "text-white" : "text-primary"} />
         </button>
       </div>
 
-      {/* ── TOP BRAND BAR ── */}
-      <div className="relative z-20 pt-4 px-4 space-y-2">
-        <div className="flex justify-center">
-          <div className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg">
-              <div className="w-2 h-2 rounded-full bg-primary" />
-              <p className="text-xs font-bold text-primary tracking-widest uppercase">WeGo</p>
-            </div>
-        </div>
-
-        {/* Active ride banner */}
-        {activeRide && (
+      {/* ── ACTIVE RIDE BANNER ── */}
+      {activeRide && (
+        <div
+          className="absolute inset-x-4 z-20 bottom-[102px] transition-all duration-300"
+        >
           <button
             type="button"
             onClick={() => navigate("/ride")}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary text-white shadow-lg shadow-primary/30 active:scale-95 transition-transform"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary text-white shadow-lg active:scale-[0.98] transition-transform"
           >
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-              <Navigation size={16} className="text-white" />
+            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+              <Navigation size={15} className="text-white" />
             </div>
             <div className="flex-1 text-left min-w-0">
-              <p className="text-sm font-bold leading-tight">Ride in Progress</p>
-              <p className="text-xs text-white/80 truncate">
-                {activeRide.status === "pending" ? "Finding driver…" :
-                 activeRide.status === "accepted" ? `${activeRide.driverName || "Driver"} is on the way` :
+              <p className="text-sm font-bold leading-tight">
+                {activeRide.status === "reserved" ? "Scheduled Ride" : "Ride in Progress"}
+              </p>
+              <p className="text-xs text-white/75 truncate">
+                {activeRide.status === "reserved" ? "Scheduled — tap to view" :
+                 activeRide.status === "pending" ? "Finding driver…" :
+                 activeRide.status === "accepted" ? `${activeRide.driverName || "Driver"} on the way` :
                  activeRide.status === "arrived" ? "Driver has arrived" :
                  "Trip in progress"}
               </p>
             </div>
-            <p className="text-xs font-semibold text-white/90 flex-shrink-0">Track →</p>
+            <span className="text-xs font-semibold text-white/90 flex-shrink-0">View →</span>
           </button>
-        )}
+        </div>
+      )}
+
+      {/* ── SERVICE GRID ── */}
+      <div className="absolute bottom-0 inset-x-0 z-20 px-4 pb-3">
+        <div className="grid grid-cols-4 gap-2.5">
+          {SERVICES.map((svc) => (
+            <button
+              key={svc.id}
+              type="button"
+              onClick={() => svc.path ? navigate(svc.path) : setSearchOpen(true)}
+              className="flex flex-col items-center gap-1.5 py-3 bg-card/95 backdrop-blur-sm border border-border rounded-2xl active:scale-95 transition-transform shadow-card"
+            >
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                svc.path === null ? "bg-primary" : "bg-secondary"
+              }`}>
+                <svc.Icon
+                  size={17}
+                  strokeWidth={1.75}
+                  className={svc.path === null ? "text-white" : "text-foreground"}
+                />
+              </div>
+              <span className="text-[11px] font-semibold text-foreground leading-none">
+                {svc.label}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── BOTTOM SHEET ── */}
-      <div
-        className={`absolute bottom-0 left-0 right-0 z-20 bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ease-out max-h-[78%] ${
-          drawerOpen ? "translate-y-0" : "translate-y-[calc(100%-104px)]"
-        }`}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        {/* Handle + search — tap anywhere to toggle */}
-        <div
-          className="flex-shrink-0 pt-2.5 pb-3 px-4 cursor-pointer"
-          onClick={() => { setDrawerOpen((o) => !o); if (drawerOpen === false) setTimeout(() => inputRef.current?.focus(), 300); }}
-        >
-          <div className="w-10 h-1 bg-muted-foreground/25 rounded-full mx-auto mb-3" />
+      {/* ── SEARCH OVERLAY ── */}
+      {searchOpen && (
+        <div className="absolute inset-0 z-50 bg-background flex flex-col">
 
-          {/* Search bar */}
-          <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3">
-            <Search size={18} className="text-primary flex-shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onFocus={handleSearchFocus}
-              onClick={(e) => e.stopPropagation()}
-              placeholder="Where to?"
-              className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground text-base font-medium focus:outline-none"
-            />
-            {query.length > 0 && (
-              <button type="button" aria-label="Clear search" onClick={(e) => { e.stopPropagation(); setQuery(""); }} className="text-muted-foreground">
-                <X size={15} />
-              </button>
-            )}
-          </div>
-
-          {/* Service tabs */}
-          <div className="flex gap-2 mt-3 overflow-x-auto pb-0.5 scrollbar-hide">
-            {SERVICES.map((svc) => (
-              <button
-                key={svc.id}
-                type="button"
-                onClick={() => { if (svc.path) navigate(svc.path); }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold whitespace-nowrap border flex-shrink-0 transition-colors active:scale-95 ${svc.path === null ? "bg-primary text-white border-primary" : "bg-background border-border text-foreground"}`}
-              >
-                <svc.Icon size={14} strokeWidth={2} />
-                {svc.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 px-4 pb-6 space-y-5">
-
-          {/* ── Search suggestions ── */}
-          {query.trim().length >= 2 && (
-            <div className="space-y-1">
-              {/* Live geocoded results */}
-              {geocodeResults.map((r) => (
-                <button
-                  key={r.label + r.sublabel}
-                  type="button"
-                  onClick={() => { handleSelectDestination(r.label, r.mapboxId); setQuery(""); }}
-                  className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
-                >
-                  <div className="w-8 h-8 rounded-full bg-muted/30 border border-border flex items-center justify-center flex-shrink-0">
-                    {r.isBusiness
-                      ? <Building2 size={14} className="text-muted-foreground" />
-                      : <MapPin size={14} className="text-muted-foreground" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{r.label}</p>
-                    <p className="text-xs text-muted-foreground truncate">{r.sublabel}</p>
-                  </div>
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 pt-4 pb-3 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(false)}
+              aria-label="Close search"
+              className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0"
+            >
+              <ArrowLeft size={17} className="text-foreground" />
+            </button>
+            <div className="flex-1 flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3">
+              <Search size={15} className="text-primary flex-shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search destination..."
+                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              />
+              {query.length > 0 && (
+                <button type="button" onClick={() => setQuery("")} aria-label="Clear search">
+                  <X size={14} className="text-muted-foreground" />
                 </button>
-              ))}
-
-              {/* Loading indicator */}
-              {geocoding && geocodeResults.length === 0 && (
-                <div className="flex items-center gap-3 p-3 text-muted-foreground">
-                  <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
-                  <span className="text-sm">Searching…</span>
-                </div>
-              )}
-
-              {/* No results at all */}
-              {!geocoding && geocodeResults.length === 0 && (
-              <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => { handleSelectDestination(query.trim()); setQuery(""); }}
-                className="w-full flex items-center gap-3 p-3 bg-background border border-primary/30 rounded-xl active:scale-[0.99] transition-all text-left"
-              >
-                <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                  <MapPin size={14} className="text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{query.trim()}</p>
-                  <p className="text-xs text-muted-foreground">Use this address</p>
-                </div>
-              </button>
-            </div>
               )}
             </div>
-          )}
+          </div>
 
-          {/* Saved places — always shown when not searching */}
-          {!query && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saved Places</p>
+          {/* Scrollable results */}
+          <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-6">
+
+            {/* ── Live search results ── */}
+            {query.trim().length >= 2 && (
+              <div className="space-y-1.5">
+                {geocodeResults.map((r) => (
+                  <button
+                    key={r.label + r.sublabel}
+                    type="button"
+                    onClick={() => { handleSelectDestination(r.label, r.mapboxId); setQuery(""); }}
+                    className="w-full flex items-center gap-3 p-3 bg-card border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                      {r.isBusiness
+                        ? <Building2 size={15} className="text-muted-foreground" />
+                        : <MapPin size={15} className="text-muted-foreground" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{r.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{r.sublabel}</p>
+                    </div>
+                  </button>
+                ))}
+
+                {geocoding && geocodeResults.length === 0 && (
+                  <div className="flex items-center gap-3 p-3 text-muted-foreground">
+                    <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                    <span className="text-sm">Searching…</span>
+                  </div>
+                )}
+
+                {!geocoding && geocodeResults.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { handleSelectDestination(query.trim()); setQuery(""); }}
+                    className="w-full flex items-center gap-3 p-3 bg-card border border-primary/25 rounded-xl active:scale-[0.99] transition-all text-left"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                      <MapPin size={15} className="text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{query.trim()}</p>
+                      <p className="text-xs text-muted-foreground">Use this address</p>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ── Saved places ── */}
+            {!query && (
               <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saved Places</p>
+
                 {/* Home */}
                 {editingPlace === "home" ? (
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 p-3 bg-background border border-primary rounded-xl">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                        <HomeIcon size={16} className="text-primary" />
+                    <div className="flex items-center gap-3 p-3 bg-card border border-primary rounded-xl">
+                      <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <HomeIcon size={15} className="text-primary" />
                       </div>
                       <input
                         ref={editInputRef}
@@ -440,7 +433,7 @@ const handleTouchStart = (e: React.TouchEvent) => {
                       <button type="button" aria-label="Cancel" onClick={() => setEditingPlace(null)} className="text-muted-foreground"><X size={13} /></button>
                     </div>
                     {placeResults.length > 0 && (
-                      <div className="bg-background border border-border rounded-xl overflow-hidden">
+                      <div className="bg-card border border-border rounded-xl overflow-hidden">
                         {placeResults.map((r) => (
                           <button key={r.label + r.sublabel} type="button"
                             onClick={() => { setEditDraft(r.fullAddress || r.label); home.save(r.fullAddress || r.label); setEditingPlace(null); setPlaceResults([]); }}
@@ -456,22 +449,19 @@ const handleTouchStart = (e: React.TouchEvent) => {
                     )}
                   </div>
                 ) : (
-                  <div className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 transition-all">
-                    <button type="button" onClick={() => home.value ? handleSelectDestination(home.value) : openEditPlace("home")}
-                      className="flex items-center gap-3 flex-1 min-w-0 text-left">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                        <HomeIcon size={16} className="text-primary" />
+                  <div className="w-full flex items-center gap-3 p-3 bg-card border border-border rounded-xl transition-all">
+                    <button type="button" onClick={() => home.value ? handleSelectDestination(home.value) : openEditPlace("home")} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                      <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                        <HomeIcon size={15} className="text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-foreground">Home</p>
                         {home.value
                           ? <p className="text-xs text-muted-foreground truncate">{home.value}</p>
-                          : <p className="text-xs text-primary font-medium">Tap to set home address</p>
-                        }
+                          : <p className="text-xs text-primary font-medium">Add home address</p>}
                       </div>
                     </button>
-                    <button type="button" aria-label="Edit home" onClick={() => openEditPlace("home")}
-                      className="text-xs text-muted-foreground hover:text-primary px-1 flex-shrink-0">Edit</button>
+                    <button type="button" aria-label="Edit home" onClick={() => openEditPlace("home")} className="text-xs text-muted-foreground hover:text-primary px-1 flex-shrink-0">Edit</button>
                     {home.value && (
                       <button type="button" aria-label="Clear home" onClick={() => home.clear()} className="text-muted-foreground p-1 flex-shrink-0">
                         <X size={13} />
@@ -479,12 +469,13 @@ const handleTouchStart = (e: React.TouchEvent) => {
                     )}
                   </div>
                 )}
+
                 {/* Work */}
                 {editingPlace === "work" ? (
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 p-3 bg-background border border-primary rounded-xl">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                        <Briefcase size={16} className="text-primary" />
+                    <div className="flex items-center gap-3 p-3 bg-card border border-primary rounded-xl">
+                      <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Briefcase size={15} className="text-primary" />
                       </div>
                       <input
                         ref={editInputRef}
@@ -499,7 +490,7 @@ const handleTouchStart = (e: React.TouchEvent) => {
                       <button type="button" aria-label="Cancel" onClick={() => setEditingPlace(null)} className="text-muted-foreground"><X size={13} /></button>
                     </div>
                     {placeResults.length > 0 && (
-                      <div className="bg-background border border-border rounded-xl overflow-hidden">
+                      <div className="bg-card border border-border rounded-xl overflow-hidden">
                         {placeResults.map((r) => (
                           <button key={r.label + r.sublabel} type="button"
                             onClick={() => { setEditDraft(r.fullAddress || r.label); work.save(r.fullAddress || r.label); setEditingPlace(null); setPlaceResults([]); }}
@@ -515,22 +506,19 @@ const handleTouchStart = (e: React.TouchEvent) => {
                     )}
                   </div>
                 ) : (
-                  <div className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 transition-all">
-                    <button type="button" onClick={() => work.value ? handleSelectDestination(work.value) : openEditPlace("work")}
-                      className="flex items-center gap-3 flex-1 min-w-0 text-left">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                        <Briefcase size={16} className="text-primary" />
+                  <div className="w-full flex items-center gap-3 p-3 bg-card border border-border rounded-xl transition-all">
+                    <button type="button" onClick={() => work.value ? handleSelectDestination(work.value) : openEditPlace("work")} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                      <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                        <Briefcase size={15} className="text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-foreground">Work</p>
                         {work.value
                           ? <p className="text-xs text-muted-foreground truncate">{work.value}</p>
-                          : <p className="text-xs text-primary font-medium">Tap to set work address</p>
-                        }
+                          : <p className="text-xs text-primary font-medium">Add work address</p>}
                       </div>
                     </button>
-                    <button type="button" aria-label="Edit work" onClick={() => openEditPlace("work")}
-                      className="text-xs text-muted-foreground hover:text-primary px-1 flex-shrink-0">Edit</button>
+                    <button type="button" aria-label="Edit work" onClick={() => openEditPlace("work")} className="text-xs text-muted-foreground hover:text-primary px-1 flex-shrink-0">Edit</button>
                     {work.value && (
                       <button type="button" aria-label="Clear work" onClick={() => work.clear()} className="text-muted-foreground p-1 flex-shrink-0">
                         <X size={13} />
@@ -539,55 +527,51 @@ const handleTouchStart = (e: React.TouchEvent) => {
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Recent rides — hide while searching */}
-          {!query && ridesLoaded && recentRides.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent</p>
+            {/* ── Recent rides ── */}
+            {!query && ridesLoaded && recentRides.length > 0 && (
               <div className="space-y-2">
-                {recentRides.map((ride) => (
-                  <button
-                    key={ride.id}
-                    type="button"
-                    onClick={() => handleSelectDestination(ride.dropoffAddress)}
-                    className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
-                      <Clock size={16} className="text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">
-                        {ride.dropoffAddress}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {ride.completedAt ? formatRelativeDate(ride.completedAt) : "Recently"} · ${ride.fare.toFixed(2)}
-                      </p>
-                    </div>
-                  </button>
-                ))}
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent</p>
+                <div className="space-y-1.5">
+                  {recentRides.map((ride) => (
+                    <button
+                      key={ride.id}
+                      type="button"
+                      onClick={() => handleSelectDestination(ride.dropoffAddress)}
+                      className="w-full flex items-center gap-3 p-3 bg-card border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                        <Clock size={15} className="text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{ride.dropoffAddress}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {ride.completedAt ? formatRelativeDate(ride.completedAt) : "Recently"} · ${ride.fare.toFixed(2)}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* WeGo tagline */}
-          {!query && (
-            <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <Building2 size={14} className="text-primary" />
-                <p className="text-xs font-semibold text-primary uppercase tracking-wide">Why WeGo</p>
+            {/* ── Idle state hint ── */}
+            {!query && (
+              <div className="flex items-center gap-3 px-3 py-3 bg-card border border-border rounded-xl">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <MapPin size={14} className="text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-foreground">No surge pricing — ever</p>
+                  <p className="text-xs text-muted-foreground">88% of your fare goes directly to your driver</p>
+                </div>
               </div>
-              <div className="space-y-1.5 text-xs text-muted-foreground">
-                <p>• <span className="text-foreground font-medium">88% goes to your driver</span> — not to shareholders</p>
-                <p>• <span className="text-foreground font-medium">No surge pricing</span> — ever, guaranteed</p>
-                <p>• <span className="text-foreground font-medium">Driver-owned</span> — your ride supports the cooperative</p>
-              </div>
-            </div>
-          )}
+            )}
 
+          </div>
         </div>
-      </div>
+      )}
 
     </div>
   );

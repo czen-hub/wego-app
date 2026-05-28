@@ -277,7 +277,7 @@ export default function ReserveRide() {
     <div className="min-h-full bg-background flex flex-col">
       <div className="px-4 pt-4 pb-2 flex items-center gap-3 flex-shrink-0">
         <button type="button" onClick={() => navigate("/")} aria-label="Back"
-          className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center flex-shrink-0">
+          className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
           <ChevronLeft size={18} className="text-foreground" />
         </button>
         <div>
@@ -433,7 +433,7 @@ export default function ReserveRide() {
                         <button key={i} type="button"
                           onMouseDown={() => { setDestination(s.label); setDestCoords(s.coords); setDestFocused(false); }}
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 text-left border-b border-border/30 last:border-0">
-                          <div className="w-7 h-7 rounded-full bg-muted/20 border border-border flex items-center justify-center flex-shrink-0">
+                          <div className="w-8 h-8 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
                             <MapPin size={13} className="text-muted-foreground" />
                           </div>
                           <div className="min-w-0">
@@ -469,7 +469,7 @@ export default function ReserveRide() {
                 </span>
               )}
               {tod > 1.00 && (
-                <span className="text-[10px] font-semibold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                   Peak rate
                 </span>
               )}
@@ -533,7 +533,7 @@ export default function ReserveRide() {
               {/* Late cancel fees */}
               <div className="space-y-1">
                 <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Late cancellation — inside 1-hour window
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground inline-block" /> Late cancellation — inside 1-hour window
                 </p>
                 <div className="pl-3.5 space-y-1 text-xs text-muted-foreground">
                   <div className="flex justify-between"><span>Driver nearby (&lt;5 mi en route)</span><span className="text-foreground font-medium">$5.00</span></div>

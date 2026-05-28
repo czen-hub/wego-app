@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Package, ChevronLeft, MapPin, Clock, Check, X, Navigation, Loader2 } from "lucide-react";
+import { Package, PackageOpen, Layers, Gem, ChevronLeft, MapPin, Clock, Check, X, Navigation, Loader2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { requestRide } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 
@@ -15,12 +16,19 @@ const MINS_PER_MILE = 1.35;
 
 // Package types are based on how the package fits in the car, not weight.
 // extraFee is added on top of the distance fare.
-const PACKAGE_TYPES = [
+const PACKAGE_TYPES: {
+  id: string;
+  label: string;
+  desc: string;
+  Icon: LucideIcon;
+  extraFee: number;
+  minFare: number;
+}[] = [
   {
     id: "standard",
     label: "Fits in Trunk",
     desc: "Any item that fits in the car trunk",
-    emoji: "📦",
+    Icon: Package,
     extraFee: 0,
     minFare: 8.00,
   },
@@ -28,7 +36,7 @@ const PACKAGE_TYPES = [
     id: "backseat",
     label: "Back Seat Needed",
     desc: "1–2 large items that won't fit in trunk",
-    emoji: "🗃️",
+    Icon: PackageOpen,
     extraFee: 8.00,
     minFare: 14.00,
   },
@@ -36,7 +44,7 @@ const PACKAGE_TYPES = [
     id: "fullseat",
     label: "Full Back Seat",
     desc: "3+ large items filling the whole back",
-    emoji: "📫",
+    Icon: Layers,
     extraFee: 15.00,
     minFare: 20.00,
   },
@@ -44,13 +52,13 @@ const PACKAGE_TYPES = [
     id: "fragile",
     label: "Fragile / Delicate",
     desc: "Breakables, art, electronics — extra care",
-    emoji: "🫧",
+    Icon: Gem,
     extraFee: 6.00,
     minFare: 12.00,
   },
-] as const;
+];
 
-type PackageId = typeof PACKAGE_TYPES[number]["id"];
+type PackageId = "standard" | "backseat" | "fullseat" | "fragile";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AddressSuggestion {
@@ -341,7 +349,7 @@ export default function CourierRequest() {
           type="button"
           aria-label="Back"
           onClick={() => navigate("/")}
-          className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center active:scale-95 transition-transform"
+          className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center active:scale-95 transition-transform"
         >
           <ChevronLeft size={20} className="text-foreground" />
         </button>
@@ -368,7 +376,11 @@ export default function CourierRequest() {
                     : "border-border bg-card hover:border-primary/40"
                 }`}
               >
-                <span className="text-xl flex-shrink-0 mt-0.5">{pkg.emoji}</span>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  packageId === pkg.id ? "bg-primary/10" : "bg-secondary border border-border"
+                }`}>
+                  <pkg.Icon size={17} className={packageId === pkg.id ? "text-primary" : "text-muted-foreground"} />
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-1">
                     <p className="text-xs font-semibold text-foreground truncate">{pkg.label}</p>
@@ -440,7 +452,7 @@ export default function CourierRequest() {
                     onMouseDown={() => selectPickup(s.label)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0"
                   >
-                    <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
                       <MapPin size={10} className="text-primary" />
                     </div>
                     <div className="min-w-0">
@@ -521,7 +533,7 @@ export default function CourierRequest() {
                     onMouseDown={() => selectDropoff(s)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0"
                   >
-                    <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
                       <MapPin size={10} className="text-primary/70" />
                     </div>
                     <div className="min-w-0">
@@ -555,12 +567,12 @@ export default function CourierRequest() {
 
         {/* Fare card */}
         {route ? (
-          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Courier Fee</p>
                 <p className="text-3xl font-bold text-foreground mt-0.5">${route.fare.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{selectedPackage.emoji} {selectedPackage.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{selectedPackage.label}</p>
               </div>
               <div className="text-right">
                 <div className="flex items-center gap-1 text-muted-foreground justify-end">
@@ -570,25 +582,21 @@ export default function CourierRequest() {
                 <p className="text-xs text-muted-foreground">{route.miles} mi</p>
               </div>
             </div>
-            <div className="space-y-1.5 text-xs text-muted-foreground border-t border-border pt-3">
+            <div className="space-y-1 border-t border-border pt-2">
               {selectedPackage.extraFee > 0 && (
-                <div className="flex justify-between">
+                <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Size fee ({selectedPackage.label})</span>
-                  <span className="font-medium">+${selectedPackage.extraFee.toFixed(2)}</span>
+                  <span>+${selectedPackage.extraFee.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Driver earns (88%)</span>
                 <span className="font-semibold text-primary">${driverTake.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>WeGo cooperative (12%)</span>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>WeGo Cooperative (12%)</span>
                 <span>${coopFee.toFixed(2)}</span>
               </div>
-            </div>
-            <div className="flex items-center gap-2 bg-primary/5 border border-primary/15 rounded-lg px-3 py-2">
-              <Check size={12} className="text-primary flex-shrink-0" />
-              <p className="text-xs text-primary font-medium">No surge pricing — ever. This is your final price.</p>
             </div>
           </div>
         ) : (
@@ -614,7 +622,7 @@ export default function CourierRequest() {
           type="button"
           disabled={!canSubmit}
           onClick={handleSubmit}
-          className="w-full py-4 rounded-xl bg-primary text-white font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shadow-primary/30 disabled:opacity-40"
+          className="w-full py-4 rounded-2xl bg-primary text-white font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform btn-glow disabled:opacity-40"
         >
           <Package size={18} />
           {submitting
@@ -630,10 +638,10 @@ export default function CourierRequest() {
         <div className="bg-card border border-border rounded-xl px-4 py-3 space-y-2">
           <p className="text-xs font-semibold text-foreground">Size guide</p>
           <div className="space-y-1.5 text-xs text-muted-foreground">
-            <p>📦 <span className="font-medium">Fits in Trunk</span> — any box or bag that fits in a standard car trunk.</p>
-            <p>🗃️ <span className="font-medium">Back Seat Needed</span> — 1–2 large items that won't fit in the trunk (+$8).</p>
-            <p>📫 <span className="font-medium">Full Back Seat</span> — 3+ large boxes or items filling the whole back (+$15).</p>
-            <p>🫧 <span className="font-medium">Fragile</span> — breakables, artwork, or electronics needing extra care (+$6).</p>
+            <p><span className="font-medium text-foreground">Fits in Trunk</span> — any box or bag that fits in a standard car trunk.</p>
+            <p><span className="font-medium text-foreground">Back Seat Needed</span> — 1–2 large items that won't fit in the trunk (+$8).</p>
+            <p><span className="font-medium text-foreground">Full Back Seat</span> — 3+ large boxes or items filling the whole back (+$15).</p>
+            <p><span className="font-medium text-foreground">Fragile</span> — breakables, artwork, or electronics needing extra care (+$6).</p>
           </div>
         </div>
 

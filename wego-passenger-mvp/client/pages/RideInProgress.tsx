@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, CheckCircle, Clock, ChevronLeft, ChevronRight, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield, ArrowUp, ArrowDown, Navigation, Compass } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 
-import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStopWithDetails, updateStopDetails, swapStopAndDropoff, type Ride, type ChatMessage } from "@/lib/db";
+import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStopWithDetails, updateStopDetails, swapStopAndDropoff, incrementPassengerRideCount, type Ride, type ChatMessage } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -132,6 +132,7 @@ export default function RideInProgress() {
     earlyEnd?: boolean;
   } | null>(null);
   const effectiveRideIdRef = useRef<string | null>(null);
+  const countIncrementedRef = useRef(false);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
   const chatRideId = liveRide?.id ?? activeRideId;
   const pendingStopKey = liveRide?.pendingStop
@@ -491,6 +492,15 @@ export default function RideInProgress() {
     if (phase !== "complete") return;
     const rideId = activeRideId || effectiveRideIdRef.current;
     if (!rideId) return;
+    // Increment passenger ride count exactly once per completed ride (idempotent via localStorage)
+    if (!countIncrementedRef.current && user) {
+      const creditKey = `wego_ride_credited_${rideId}`;
+      if (!localStorage.getItem(creditKey)) {
+        countIncrementedRef.current = true;
+        localStorage.setItem(creditKey, "1");
+        incrementPassengerRideCount(user.uid);
+      }
+    }
     getDoc(doc(db, "rides", rideId)).then((snap) => {
       if (!snap.exists()) return;
       const d = snap.data();
@@ -781,7 +791,7 @@ export default function RideInProgress() {
               {completedRideData?.earlyEnd ? "Trip Ended Early" : isFood ? "Order Delivered!" : isCourier ? "Package Delivered!" : "You've arrived!"}
             </h1>
             {completedRideData?.earlyEnd && (
-              <div className="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-xs font-semibold text-amber-600 dark:text-amber-400">
+              <div className="px-3 py-1 rounded-full bg-muted/20 border border-border text-xs font-semibold text-muted-foreground">
                 Prorated — you were only charged for the distance covered
               </div>
             )}
@@ -858,7 +868,7 @@ export default function RideInProgress() {
                   </div>
                   {summaryExpanded && summaryStops.map((stop, i) => (
                     <div key={i} className="flex gap-3 items-start">
-                      <MapPin size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                      <MapPin size={16} className="text-primary/60 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="text-xs text-muted-foreground">Stop {i + 1}</p>
                         <p className="text-sm text-foreground">{stop.address}</p>
@@ -970,7 +980,7 @@ export default function RideInProgress() {
               </button>
             ) : (
               <a
-                href={`mailto:support@wego.app?subject=${encodeURIComponent(`Lost Item - Ride #${activeRideId ?? ""}`)}`}
+                href={`mailto:support@wego.coop?subject=${encodeURIComponent(`Lost Item - Ride #${activeRideId ?? ""}`)}`}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform"
               >
                 <MessageSquare size={16} className="text-muted-foreground" />
@@ -1130,7 +1140,7 @@ export default function RideInProgress() {
           type="button"
           aria-label="Back to home"
           onClick={() => navigate("/")}
-          className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center"
+          className="absolute top-4 left-4 z-10 w-9 h-9 rounded-xl bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center"
         >
           <ChevronLeft size={20} className="text-foreground" />
         </button>
@@ -1189,7 +1199,7 @@ export default function RideInProgress() {
 
         {/* Timer */}
         {phase === "in_progress" && (
-          <div className="absolute bottom-4 right-4 z-10 bg-card/80 backdrop-blur-sm border border-border rounded-xl px-3 py-2 flex items-center gap-2">
+          <div className="absolute bottom-4 left-4 z-10 bg-card/80 backdrop-blur-sm border border-border rounded-xl px-3 py-2 flex items-center gap-2">
             <Clock size={14} className="text-primary" />
             <span className="text-sm font-bold text-primary font-mono">{formatTime(elapsed)}</span>
           </div>
@@ -1311,17 +1321,17 @@ export default function RideInProgress() {
                     <div key={`${stop.lat}-${stop.lng}-${i}`}>
                       <div className="flex gap-3 items-start">
                         <div className="flex flex-col items-center flex-shrink-0">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
                             isPending
-                              ? "bg-amber-500/15 border border-amber-500/30"
+                              ? "bg-primary/10 border border-primary/20"
                               : "bg-muted/20 border border-border/50"
                           }`}>
-                            <MapPin size={14} className={isPending ? "text-amber-500" : "text-muted-foreground/60"} />
+                            <MapPin size={14} className={isPending ? "text-primary" : "text-muted-foreground/60"} />
                           </div>
                           <div className="w-px h-4 bg-border/50 mt-1 mb-1" />
                         </div>
                         <div className="flex-1 min-w-0 pb-3">
-                          <p className={`text-xs font-semibold uppercase tracking-wide ${isPending ? "text-amber-500/90" : "text-muted-foreground/60"}`}>
+                          <p className={`text-xs font-semibold uppercase tracking-wide ${isPending ? "text-primary" : "text-muted-foreground/60"}`}>
                             Stop {i + 1}
                           </p>
                           <p className={`text-sm font-semibold mt-0.5 truncate ${isPending ? "text-foreground" : "text-muted-foreground/70 line-through decoration-muted-foreground/40"}`}>
@@ -1455,15 +1465,15 @@ export default function RideInProgress() {
         {phase === "in_progress" && (
           <>
             {!isFood && !isCourier && hasPickupIssueReport && (
-              <div className="glass-card p-4 border border-amber-500/35 rounded-xl bg-amber-500/5 space-y-2">
+              <div className="glass-card p-4 border border-destructive/25 rounded-xl bg-destructive/5 space-y-2">
                 <div className="flex items-center gap-2">
-                  <TriangleAlert size={16} className="text-amber-500" />
+                  <TriangleAlert size={16} className="text-destructive" />
                   <p className="text-sm font-semibold text-foreground">Pickup issue reported</p>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Your payment is on hold while this ride is reviewed. The driver has been alerted to verify the passenger in the vehicle.
                 </p>
-                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                <p className="text-xs font-medium text-muted-foreground">
                   {driverAlertSeen ? "Driver alert acknowledged." : "Sending live alert to driver now."}
                 </p>
               </div>
@@ -1488,7 +1498,7 @@ export default function RideInProgress() {
                 </div>
               ) : (
                 <button type="button" onClick={() => setDisputeOpen(true)}
-                  className="w-full py-3 rounded-xl border border-amber-500/40 text-amber-600 dark:text-amber-400 text-sm font-semibold active:scale-95 transition-transform bg-amber-500/5">
+                  className="w-full py-3 rounded-xl border border-border text-muted-foreground text-sm font-semibold active:scale-95 transition-transform bg-muted/10">
                   Wasn't picked up?
                 </button>
               )
@@ -1748,8 +1758,8 @@ export default function RideInProgress() {
           <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-5">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
-                  <TriangleAlert size={22} className="text-amber-500" />
+                <div className="w-12 h-12 rounded-xl bg-destructive/10 border border-destructive/30 flex items-center justify-center flex-shrink-0">
+                  <TriangleAlert size={22} className="text-destructive" />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-foreground">Weren't Picked Up?</h2>
@@ -1789,7 +1799,7 @@ export default function RideInProgress() {
                       }
                       setDisputeSubmitted(true);
                     }}
-                    className="py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-95 transition-transform">
+                    className="py-3 rounded-xl bg-destructive text-destructive-foreground font-semibold text-sm active:scale-95 transition-transform">
                     Report Issue
                   </button>
                 </div>
