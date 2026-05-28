@@ -1204,7 +1204,7 @@ export default function TripInProgress() {
             <button
               type="button"
               onClick={() => setStopViaCoords(null)}
-              className="px-3 py-2 rounded-lg bg-amber-500 text-white text-xs font-bold active:scale-95 transition-transform flex-shrink-0"
+              className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold active:scale-95 transition-transform flex-shrink-0"
             >
               Arrived
             </button>
@@ -1333,7 +1333,7 @@ export default function TripInProgress() {
                   setPickupIssueAlertOpen(false);
                   if (trip.rideId) acknowledgeRideDispute(trip.rideId).catch(() => {});
                 }}
-                className="py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-95 transition-transform"
+                className="py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm active:scale-95 transition-transform btn-glow"
               >
                 Acknowledge Alert
               </button>
@@ -1541,7 +1541,7 @@ export default function TripInProgress() {
             <div className="bg-background border border-border rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Stop fee added</span>
-                <span className="font-bold text-amber-500">+${stopNotif.fareDelta.toFixed(2)}</span>
+                <span className="font-bold text-primary">+${stopNotif.fareDelta.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Your new take</span>

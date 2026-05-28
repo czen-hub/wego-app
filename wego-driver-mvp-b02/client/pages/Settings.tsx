@@ -682,7 +682,7 @@ export default function Settings() {
               right={
                 bankAccount
                   ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">Linked</span>
-                  : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">Not set</span>
+                  : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Not set</span>
               }
               onClick={() => {
                 setBankDraft({ holderName: bankAccount?.holderName ?? "", bankName: bankAccount?.bankName ?? "", accountType: bankAccount?.accountType ?? "checking", routingNumber: "", accountNumber: "", accountNumberConfirm: "" });

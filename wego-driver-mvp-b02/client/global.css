@@ -7,79 +7,72 @@
 
 @layer base {
   /**
-   * Obsidian & Amber — WeGo Driver
-   * 3 colors: pure-black (#000000), amber (#F59E0B), near-white (#F7F4EF)
+   * Carbon Blue — WeGo Driver
+   * Zinc palette + Blue-600 accent. Matches passenger app.
    */
   :root {
-    --background: 0 0% 0%;
-    --foreground: 48 12% 95%;
+    --background: 240 10% 4%;
+    --foreground: 0 0% 98%;
 
-    --card: 0 0% 9%;
-    --card-foreground: 48 12% 95%;
+    --card: 240 6% 10%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 9%;
-    --popover-foreground: 48 12% 95%;
+    --popover: 240 6% 10%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 43 96% 56%;
-    --primary-foreground: 0 0% 4%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 48 12% 95%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
 
-    --accent: 43 96% 56%;
-    --accent-foreground: 0 0% 4%;
+    --accent: 221 83% 53%;
+    --accent-foreground: 0 0% 100%;
 
-    --cyan: 43 96% 56%;
-
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 52%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 4% 46%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 14%;
-    --input: 0 0% 10%;
-    --ring: 43 96% 56%;
+    --border: 240 4% 16%;
+    --input: 240 6% 10%;
+    --ring: 221 83% 53%;
 
-    --radius: 1rem;
+    --radius: 0.75rem;
   }
 
   [data-theme="light"] {
-    --background: 48 30% 97%;
-    --foreground: 0 0% 8%;
+    --background: 0 0% 98%;
+    --foreground: 240 10% 4%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 8%;
+    --card-foreground: 240 10% 4%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 8%;
+    --popover-foreground: 240 10% 4%;
 
-    --primary: 43 96% 42%;
+    --primary: 221 83% 48%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 48 20% 93%;
-    --secondary-foreground: 0 0% 8%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 10% 4%;
 
-    --accent: 43 96% 42%;
+    --accent: 221 83% 48%;
     --accent-foreground: 0 0% 100%;
 
-    --cyan: 43 96% 42%;
-
-    --muted: 48 15% 91%;
-    --muted-foreground: 0 0% 35%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
 
     --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 48 12% 86%;
-    --input: 0 0% 96%;
-    --ring: 43 96% 42%;
+    --border: 240 6% 90%;
+    --input: 0 0% 98%;
+    --ring: 221 83% 48%;
   }
 }
 
-[data-theme="light"] .from-blue-950 { --tw-gradient-from: hsl(48 20% 88%) !important; }
-[data-theme="light"] .via-slate-900 { --tw-gradient-via:  hsl(48 15% 90%) !important; }
-[data-theme="light"] .to-slate-950  { --tw-gradient-to:   hsl(48 12% 86%) !important; }
 
 @layer base {
   * {
@@ -99,14 +92,14 @@
 
   body {
     @apply text-foreground;
-    background-color: #000000;
+    background-color: #09090b;
     font-family: "Plus Jakarta Sans", sans-serif;
   }
 
   #root {
     width: 100%;
     min-height: 100dvh;
-    background-color: #000000;
+    background-color: hsl(var(--background));
     position: relative;
   }
 
@@ -133,8 +126,8 @@
 @layer components {
   .map-grid {
     background-image:
-      linear-gradient(0deg, transparent 24%, rgba(251,191,36,0.05) 25%, rgba(251,191,36,0.05) 26%, transparent 27%, transparent 74%, rgba(251,191,36,0.05) 75%, rgba(251,191,36,0.05) 76%, transparent 77%),
-      linear-gradient(90deg, transparent 24%, rgba(251,191,36,0.05) 25%, rgba(251,191,36,0.05) 26%, transparent 27%, transparent 74%, rgba(251,191,36,0.05) 75%, rgba(251,191,36,0.05) 76%, transparent 77%);
+      linear-gradient(0deg, transparent 24%, rgba(113,113,122,0.07) 25%, rgba(113,113,122,0.07) 26%, transparent 27%),
+      linear-gradient(90deg, transparent 24%, rgba(113,113,122,0.07) 25%, rgba(113,113,122,0.07) 26%, transparent 27%);
     background-size: 50px 50px;
   }
 
@@ -196,19 +189,5 @@
     flex-shrink: 0;
   }
 
-  .card-shine {
-    background-image: linear-gradient(
-      45deg,
-      transparent 30%,
-      rgba(251, 191, 36, 0.06) 32%,
-      rgba(251, 191, 36, 0.06) 34%,
-      transparent 36%,
-      transparent 64%,
-      rgba(251, 191, 36, 0.06) 66%,
-      rgba(251, 191, 36, 0.06) 68%,
-      transparent 70%
-    );
-    background-size: 80px 80px;
-  }
 
 }

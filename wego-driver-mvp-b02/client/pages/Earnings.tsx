@@ -107,10 +107,10 @@ export default function Earnings() {
             <button
               type="button"
               onClick={() => navigate("/settings", { state: { openModal: "payout" } })}
-              className="w-full p-4 border border-dashed border-amber-500/40 rounded-xl bg-amber-500/5 flex items-center gap-3 active:scale-[0.99] transition-transform"
+              className="w-full p-4 border border-dashed border-primary/40 rounded-xl bg-primary/5 flex items-center gap-3 active:scale-[0.99] transition-transform"
             >
-              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                <Banknote size={18} className="text-amber-600 dark:text-amber-400" />
+              <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                <Banknote size={18} className="text-primary" />
               </div>
               <div className="flex-1 text-left min-w-0">
                 <p className="text-sm font-semibold text-foreground">Add Bank Account</p>
