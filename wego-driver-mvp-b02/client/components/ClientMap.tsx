@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-
-declare const mapboxgl: any;
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 const REFETCH_M = 150;
@@ -62,6 +62,22 @@ export interface RouteStep {
   modifier?: string;
   distance: number;
   duration: number;
+  name: string;
+  nextStep?: { instruction: string; type: string; modifier?: string; name: string };
+}
+
+function buildStep(s: any, nextS?: any): RouteStep {
+  return {
+    instruction: s.maneuver.instruction,
+    type: s.maneuver.type,
+    modifier: s.maneuver.modifier,
+    distance: s.distance,
+    duration: s.duration,
+    name: s.name ?? "",
+    nextStep: nextS
+      ? { instruction: nextS.maneuver.instruction, type: nextS.maneuver.type, modifier: nextS.maneuver.modifier, name: nextS.name ?? "" }
+      : undefined,
+  };
 }
 
 interface ClientMapProps {
@@ -77,9 +93,17 @@ interface ClientMapProps {
   zoomAdjust?: number;
   forceResetToken?: number;
   followBearing?: boolean;
+  navMode?: boolean;
   onCenterChange?: (coords: [number, number]) => void;
   onClickLocation?: (coords: [number, number]) => void;
   onStepChange?: (step: RouteStep | null) => void;
+  onDistanceChange?: (meters: number) => void;
+  onSpeedLimitChange?: (mph: number | null) => void;
+  onCameraApproach?: () => void;
+  onSpeedChange?: (mph: number) => void;
+  onRerouting?: () => void;
+  onRouteInfoChange?: (info: { remainingM: number; remainingSecs: number }) => void;
+  surgeZones?: Array<{ lat: number; lng: number; radiusM: number; label: string }>;
 }
 
 export default function ClientMap({
@@ -95,9 +119,17 @@ export default function ClientMap({
   zoomAdjust = 0,
   forceResetToken,
   followBearing = false,
+  navMode = false,
   onCenterChange,
   onClickLocation,
   onStepChange,
+  onDistanceChange,
+  onSpeedLimitChange,
+  onCameraApproach,
+  onSpeedChange,
+  onRerouting,
+  onRouteInfoChange,
+  surgeZones,
 }: ClientMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -123,16 +155,35 @@ export default function ClientMap({
   const compassHeadingRef = useRef<number | null>(null);
   const lastGpsMovedRef = useRef<number>(0);
   const followBearingRef = useRef(followBearing);
+  const navModeRef = useRef(navMode);
   const [mapReady, setMapReady] = useState(false);
   const centerRef = useRef<[number, number]>(center);
   const zoomRef = useRef<number>(zoom);
   const onCenterChangeRef = useRef(onCenterChange);
   const onClickRef = useRef(onClickLocation);
   const onStepRef = useRef(onStepChange);
+  const onDistanceChangeRef = useRef(onDistanceChange);
   const accuracyRef = useRef<number | null>(accuracy ?? null);
   const posBufferRef = useRef<[number, number][]>([]);
   const snapAbortRef = useRef<AbortController | null>(null);
   const lastSnapRef = useRef<{ pos: [number, number]; time: number } | null>(null);
+  const routeCoordsRef = useRef<[number, number][]>([]);
+  const maxspeedsRef = useRef<Array<number | null>>([]);
+  const cameraMarkersRef = useRef<Array<{ marker: any; lat: number; lng: number }>>([]);
+  const alertedCamerasRef = useRef<Set<string>>(new Set());
+  const lastSpeedLimitRef = useRef<number | null>(null);
+  const nearestCoordIdxRef = useRef(0);
+  const cameraFetchGenRef = useRef(0);
+  const onSpeedLimitRef = useRef(onSpeedLimitChange);
+  const onCameraApproachRef = useRef(onCameraApproach);
+  const prevTimeRef = useRef<number | null>(null);
+  const lastRerouteRef = useRef<number>(0);
+  const cumDistRef = useRef<number[]>([]);
+  const cumDurRef = useRef<number[]>([]);
+  const fuelMarkersRef = useRef<any[]>([]);
+  const onSpeedRef = useRef(onSpeedChange);
+  const onReroutingRef = useRef(onRerouting);
+  const onRouteInfoRef = useRef(onRouteInfoChange);
 
   const isInteractingRef = useRef(false);
   const isTrackingRef = useRef(true);
@@ -140,10 +191,17 @@ export default function ClientMap({
   const lastProgrammaticRef = useRef(0);
 
   useEffect(() => { accuracyRef.current = accuracy ?? null; }, [accuracy]);
+  useEffect(() => { navModeRef.current = navMode; }, [navMode]);
 
   useEffect(() => { onCenterChangeRef.current = onCenterChange; }, [onCenterChange]);
   useEffect(() => { onClickRef.current = onClickLocation; }, [onClickLocation]);
   useEffect(() => { onStepRef.current = onStepChange; }, [onStepChange]);
+  useEffect(() => { onDistanceChangeRef.current = onDistanceChange; }, [onDistanceChange]);
+  useEffect(() => { onSpeedLimitRef.current = onSpeedLimitChange; }, [onSpeedLimitChange]);
+  useEffect(() => { onCameraApproachRef.current = onCameraApproach; }, [onCameraApproach]);
+  useEffect(() => { onSpeedRef.current = onSpeedChange; }, [onSpeedChange]);
+  useEffect(() => { onReroutingRef.current = onRerouting; }, [onRerouting]);
+  useEffect(() => { onRouteInfoRef.current = onRouteInfoChange; }, [onRouteInfoChange]);
   useEffect(() => { centerRef.current = center; }, [center]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
@@ -154,7 +212,7 @@ export default function ClientMap({
     if (isInteractingRef.current || !isTrackingRef.current) return;
 
     const options: any = {
-      pitch: 0,
+      pitch: navModeRef.current ? 50 : 0,
       duration: 1000,
       essential: true,
     };
@@ -225,9 +283,30 @@ export default function ClientMap({
       animateCamera(driverPos ?? centerRef.current, bearingRef.current);
     } else {
       if (driverElRef.current) driverElRef.current.style.transform = `rotate(${bearingRef.current}deg)`;
-      map.easeTo({ bearing: 0, pitch: 0, duration: 600 });
+      map.easeTo({ bearing: 0, pitch: navModeRef.current ? 50 : 0, duration: 600 });
     }
   }, [followBearing, mapReady]);
+
+  // — navMode: transition from route overview to street-level driver view —
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+
+    if (navMode) {
+      isTrackingRef.current = true;
+      lastProgrammaticRef.current = Date.now() + 2500;
+      map.easeTo({
+        center: [centerRef.current[1], centerRef.current[0]],
+        zoom: 17,
+        pitch: 50,
+        bearing: followBearingRef.current ? bearingRef.current : map.getBearing(),
+        duration: 1500,
+        essential: true,
+      });
+    } else {
+      map.easeTo({ pitch: 0, duration: 600 });
+    }
+  }, [navMode, mapReady]);
 
   // — device compass — always listen to both events; absolute takes priority over relative
   useEffect(() => {
@@ -237,13 +316,22 @@ export default function ClientMap({
       compassHeadingRef.current = heading;
       localStorage.setItem("wego_heading", String(Math.round(heading)));
 
+      // Only use compass when truly stationary — 8s prevents fighting GPS on variable update intervals
+      const isStationary = Date.now() - lastGpsMovedRef.current > 8000;
+
       if (followBearingRef.current) {
-        bearingRef.current = heading;
-        if (driverElRef.current) driverElRef.current.style.transform = "rotate(0deg)";
-        isTrackingRef.current = true; // compass owns the camera — override any prior user-pan lock
-        animateCamera(null, heading);
+        if (isStationary) {
+          // Require >5° change to suppress noisy micro-rotations
+          const delta = Math.abs(((heading - bearingRef.current) + 540) % 360 - 180);
+          if (delta > 5) {
+            bearingRef.current = heading;
+            if (driverElRef.current) driverElRef.current.style.transform = "rotate(0deg)";
+            isTrackingRef.current = true;
+            animateCamera(null, heading);
+          }
+        }
       } else {
-        if (Date.now() - lastGpsMovedRef.current > 3000) {
+        if (isStationary) {
           bearingRef.current = heading;
           if (driverElRef.current) driverElRef.current.style.transform = `rotate(${heading}deg)`;
         }
@@ -284,6 +372,12 @@ export default function ClientMap({
     }
 
     const mb = mapboxgl;
+
+    if (!mb.supported()) {
+      console.error("[Map] WebGL not supported in this browser");
+      return;
+    }
+
     mbRef.current = mb;
     mb.accessToken = TOKEN;
 
@@ -300,8 +394,13 @@ export default function ClientMap({
       maxPitch: 60,
       attributionControl: false,
       accessToken: TOKEN,
+      fadeDuration: 0,
     });
     mapRef.current = map;
+
+    map.on("error", (e) => {
+      console.error("[Map] runtime error:", e.error?.message ?? JSON.stringify(e));
+    });
 
     setTimeout(() => map.resize(), 100);
 
@@ -360,6 +459,23 @@ export default function ClientMap({
         paint: { "line-color": "#3B82F6", "line-width": 2, "line-opacity": 0.8 },
       });
 
+      map.addSource("surge-zones", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "surge-zones-fill",
+        type: "fill",
+        source: "surge-zones",
+        paint: { "fill-color": "#F59E0B", "fill-opacity": 0.10 },
+      });
+      map.addLayer({
+        id: "surge-zones-border",
+        type: "line",
+        source: "surge-zones",
+        paint: { "line-color": "#F59E0B", "line-width": 1.5, "line-opacity": 0.55, "line-dasharray": [3, 2] },
+      });
+
       setMapReady(true);
     });
 
@@ -387,6 +503,10 @@ export default function ClientMap({
       toMkRef.current = null;
       viaMkRef.current = null;
       driverMkRef.current = null;
+      for (const cm of cameraMarkersRef.current) cm.marker.remove();
+      cameraMarkersRef.current = [];
+      for (const mk of fuelMarkersRef.current) mk.remove();
+      fuelMarkersRef.current = [];
     };
   }, []);
 
@@ -412,9 +532,9 @@ export default function ClientMap({
 
     map.flyTo({
       center: [centerRef.current[1], centerRef.current[0]],
-      zoom: zoomRef.current,
-      bearing: followBearingRef.current ? bearingRef.current : 0,
-      pitch: 0,
+      zoom: navModeRef.current ? 17 : zoomRef.current,
+      bearing: followBearingRef.current ? map.getBearing() : 0,
+      pitch: navModeRef.current ? 50 : 0,
       duration: 2000,
       essential: true,
     });
@@ -493,6 +613,19 @@ export default function ClientMap({
         stepsRef.current = [];
         stepIdxRef.current = -1;
         onStepRef.current?.(null);
+        for (const cm of cameraMarkersRef.current) cm.marker.remove();
+        cameraMarkersRef.current = [];
+        alertedCamerasRef.current = new Set();
+        routeCoordsRef.current = [];
+        maxspeedsRef.current = [];
+        nearestCoordIdxRef.current = 0;
+        cameraFetchGenRef.current++;
+        onSpeedLimitRef.current?.(null);
+        lastSpeedLimitRef.current = null;
+        for (const mk of fuelMarkersRef.current) mk.remove();
+        fuelMarkersRef.current = [];
+        cumDistRef.current = [];
+        cumDurRef.current = [];
 
         // dashed placeholder
         const pts = via
@@ -521,7 +654,7 @@ export default function ClientMap({
           : `${from[1]},${from[0]};${to[1]},${to[0]}`;
 
         fetch(
-          `https://api.mapbox.com/directions/v5/mapbox/driving/${wpts}?steps=true&geometries=geojson&overview=full&access_token=${TOKEN}`,
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${wpts}?steps=true&geometries=geojson&overview=full&annotations=maxspeed&access_token=${TOKEN}`,
           { signal: ctrl.signal },
         )
           .then((r) => r.json())
@@ -545,15 +678,84 @@ export default function ClientMap({
 
             if (steps.length > 0) {
               stepIdxRef.current = 0;
-              const s = steps[0];
-              onStepRef.current?.({
-                instruction: s.maneuver.instruction,
-                type: s.maneuver.type,
-                modifier: s.maneuver.modifier,
-                distance: s.distance,
-                duration: s.duration,
-              });
+              onStepRef.current?.(buildStep(steps[0], steps[1]));
             }
+
+            // Cumulative remaining distance + duration from each step to end
+            const cumDist: number[] = new Array(steps.length).fill(0);
+            const cumDur: number[] = new Array(steps.length).fill(0);
+            for (let i = steps.length - 1; i >= 0; i--) {
+              cumDist[i] = steps[i].distance + (i < steps.length - 1 ? cumDist[i + 1] : 0);
+              cumDur[i] = steps[i].duration + (i < steps.length - 1 ? cumDur[i + 1] : 0);
+            }
+            cumDistRef.current = cumDist;
+            cumDurRef.current = cumDur;
+            if (cumDist.length > 0) onRouteInfoRef.current?.({ remainingM: cumDist[0], remainingSecs: cumDur[0] });
+
+            // Store route coordinates and maxspeed annotations
+            routeCoordsRef.current = route.geometry.coordinates as [number, number][];
+            nearestCoordIdxRef.current = 0;
+            lastSpeedLimitRef.current = null;
+            const allMaxspeeds: Array<number | null> = [];
+            for (const leg of route.legs ?? []) {
+              for (const s of (leg.annotation?.maxspeed ?? []) as any[]) {
+                if (s && typeof s.speed === "number") {
+                  allMaxspeeds.push(s.unit === "mph" ? Math.round(s.speed) : Math.round(s.speed * 0.621371));
+                } else {
+                  allMaxspeeds.push(null);
+                }
+              }
+            }
+            maxspeedsRef.current = allMaxspeeds;
+
+            // Fetch speed cameras along route from OpenStreetMap via Overpass API
+            const allCoords = route.geometry.coordinates as [number, number][];
+            let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+            for (const [lng, lat] of allCoords) {
+              if (lat < minLat) minLat = lat;
+              if (lat > maxLat) maxLat = lat;
+              if (lng < minLng) minLng = lng;
+              if (lng > maxLng) maxLng = lng;
+            }
+            const gen = ++cameraFetchGenRef.current;
+            const south = (minLat - 0.01).toFixed(6);
+            const north = (maxLat + 0.01).toFixed(6);
+            const west = (minLng - 0.01).toFixed(6);
+            const east = (maxLng + 0.01).toFixed(6);
+            fetch(`https://overpass-api.de/api/interpreter?data=[out:json][timeout:10];node["highway"="speed_camera"](${south},${west},${north},${east});out;`)
+              .then((r) => r.json())
+              .then((camData) => {
+                if (gen !== cameraFetchGenRef.current || !mapRef.current || !mbRef.current) return;
+                for (const node of (camData.elements ?? []) as any[]) {
+                  const el = document.createElement("div");
+                  el.style.cssText = "width:18px;height:18px;background:#ef4444;border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(239,68,68,0.7);";
+                  el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>';
+                  const mk = new mbRef.current.Marker({ element: el, anchor: "center" })
+                    .setLngLat([node.lon, node.lat])
+                    .addTo(mapRef.current);
+                  cameraMarkersRef.current.push({ marker: mk, lat: node.lat, lng: node.lon });
+                }
+              })
+              .catch(() => {});
+
+            // Fuel stations along route
+            for (const mk of fuelMarkersRef.current) mk.remove();
+            fuelMarkersRef.current = [];
+            fetch(`https://overpass-api.de/api/interpreter?data=[out:json][timeout:10];node["amenity"="fuel"](${south},${west},${north},${east});out;`)
+              .then((r) => r.json())
+              .then((fuelData) => {
+                if (gen !== cameraFetchGenRef.current || !mapRef.current || !mbRef.current) return;
+                for (const node of (fuelData.elements ?? []) as any[]) {
+                  const el = document.createElement("div");
+                  el.style.cssText = "width:16px;height:16px;background:#22c55e;border:2px solid white;border-radius:3px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(34,197,94,0.7);";
+                  el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22V4a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v18"/><path d="M3 22h11"/><path d="M12 7h4"/><path d="M18 7v4"/><circle cx="18" cy="11" r="2"/></svg>';
+                  const mk = new mbRef.current.Marker({ element: el, anchor: "center" })
+                    .setLngLat([node.lon, node.lat])
+                    .addTo(mapRef.current);
+                  fuelMarkersRef.current.push(mk);
+                }
+              })
+              .catch(() => {});
           })
           .catch((e) => {
             fetchingRef.current = false;
@@ -571,6 +773,18 @@ export default function ClientMap({
       lastToRef.current = "";
       stepsRef.current = [];
       stepIdxRef.current = -1;
+      for (const cm of cameraMarkersRef.current) cm.marker.remove();
+      cameraMarkersRef.current = [];
+      routeCoordsRef.current = [];
+      maxspeedsRef.current = [];
+      cameraFetchGenRef.current++;
+      onSpeedLimitRef.current?.(null);
+      lastSpeedLimitRef.current = null;
+      for (const mk of fuelMarkersRef.current) mk.remove();
+      fuelMarkersRef.current = [];
+      cumDistRef.current = [];
+      cumDurRef.current = [];
+      onRouteInfoRef.current?.(null as any);
       if (!hasInitCenteredRef.current) {
         hasInitCenteredRef.current = true;
         lastProgrammaticRef.current = Date.now() + 500;
@@ -598,15 +812,14 @@ export default function ClientMap({
 
     // GPS supplies travel-direction bearing when moving; compass owns bearing in heading-up mode
     let currentBearing = bearingRef.current;
+    let gpsMoved = false;
     if (prevPosRef.current) {
       const dist = haversineM(prevPosRef.current[0], prevPosRef.current[1], driverPos[0], driverPos[1]);
       if (dist > 2) {
         lastGpsMovedRef.current = Date.now();
-        if (!followBearingRef.current) {
-          // Only let GPS overwrite the bearing when heading-up is OFF
-          currentBearing = calcBearing(prevPosRef.current[0], prevPosRef.current[1], driverPos[0], driverPos[1]);
-          bearingRef.current = currentBearing;
-        }
+        gpsMoved = true;
+        currentBearing = calcBearing(prevPosRef.current[0], prevPosRef.current[1], driverPos[0], driverPos[1]);
+        bearingRef.current = currentBearing;
       }
     }
     prevPosRef.current = driverPos;
@@ -621,10 +834,10 @@ export default function ClientMap({
         .addTo(map);
     }
 
-    // Keep camera following driver position; bearing is controlled by compass when heading-up is on
+    // Keep camera following driver position; when moving, GPS bearing is authoritative in heading-up mode
     if (followBearingRef.current) {
       if (driverElRef.current) driverElRef.current.style.transform = "rotate(0deg)";
-      animateCamera(driverPos, null); // bearing comes from compass via processHeading
+      animateCamera(driverPos, gpsMoved ? currentBearing : null);
     } else {
       if (driverElRef.current) driverElRef.current.style.transform = `rotate(${currentBearing}deg)`;
       animateCamera(driverPos, 0);
@@ -644,21 +857,76 @@ export default function ClientMap({
       });
     }
 
+    // GPS speed calculation
+    const nowMs = Date.now();
+    if (prevPosRef.current && prevTimeRef.current) {
+      const timeSec = (nowMs - prevTimeRef.current) / 1000;
+      if (timeSec > 0.4 && timeSec < 12) {
+        const moveDist = haversineM(prevPosRef.current[0], prevPosRef.current[1], driverPos[0], driverPos[1]);
+        if (moveDist > 0.5) onSpeedRef.current?.(Math.round((moveDist / timeSec) * 2.23694));
+      }
+    }
+    prevTimeRef.current = nowMs;
+
     const steps = stepsRef.current;
     const idx = stepIdxRef.current;
     const next = idx + 1;
     if (steps.length > 0 && idx >= 0 && next < steps.length) {
       const [lng, lat] = steps[next].maneuver.location;
-      if (haversineM(driverPos[0], driverPos[1], lat, lng) < ADVANCE_M) {
+      const dist = haversineM(driverPos[0], driverPos[1], lat, lng);
+      onDistanceChangeRef.current?.(dist);
+      if (dist < ADVANCE_M) {
         stepIdxRef.current = next;
-        const s = steps[next];
-        onStepRef.current?.({
-          instruction: s.maneuver.instruction,
-          type: s.maneuver.type,
-          modifier: s.maneuver.modifier,
-          distance: s.distance,
-          duration: s.duration,
-        });
+        onStepRef.current?.(buildStep(steps[next], steps[next + 1]));
+        if (cumDistRef.current.length > next) {
+          onRouteInfoRef.current?.({ remainingM: cumDistRef.current[next], remainingSecs: cumDurRef.current[next] });
+        }
+      }
+    }
+
+    // Find nearest route coord — shared by speed limit AND off-route detection
+    const routeCoords = routeCoordsRef.current;
+    let nearestRouteDist = Infinity;
+    if (routeCoords.length > 0) {
+      const base = Math.max(0, nearestCoordIdxRef.current - 5);
+      const end = Math.min(routeCoords.length - 1, nearestCoordIdxRef.current + 30);
+      let best = nearestCoordIdxRef.current;
+      nearestRouteDist = haversineM(driverPos[0], driverPos[1], routeCoords[best][1], routeCoords[best][0]);
+      for (let i = base; i <= end; i++) {
+        const d = haversineM(driverPos[0], driverPos[1], routeCoords[i][1], routeCoords[i][0]);
+        if (d < nearestRouteDist) { nearestRouteDist = d; best = i; }
+      }
+      nearestCoordIdxRef.current = best;
+      if (maxspeedsRef.current.length > 0) {
+        const sl = maxspeedsRef.current[Math.min(best, maxspeedsRef.current.length - 1)] ?? null;
+        if (sl !== lastSpeedLimitRef.current) {
+          lastSpeedLimitRef.current = sl;
+          onSpeedLimitRef.current?.(sl);
+        }
+      }
+    }
+
+    // Off-route detection: reroute if driver strays >80m from route
+    if (hasSolidRef.current && !fetchingRef.current && nearestRouteDist > 80) {
+      const now = Date.now();
+      if (now - lastRerouteRef.current > 15_000) {
+        lastRerouteRef.current = now;
+        onReroutingRef.current?.();
+        hasSolidRef.current = false;
+        lastFromRef.current = null;
+        lastToRef.current = "";
+        lastViaRef.current = "";
+      }
+    }
+
+    // Camera proximity warning — fire once per camera per 60s
+    for (const cam of cameraMarkersRef.current) {
+      const camDist = haversineM(driverPos[0], driverPos[1], cam.lat, cam.lng);
+      const camKey = `${cam.lat.toFixed(4)},${cam.lng.toFixed(4)}`;
+      if (camDist < 400 && !alertedCamerasRef.current.has(camKey)) {
+        alertedCamerasRef.current.add(camKey);
+        onCameraApproachRef.current?.();
+        setTimeout(() => alertedCamerasRef.current.delete(camKey), 60_000);
       }
     }
 
@@ -714,10 +982,23 @@ export default function ClientMap({
     });
   }, [accuracy, driverPosKey, mapReady]);
 
+  // Surge zone polygons
+  useEffect(() => {
+    if (!mapReady) return;
+    const src = mapRef.current?.getSource("surge-zones") as any;
+    if (!src) return;
+    const features = (surgeZones ?? []).map((z) => ({
+      type: "Feature" as const,
+      geometry: { type: "Polygon" as const, coordinates: [circlePolygon(z.lat, z.lng, z.radiusM)] },
+      properties: { label: z.label },
+    }));
+    src.setData({ type: "FeatureCollection", features });
+  }, [surgeZones, mapReady]);
+
   return (
     <div
       ref={containerRef}
-      className={`${className} ${interactive ? "cursor-grab active:cursor-grabbing" : ""}`}
+      className={`map-fill ${interactive ? "cursor-grab active:cursor-grabbing" : ""}`}
     />
   );
 }

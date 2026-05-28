@@ -12,6 +12,7 @@ export default function FoodPickups() {
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [accepted, setAccepted] = useState<string[]>([]);
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = listenToPendingJobsByType("food", (rides) => {
@@ -26,6 +27,7 @@ export default function FoodPickups() {
   const handleAccept = async (job: Ride) => {
     if (!user || accepting) return;
     setAccepting(job.id);
+    setAcceptError(null);
     try {
       await acceptRide(job.id, user.uid, {
         name: profile?.name || "Driver",
@@ -58,6 +60,7 @@ export default function FoodPickups() {
       });
     } catch {
       setAccepting(null);
+      setAcceptError("Failed to accept job. Please try again.");
     }
   };
 
@@ -88,6 +91,12 @@ export default function FoodPickups() {
             <p className="text-sm font-semibold text-primary">
               {accepted.length} job{accepted.length > 1 ? "s" : ""} confirmed in your queue.
             </p>
+          </div>
+        )}
+        {acceptError && (
+          <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/25 rounded-xl px-4 py-3">
+            <X size={16} className="text-destructive flex-shrink-0" />
+            <p className="text-sm font-semibold text-destructive">{acceptError}</p>
           </div>
         )}
 

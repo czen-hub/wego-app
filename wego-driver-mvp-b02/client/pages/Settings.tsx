@@ -1,9 +1,9 @@
 ﻿import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Moon, Sun, Bell, BellOff, Car, Map, Shield, ChevronRight, ChevronLeft,
   LogOut, User, Phone, Mail, Star, HelpCircle, FileText,
-  Camera, Upload, CheckCircle, Eye, EyeOff, Lock, Pencil, Users, Copy
+  Camera, Upload, CheckCircle, Eye, EyeOff, Lock, Pencil, Users, Copy, Banknote
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/context/ThemeContext";
@@ -13,6 +13,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import BottomSheet from "@/components/BottomSheet";
+import { saveBankAccount, getBankAccount, type BankAccount } from "@/lib/db";
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
@@ -175,7 +176,8 @@ function UploadBox({
 
 type ModalId =
   | "editProfile" | "vehicleInfo" | "insurance" | "inspection"
-  | "phone" | "email" | "password" | "help" | null;
+  | "phone" | "email" | "password" | "help" | "payout"
+  | "agreement" | "privacy" | null;
 
 const DRIVER_FAQS = [
   { q: "What are the cancellation fees if a passenger cancels?", a: "You are protected by distance-based cancellation fees that go 100% to you — WeGo keeps none of it.\n\n• Free: passenger cancels within 5 min of booking (driver not yet dispatched)\n• $5.00: passenger cancels while you are nearby (< 5 miles en route)\n• $9.00: passenger cancels while you are 5–10 miles en route\n• $14.00: passenger cancels after you drove 10+ miles including highway\n• Distance fee + $3.00: passenger cancels after you have already arrived (e.g. drove 10+ miles = $14 + $3 = $17)\n\nFees are credited to your account within 24 hours." },
@@ -196,6 +198,7 @@ const DRIVER_FAQS = [
 
 export default function Settings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { logOut, profile, user } = useAuth();
   const isDark = theme === "dark";
@@ -250,9 +253,48 @@ export default function Settings() {
     }
   }, [profile]);
 
+  // Load saved bank account
+  useEffect(() => {
+    if (!user) return;
+    getBankAccount(user.uid).then((acct) => {
+      if (acct) setBankAccount(acct);
+    });
+  }, [user]);
+
+  // Deep-link: Earnings page navigates here with { openModal: "payout" }
+  const locationState = (location as any).state as { openModal?: string } | null;
+  useEffect(() => {
+    if (locationState?.openModal === "payout") {
+      setBankDraft({ holderName: bankAccount?.holderName ?? "", bankName: bankAccount?.bankName ?? "", accountType: bankAccount?.accountType ?? "checking", routingNumber: "", accountNumber: "", accountNumberConfirm: "" });
+      setBankError("");
+      setModal("payout");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Payout / Banking ──
+  const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
+  const [bankDraft, setBankDraft] = useState({ holderName: "", bankName: "", accountType: "checking" as "checking" | "savings", routingNumber: "", accountNumber: "", accountNumberConfirm: "" });
+  const [bankError, setBankError] = useState("");
+  const [bankSaving, setBankSaving] = useState(false);
+
   // ── Notifications / Nav ──
   const [notifications, setNotifications] = useState({ rideRequests: true, earnings: true, governance: false, promotions: false });
   const [navApp, setNavApp] = useState<"google" | "waze" | "apple">("google");
+
+  // Load persisted preferences from Firestore on mount
+  useEffect(() => {
+    if (!user) return;
+    import("firebase/firestore").then(({ getDoc, doc: fsDoc }) =>
+      getDoc(fsDoc(db, "drivers", user.uid)).then((snap) => {
+        if (!snap.exists()) return;
+        const prefs = snap.data().preferences as Record<string, unknown> | undefined;
+        if (!prefs) return;
+        if (prefs.notifications) setNotifications(prefs.notifications as typeof notifications);
+        if (prefs.navApp) setNavApp(prefs.navApp as "google" | "waze" | "apple");
+      }).catch(() => {})
+    );
+  }, [user]);
 
   // ── Modal ──
   const [modal, setModal] = useState<ModalId>(null);
@@ -293,6 +335,11 @@ export default function Settings() {
     }
   };
   const saveVehicle = async () => {
+    const yearNum = parseInt(vehicleDraft.year, 10);
+    if (!vehicleDraft.year || isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear() + 1) {
+      toast.error("Enter a valid 4-digit vehicle year.");
+      return;
+    }
     const prev = vehicle;
     setVehicle(vehicleDraft);
     try {
@@ -359,6 +406,29 @@ export default function Settings() {
       toast.error("Failed to save. Please try again.");
     }
   };
+
+  const handleSaveBankAccount = async () => {
+    setBankError("");
+    const { holderName, bankName, accountType, routingNumber, accountNumber, accountNumberConfirm } = bankDraft;
+    if (!holderName.trim()) { setBankError("Enter the account holder name."); return; }
+    if (!bankName.trim()) { setBankError("Enter the bank name."); return; }
+    if (!/^\d{9}$/.test(routingNumber.replace(/\s/g, ""))) { setBankError("Routing number must be exactly 9 digits."); return; }
+    if (accountNumber.length < 4) { setBankError("Account number must be at least 4 digits."); return; }
+    if (accountNumber !== accountNumberConfirm) { setBankError("Account numbers do not match."); return; }
+    if (!user) return;
+    setBankSaving(true);
+    try {
+      await saveBankAccount(user.uid, { holderName: holderName.trim(), bankName: bankName.trim(), accountType, routingNumber: routingNumber.replace(/\s/g, ""), accountNumber: accountNumber.replace(/\s/g, "") });
+      const updated: BankAccount = { holderName: holderName.trim(), bankName: bankName.trim(), accountType, routingNumberLast4: routingNumber.slice(-4), accountNumberLast4: accountNumber.slice(-4) };
+      setBankAccount(updated);
+      toast.success("Bank account saved");
+      close();
+    } catch {
+      toast.error("Failed to save. Please try again.");
+    } finally {
+      setBankSaving(false);
+    }
+  };
   const saveEmail = async () => {
     if (!emailDraft.trim()) { setEmailError("Enter a new email address."); return; }
     if (!emailPassword) { setEmailError("Enter your current password to confirm."); return; }
@@ -405,9 +475,19 @@ export default function Settings() {
     }
   };
 
-  const handleProfilePic = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfilePic = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setProfilePic(URL.createObjectURL(file));
+    if (!file || !user) return;
+    setProfilePic(URL.createObjectURL(file));
+    try {
+      const storageRef = ref(storage, `drivers/${user.uid}/profile.jpg`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(snapshot.ref);
+      await updateDoc(doc(db, "drivers", user.uid), { photoURL: downloadUrl });
+      toast.success("Profile photo updated");
+    } catch {
+      toast.error("Failed to upload photo. Please try again.");
+    }
   };
 
   const navApps = [
@@ -501,8 +581,20 @@ export default function Settings() {
                   icon={key === "promotions" ? <BellOff size={18} /> : <Bell size={18} />}
                   label={labels[key][0]}
                   sublabel={labels[key][1]}
-                  right={<Toggle checked={notifications[key]} onChange={() => setNotifications((p) => ({ ...p, [key]: !p[key] }))} />}
-                  onClick={() => setNotifications((p) => ({ ...p, [key]: !p[key] }))}
+                  right={<Toggle checked={notifications[key]} onChange={() => {
+                    setNotifications((p) => {
+                      const next = { ...p, [key]: !p[key] };
+                      if (user) updateDoc(doc(db, "drivers", user.uid), { "preferences.notifications": next }).catch(() => {});
+                      return next;
+                    });
+                  }} />}
+                  onClick={() => {
+                    setNotifications((p) => {
+                      const next = { ...p, [key]: !p[key] };
+                      if (user) updateDoc(doc(db, "drivers", user.uid), { "preferences.notifications": next }).catch(() => {});
+                      return next;
+                    });
+                  }}
                 />
               );
             })}
@@ -520,7 +612,10 @@ export default function Settings() {
                     ? <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><div className="w-2 h-2 rounded-full bg-white" /></div>
                     : <div className="w-5 h-5 rounded-full border-2 border-border" />
                 }
-                onClick={() => setNavApp(app.id)}
+                onClick={() => {
+                  setNavApp(app.id);
+                  if (user) updateDoc(doc(db, "drivers", user.uid), { "preferences.navApp": app.id }).catch(() => {});
+                }}
               />
             ))}
           </Section>
@@ -569,6 +664,29 @@ export default function Settings() {
             />
           </Section>
 
+          {/* Payout & Banking */}
+          <Section title="Payout & Banking">
+            <Row
+              icon={<Banknote size={18} />}
+              label="Bank Account"
+              sublabel={
+                bankAccount
+                  ? `${bankAccount.bankName} ****${bankAccount.accountNumberLast4} · ${bankAccount.accountType === "checking" ? "Checking" : "Savings"}`
+                  : "Tap to add bank account"
+              }
+              right={
+                bankAccount
+                  ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">Linked</span>
+                  : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">Not set</span>
+              }
+              onClick={() => {
+                setBankDraft({ holderName: bankAccount?.holderName ?? "", bankName: bankAccount?.bankName ?? "", accountType: bankAccount?.accountType ?? "checking", routingNumber: "", accountNumber: "", accountNumberConfirm: "" });
+                setBankError("");
+                setModal("payout");
+              }}
+            />
+          </Section>
+
           {/* Refer a Driver */}
           <Section title="Refer a Driver">
             <div className="px-4 py-4 space-y-3">
@@ -594,8 +712,8 @@ export default function Settings() {
           {/* Support */}
           <Section title="Support">
             <Row icon={<HelpCircle size={18} />} label="Help Center" sublabel="FAQs, guides, and driver support" onClick={() => setModal("help")} />
-            <Row icon={<FileText size={18} />} label="Member Agreement" sublabel="View your cooperative membership terms" onClick={() => alert("Member Agreement coming soon.")} />
-            <Row icon={<FileText size={18} />} label="Privacy Policy" sublabel="How WeGo handles your data" onClick={() => alert("Privacy Policy coming soon.")} />
+            <Row icon={<FileText size={18} />} label="Member Agreement" sublabel="View your cooperative membership terms" onClick={() => setModal("agreement")} />
+            <Row icon={<FileText size={18} />} label="Privacy Policy" sublabel="How WeGo handles your data" onClick={() => setModal("privacy")} />
           </Section>
 
           {/* Sign Out */}
@@ -793,6 +911,74 @@ export default function Settings() {
         </div>
       </BottomSheet>
 
+      {/* Payout & Banking */}
+      <BottomSheet open={modal === "payout"} onClose={close} title="Bank Account">
+        <div className="space-y-4">
+          {bankAccount && (
+            <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+              <CheckCircle size={16} className="text-primary flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">{bankAccount.bankName} — {bankAccount.accountType === "checking" ? "Checking" : "Savings"}</p>
+                <p className="text-xs text-muted-foreground">Account ending ****{bankAccount.accountNumberLast4} · Holder: {bankAccount.holderName}</p>
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">{bankAccount ? "Update your payout account below." : "Add your bank account to receive weekly payouts."}</p>
+          <Field label="Account Holder Name" value={bankDraft.holderName} onChange={(v) => setBankDraft((p) => ({ ...p, holderName: v }))} placeholder="Full name as on bank account" />
+          <Field label="Bank Name" value={bankDraft.bankName} onChange={(v) => setBankDraft((p) => ({ ...p, bankName: v }))} placeholder="e.g. Chase, Wells Fargo, Bank of America" />
+          {/* Account Type */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Account Type</label>
+            <div className="flex gap-3">
+              {(["checking", "savings"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setBankDraft((p) => ({ ...p, accountType: t }))}
+                  className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-all active:scale-95 ${bankDraft.accountType === t ? "bg-primary/10 border-primary/40 text-primary" : "border-border text-muted-foreground bg-background"}`}
+                >
+                  {t === "checking" ? "Checking" : "Savings"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Field
+            label="Routing Number"
+            value={bankDraft.routingNumber}
+            onChange={(v) => setBankDraft((p) => ({ ...p, routingNumber: v.replace(/\D/g, "").slice(0, 9) }))}
+            placeholder="9-digit routing number"
+            type="tel"
+            hint="Found at the bottom-left of your check."
+          />
+          <Field
+            label="Account Number"
+            value={bankDraft.accountNumber}
+            onChange={(v) => setBankDraft((p) => ({ ...p, accountNumber: v.replace(/\D/g, "") }))}
+            placeholder="Your account number"
+            type="tel"
+          />
+          <Field
+            label="Confirm Account Number"
+            value={bankDraft.accountNumberConfirm}
+            onChange={(v) => setBankDraft((p) => ({ ...p, accountNumberConfirm: v.replace(/\D/g, "") }))}
+            placeholder="Re-enter account number"
+            type="tel"
+          />
+          {bankError && <p className="text-xs text-destructive font-medium">{bankError}</p>}
+          <div className="p-3 bg-muted/20 border border-border rounded-xl">
+            <p className="text-[11px] text-muted-foreground leading-relaxed">Your account details are stored securely. Only the last 4 digits of your account number are displayed after saving. Payouts are processed every Monday for the prior week.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveBankAccount}
+            disabled={bankSaving}
+            className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {bankSaving ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Saving…</> : (bankAccount ? "Update Bank Account" : "Save Bank Account")}
+          </button>
+        </div>
+      </BottomSheet>
+
       {/* Help Center */}
       <BottomSheet open={modal === "help"} onClose={close} title="Help Center">
         <div className="space-y-3">
@@ -803,9 +989,81 @@ export default function Settings() {
           <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 text-center space-y-2 mt-2">
             <p className="text-sm font-semibold text-foreground">Still need help?</p>
             <p className="text-xs text-muted-foreground">Contact the member services committee — we respond within 24 hours.</p>
-            <button type="button" className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold active:scale-95 transition-transform">
+            <button type="button" onClick={() => { window.location.href = "mailto:support@wegoapp.com"; }} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold active:scale-95 transition-transform">
               Contact Support
             </button>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Member Agreement */}
+      <BottomSheet open={modal === "agreement"} onClose={close} title="Member Agreement">
+        <div className="space-y-4 text-sm text-foreground leading-relaxed">
+          <p className="text-xs text-muted-foreground">Effective January 1, 2025 · WeGo Driver Cooperative</p>
+          <div className="space-y-3">
+            <div>
+              <p className="font-semibold mb-1">1. Cooperative Membership</p>
+              <p className="text-xs text-muted-foreground">By joining WeGo, you become a member-owner of the cooperative. You have one vote on major platform decisions, board elections, and constitutional amendments. Membership requires active driving status or an approved leave of absence.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">2. Monthly Dues</p>
+              <p className="text-xs text-muted-foreground">Monthly dues of $75 cover group commercial insurance ($20), app infrastructure ($15), operations reserve ($10), your Retirement Trust contribution ($25), and the cooperative dividend reserve ($5). Dues are waived during approved leave.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">3. Earnings & Platform Fee</p>
+              <p className="text-xs text-muted-foreground">You retain 88% of every fare. WeGo's 12% covers dispatch, technology, and cooperative operations. Tips go 100% to you. Cancellation and no-show fees go 100% to you. Payouts are processed every Monday.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">4. Deactivation Protections</p>
+              <p className="text-xs text-muted-foreground">No algorithmic deactivations. Every deactivation requires documented human review, written notice, and a 30-day appeal right to the member-elected board committee. This protection requires a 75% supermajority to amend.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">5. Retirement Trust</p>
+              <p className="text-xs text-muted-foreground">Your $25/month Retirement Trust contribution is held in a legally separate ERISA trust. Management cannot access or redirect these funds. Vesting schedule and withdrawal rules are governed by the trust agreement.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">6. Dispute Resolution</p>
+              <p className="text-xs text-muted-foreground">Disputes are reviewed by a human within 48 hours. You will receive written notice of any complaint and its outcome. Ratings from cancelled rides or unverified complaints are not counted against your score.</p>
+            </div>
+          </div>
+          <div className="p-3 bg-muted/20 border border-border rounded-xl">
+            <p className="text-[11px] text-muted-foreground">For the full member agreement, contact support@wegoapp.com or request a copy from the member services committee.</p>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Privacy Policy */}
+      <BottomSheet open={modal === "privacy"} onClose={close} title="Privacy Policy">
+        <div className="space-y-4 text-sm text-foreground leading-relaxed">
+          <p className="text-xs text-muted-foreground">Effective January 1, 2025 · WeGo Driver Cooperative</p>
+          <div className="space-y-3">
+            <div>
+              <p className="font-semibold mb-1">Data We Collect</p>
+              <p className="text-xs text-muted-foreground">Account information (name, email, phone), vehicle and insurance documents, location during active driving sessions, ride history, earnings data, and device identifiers for app function.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">How We Use Your Data</p>
+              <p className="text-xs text-muted-foreground">To match you with passengers, process payouts, maintain safety records, comply with insurance and regulatory requirements, and improve the platform. We do not sell your personal data to third parties.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">Location Data</p>
+              <p className="text-xs text-muted-foreground">Precise location is collected only while the app is active during a driving session. Location data is retained for 90 days for safety and dispute purposes, then deleted. We do not collect background location when you are off-duty.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">Banking Information</p>
+              <p className="text-xs text-muted-foreground">Only the last 4 digits of your account and routing numbers are stored in our systems. Full banking details are transmitted securely to our payment processor and never stored on WeGo servers.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">Your Rights</p>
+              <p className="text-xs text-muted-foreground">You may request a copy of your data, correction of inaccurate data, or deletion of your account at any time by contacting support@wegoapp.com. Account deletion requests are processed within 30 days.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">Data Sharing</p>
+              <p className="text-xs text-muted-foreground">Ride details (pickup/dropoff location, fare) are shared with passengers for trip transparency. Aggregate anonymized data may be used for cooperative reporting. No personally identifiable data is shared with advertisers.</p>
+            </div>
+          </div>
+          <div className="p-3 bg-muted/20 border border-border rounded-xl">
+            <p className="text-[11px] text-muted-foreground">Questions about your privacy? Contact support@wegoapp.com. For data deletion requests, include your member ID.</p>
           </div>
         </div>
       </BottomSheet>

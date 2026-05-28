@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Bell, Star, AlertCircle, Info, ChevronRight, ChevronLeft, Check, Tag } from "lucide-react";
+import { Bell, Star, AlertCircle, Info, ChevronRight, ChevronLeft, Check, Tag, Send } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { listenToMessages, markMessageRead as markMsgRead, markAllMessagesRead, type Message as DbMessage } from "@/lib/db";
+import { listenToMessages, markMessageRead as markMsgRead, markAllMessagesRead, sendRideMessage, type Message as DbMessage } from "@/lib/db";
 
 type MessageType = "wego" | "rider" | "alert" | "system" | "promo";
 type Tab = "all" | "messages" | "alerts" | "promotions";
@@ -15,6 +15,7 @@ interface Message {
   body: string;
   time: string;
   read: boolean;
+  rideId?: string;
 }
 
 
@@ -44,15 +45,17 @@ function timeAgo(date: Date | null): string {
 }
 
 function fromDb(m: DbMessage): Message {
+  const isPassengerMsg = m.type === "notification" && m.rideId;
   return {
     id: m.id,
-    type: DB_TYPE_MAP[m.type] ?? "wego",
-    from: DB_FROM_MAP[m.type] ?? "WeGo",
+    type: isPassengerMsg ? "rider" : (DB_TYPE_MAP[m.type] ?? "wego"),
+    from: m.fromName || DB_FROM_MAP[m.type] || "WeGo",
     subject: m.title,
     preview: m.body.length > 80 ? m.body.slice(0, 80) + "…" : m.body,
     body: m.body,
     time: timeAgo(m.createdAt),
     read: m.read,
+    rideId: m.rideId,
   };
 }
 
@@ -90,6 +93,8 @@ export default function Inbox() {
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<Message | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("all");
+  const [replyText, setReplyText] = useState("");
+  const [replySent, setReplySent] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -115,6 +120,15 @@ export default function Inbox() {
     setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, read: true } : m)));
     if (!msg.read) markMsgRead(msg.id).catch(() => {});
     setSelected({ ...msg, read: true });
+    setReplyText("");
+    setReplySent(false);
+  };
+
+  const sendReply = async () => {
+    if (!replyText.trim() || !selected?.rideId || !user) return;
+    await sendRideMessage(selected.rideId, user.uid, "driver", replyText.trim());
+    setReplyText("");
+    setReplySent(true);
   };
 
   const markAllRead = () => {
@@ -150,6 +164,28 @@ export default function Inbox() {
             <div className="border-t border-border pt-4">
               <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{selected.body}</p>
             </div>
+            {selected.rideId && (
+              <div className="border-t border-border pt-4 space-y-2">
+                {replySent ? (
+                  <p className="text-sm text-primary font-medium text-center">Reply sent</p>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) sendReply(); }}
+                      placeholder="Reply to passenger…"
+                      className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary"
+                    />
+                    <button type="button" aria-label="Send reply" onClick={sendReply} disabled={!replyText.trim()}
+                      className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform flex-shrink-0">
+                      <Send size={16} className="text-white" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -23,31 +23,32 @@ export function useCurrentLocation(): UseCurrentLocationResult {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setCoords([position.coords.latitude, position.coords.longitude]);
-        setAccuracy(position.coords.accuracy);
-        setError(null);
-        setLoading(false);
-      },
-      (geoError) => {
-        const message =
-          geoError.code === geoError.PERMISSION_DENIED
-            ? "Location access was denied. Using the default map center."
-            : geoError.code === geoError.POSITION_UNAVAILABLE
-              ? "Current location is unavailable right now. Using the default map center."
-              : "Location request timed out. Using the default map center.";
+    const onSuccess = (position: GeolocationPosition) => {
+      setCoords([position.coords.latitude, position.coords.longitude]);
+      setAccuracy(position.coords.accuracy);
+      setError(null);
+      setLoading(false);
+    };
 
-        setCoords(DEFAULT_COORDS);
-        setError(message);
-        setLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
-      },
-    );
+    const onError = (geoError: GeolocationPositionError) => {
+      const message =
+        geoError.code === geoError.PERMISSION_DENIED
+          ? "Location access was denied. Using the default map center."
+          : geoError.code === geoError.POSITION_UNAVAILABLE
+            ? "Current location is unavailable right now. Using the default map center."
+            : "Location request timed out. Using the default map center.";
+      setCoords(DEFAULT_COORDS);
+      setError(message);
+      setLoading(false);
+    };
+
+    const watchId = navigator.geolocation.watchPosition(onSuccess, onError, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 3000,
+    });
+
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   return { coords, accuracy, error, loading };

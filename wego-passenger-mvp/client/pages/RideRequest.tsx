@@ -221,6 +221,8 @@ function calcRoute(
 // The parent does NOT render a left-column connector for stops — this component
 // owns its own indicator so the dnd transform applies to the whole row.
 
+interface GeoResult { name: string; sublabel: string; coords: [number, number] }
+
 interface SortableStopProps {
   stop: StopEntry;
   index: number;
@@ -228,20 +230,26 @@ interface SortableStopProps {
   onFocus: (id: string) => void;
   onBlur: (id: string) => void;
   onChange: (id: string, val: string) => void;
-  onSelect: (id: string, label: string) => void;
+  onSelect: (id: string, label: string, coords?: [number, number]) => void;
   onRemove: (id: string) => void;
   inputRef: (el: HTMLInputElement | null) => void;
+  geoResults: GeoResult[];
 }
 
-function SortableStop({ stop, index, focused, onFocus, onBlur, onChange, onSelect, onRemove, inputRef }: SortableStopProps) {
+function SortableStop({ stop, index, focused, onFocus, onBlur, onChange, onSelect, onRemove, inputRef, geoResults }: SortableStopProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
 
-  const suggestions = stop.address.trim().length >= 1
+  const staticSuggestions = stop.address.trim().length >= 1
     ? LOCATION_SUGGESTIONS.filter(s =>
         s.label.toLowerCase().includes(stop.address.toLowerCase()) ||
         s.sublabel.toLowerCase().includes(stop.address.toLowerCase())
       ).slice(0, 4)
     : LOCATION_SUGGESTIONS.slice(0, 4);
+
+  const displayResults: { label: string; sublabel: string; coords?: [number, number] }[] =
+    geoResults.length > 0
+      ? geoResults.map(r => ({ label: r.name, sublabel: r.sublabel, coords: r.coords }))
+      : staticSuggestions.map(s => ({ label: s.label, sublabel: s.sublabel }));
 
   return (
     // eslint-disable-next-line react/forbid-component-props
@@ -277,8 +285,8 @@ function SortableStop({ stop, index, focused, onFocus, onBlur, onChange, onSelec
               />
               {focused && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                  {suggestions.map(s => (
-                    <button key={s.label} type="button" onMouseDown={() => onSelect(stop.id, s.label)}
+                  {displayResults.map(s => (
+                    <button key={s.label + s.sublabel} type="button" onMouseDown={() => onSelect(stop.id, s.label, s.coords)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 active:bg-muted/50 text-left border-b border-border/30 last:border-0">
                       <div className="w-6 h-6 rounded-full bg-amber-400/10 border border-amber-400/30 flex items-center justify-center flex-shrink-0">
                         <MapPin size={11} className="text-amber-500" />
@@ -289,6 +297,9 @@ function SortableStop({ stop, index, focused, onFocus, onBlur, onChange, onSelec
                       </div>
                     </button>
                   ))}
+                  {geoResults.length === 0 && stop.address.trim().length >= 2 && (
+                    <p className="text-xs text-muted-foreground text-center py-3">Searching…</p>
+                  )}
                 </div>
               )}
             </div>
@@ -362,6 +373,8 @@ export default function RideRequest() {
   const stopGeocodeTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const stopBlurTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const stopInputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
+  const [stopGeoResults, setStopGeoResults] = useState<Map<string, GeoResult[]>>(new Map());
+  const stopSearchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -410,9 +423,45 @@ export default function RideRequest() {
     setFocusedStopId(id);
   };
 
+  const searchStop = (id: string, q: string) => {
+    const existing = stopSearchTimers.current.get(id);
+    if (existing) clearTimeout(existing);
+    if (q.trim().length < 2) {
+      setStopGeoResults(prev => { const m = new Map(prev); m.delete(id); return m; });
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const loc = currentCoords ?? FALLBACK;
+        const prox = `&proximity=${loc[1]},${loc[0]}`;
+        const bbox = `&bbox=${(loc[1] - 1.5).toFixed(4)},${(loc[0] - 1.5).toFixed(4)},${(loc[1] + 1.5).toFixed(4)},${(loc[0] + 1.5).toFixed(4)}`;
+        const res = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?types=poi,address,place,neighborhood&language=en&country=us${prox}${bbox}&access_token=${TOKEN}`
+        );
+        const data = await res.json();
+        setStopGeoResults(prev => {
+          const m = new Map(prev);
+          m.set(id, (data.features ?? []).slice(0, 5).map((f: any) => ({
+            name: f.address ? `${f.address} ${f.text}` : (f.place_name as string).split(",")[0],
+            sublabel: f.place_name as string,
+            coords: [f.center[1], f.center[0]] as [number, number],
+          })));
+          return m;
+        });
+      } catch {
+        setStopGeoResults(prev => { const m = new Map(prev); m.delete(id); return m; });
+      }
+      stopSearchTimers.current.delete(id);
+    }, 350);
+    stopSearchTimers.current.set(id, timer);
+  };
+
   const removeStop = (id: string) => {
     const t = stopGeocodeTimers.current.get(id);
     if (t) { clearTimeout(t); stopGeocodeTimers.current.delete(id); }
+    const st = stopSearchTimers.current.get(id);
+    if (st) { clearTimeout(st); stopSearchTimers.current.delete(id); }
+    setStopGeoResults(prev => { const m = new Map(prev); m.delete(id); return m; });
     setStops(prev => prev.filter(s => s.id !== id));
     if (focusedStopId === id) setFocusedStopId(null);
   };
@@ -420,6 +469,7 @@ export default function RideRequest() {
   const updateStopAddress = (id: string, address: string) => {
     const presetCoords = LOCATION_COORDS[address] ?? null;
     setStops(prev => prev.map(s => s.id === id ? { ...s, address, coords: presetCoords } : s));
+    searchStop(id, address);
     if (!presetCoords && address.trim().length > 3) {
       const existing = stopGeocodeTimers.current.get(id);
       if (existing) clearTimeout(existing);
@@ -432,10 +482,11 @@ export default function RideRequest() {
     }
   };
 
-  const selectStop = (id: string, label: string) => {
-    const coords = LOCATION_COORDS[label] ?? null;
-    setStops(prev => prev.map(s => s.id === id ? { ...s, address: label, coords } : s));
+  const selectStop = (id: string, label: string, coords?: [number, number]) => {
+    const resolvedCoords = coords ?? LOCATION_COORDS[label] ?? null;
+    setStops(prev => prev.map(s => s.id === id ? { ...s, address: label, coords: resolvedCoords } : s));
     setFocusedStopId(null);
+    setStopGeoResults(prev => { const m = new Map(prev); m.delete(id); return m; });
   };
 
   const handleStopFocus = (id: string) => {
@@ -587,7 +638,7 @@ export default function RideRequest() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    <div className="relative h-full flex flex-col overflow-hidden bg-background">
 
       {/* MAP */}
       <div className="request-map-panel relative">
@@ -662,6 +713,7 @@ export default function RideRequest() {
                     onSelect={selectStop}
                     onRemove={removeStop}
                     inputRef={el => { stopInputRefs.current.set(stop.id, el); }}
+                    geoResults={stopGeoResults.get(stop.id) ?? []}
                   />
                 ))}
               </SortableContext>
@@ -852,7 +904,7 @@ export default function RideRequest() {
 
       {/* ── PICKUP SEARCH OVERLAY ── */}
       {pickupSearchOpen && (
-        <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
+        <div className="absolute inset-0 z-[9999] bg-background flex flex-col">
           <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
             <button type="button" aria-label="Close" onClick={() => setPickupSearchOpen(false)}>
               <ChevronLeft size={22} className="text-foreground" />
@@ -909,7 +961,7 @@ export default function RideRequest() {
 
       {/* ── DESTINATION SEARCH OVERLAY ── */}
       {destSearchOpen && (
-        <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
+        <div className="absolute inset-0 z-[9999] bg-background flex flex-col">
           <div className="flex items-center gap-3 px-4 py-4 border-b border-border">
             <button type="button" aria-label="Close" onClick={() => setDestSearchOpen(false)}>
               <ChevronLeft size={22} className="text-foreground" />

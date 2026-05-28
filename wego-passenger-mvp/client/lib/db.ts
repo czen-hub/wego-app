@@ -164,7 +164,9 @@ export async function requestRide(opts: {
 }) {
   const coopFee = Math.round(opts.fare * 0.12 * 100) / 100;
   const driverTake = Math.round((opts.fare - coopFee) * 100) / 100;
-  const pin = String(Math.floor(1000 + Math.random() * 9000));
+  const pinArr = new Uint32Array(1);
+  crypto.getRandomValues(pinArr);
+  const pin = String(1000 + (pinArr[0] % 9000));
   return addDoc(collection(db, "rides"), {
     status: "pending",
     type: opts.type ?? "ride",
@@ -205,10 +207,11 @@ export async function requestRide(opts: {
 
 // ── Dispute a ride ─────────────────────────────────────────────────────────
 
-export async function disputeRide(rideId: string, reason: string): Promise<void> {
+export async function disputeRide(rideId: string, reason: string, passengerId: string): Promise<void> {
   try {
     await addDoc(collection(db, "disputes"), {
       rideId,
+      passengerId,
       reason,
       reportedAt: serverTimestamp(),
       reportedBy: "passenger",
@@ -243,7 +246,9 @@ export async function createReservedRide(opts: {
 }) {
   const coopFee = Math.round(opts.fare * 0.12 * 100) / 100;
   const driverTake = Math.round((opts.fare - coopFee) * 100) / 100;
-  const pin = String(Math.floor(1000 + Math.random() * 9000));
+  const pinArr = new Uint32Array(1);
+  crypto.getRandomValues(pinArr);
+  const pin = String(1000 + (pinArr[0] % 9000));
   return addDoc(collection(db, "rides"), {
     status: "reserved",
     type: "ride",
@@ -291,7 +296,12 @@ export async function cancelRide(rideId: string, cancellationFee?: number): Prom
     await updateDoc(doc(db, "rides", rideId), {
       status: "cancelled",
       cancelledAt: serverTimestamp(),
-      ...(cancellationFee !== undefined ? { cancellationFee } : {}),
+      ...(cancellationFee !== undefined ? {
+        cancellationFee,
+        fare: cancellationFee,
+        driverTake: cancellationFee, // 100% to driver — no coop fee on cancellations
+        coopFee: 0,
+      } : {}),
     });
   } catch (err) {
     console.error("cancelRide failed:", err);
@@ -337,7 +347,8 @@ export function listenToPassengerRide(
 ): () => void {
   const q = query(
     collection(db, "rides"),
-    where("passengerId", "==", passengerId)
+    where("passengerId", "==", passengerId),
+    where("status", "in", ["pending", "accepted", "arrived", "inProgress", "reserved"])
   );
   return onSnapshot(q, (snap) => {
     let rides = snap.docs.map((d) => rideFromDoc(d.id, d.data() as Record<string, unknown>));
@@ -372,7 +383,7 @@ export function listenToRideHistory(
 
 // ── Ride Chat ──────────────────────────────────────────────────────────────
 
-export async function sendRideMessage(rideId: string, senderId: string, senderType: "driver" | "passenger", text: string) {
+export async function sendRideMessage(rideId: string, senderId: string, senderType: "driver" | "passenger", text: string, driverId?: string, passengerName?: string) {
   await addDoc(collection(db, "ride_chats"), {
     rideId,
     senderId,
@@ -380,6 +391,18 @@ export async function sendRideMessage(rideId: string, senderId: string, senderTy
     text,
     createdAt: serverTimestamp(),
   });
+  if (senderType === "passenger" && driverId) {
+    await addDoc(collection(db, "messages"), {
+      driverId,
+      title: passengerName ? `${passengerName}` : "Passenger",
+      body: text,
+      type: "notification",
+      rideId,
+      fromName: passengerName || "Passenger",
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+  }
 }
 
 export function listenToRideMessages(rideId: string, callback: (messages: ChatMessage[]) => void) {

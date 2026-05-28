@@ -3,7 +3,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plane, Music, Target, Clock, ChevronUp, ChevronDown,
   Package, UtensilsCrossed, MapPin, CheckCircle, X, Search,
-  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation, CornerUpRight, AlertTriangle, Compass, History,
+  SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation,
+  CornerUpRight, CornerUpLeft, CornerDownLeft, ArrowUp,
+  AlertTriangle, Compass, Volume2, VolumeX, Camera,
   type LucideIcon,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
@@ -20,10 +22,6 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Plane, Music, Target, Package, UtensilsCrossed, Car,
 };
 
-const FALLBACK_OPPORTUNITIES: (Omit<Opportunity, "active">)[] = [
-  { id: "airport", iconName: "Plane", title: "Airport Bonus",  detail: "SFO Terminal 2",     bonus: "+$8/trip", tag: "Active now" },
-  { id: "event",   iconName: "Music", title: "Event Surge",    detail: "Downtown · Tonight", bonus: "+$6/trip", tag: "Tonight"    },
-];
 
 function Toggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
   return (
@@ -57,12 +55,15 @@ export default function Command() {
   const [offlineBlockOpen, setOfflineBlockOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [navQuery, setNavQuery] = useState("");
-  const [navResults, setNavResults] = useState<{ name: string; coords: [number, number] }[]>([]);
+  const [navResults, setNavResults] = useState<{ name: string; sub: string; mapbox_id: string }[]>([]);
   const [navDest, setNavDest] = useState<{ coords: [number, number]; name: string } | null>(null);
   const [navStep, setNavStep] = useState<RouteStep | null>(null);
+  const [navMode, setNavMode] = useState(false);
   const [navSearching, setNavSearching] = useState(false);
   const navSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navDestRef = useRef<{ coords: [number, number]; name: string } | null>(null);
+  const sessionTokenRef = useRef(crypto.randomUUID());
   const [issueOpen, setIssueOpen] = useState(false);
   const [headingUp, setHeadingUp] = useState(false);
   const [issueSubmitting, setIssueSubmitting] = useState(false);
@@ -80,12 +81,58 @@ export default function Command() {
   const [weeklyEntries, setWeeklyEntries] = useState<EarningsEntry[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem("wego_voice") !== "off");
+  const [navDistM, setNavDistM] = useState<number | null>(null);
+  const [speedLimit, setSpeedLimit] = useState<number | null>(null);
+  const [speedMph, setSpeedMph] = useState<number | null>(null);
+  const [rerouting, setRerouting] = useState(false);
+  const [routeInfo, setRouteInfo] = useState<{ remainingM: number; remainingSecs: number } | null>(null);
+  const [cameraWarning, setCameraWarning] = useState(false);
+  const cameraWarnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartY = useRef(0);
+  const spokenInstructionRef = useRef<string | null>(null);
   const navigatedRef = useRef(!!(location.state as { tripCompleted?: boolean } | null)?.tripCompleted);
 
   // Sync navDestRef so the interval below can read it without a stale closure
   useEffect(() => { navDestRef.current = navDest; }, [navDest]);
+
+  // 3-second overview then switch to street-level nav mode
+  useEffect(() => {
+    if (navModeTimerRef.current) clearTimeout(navModeTimerRef.current);
+    if (navDest) {
+      navModeTimerRef.current = setTimeout(() => setNavMode(true), 3000);
+    } else {
+      setNavMode(false);
+    }
+    return () => { if (navModeTimerRef.current) clearTimeout(navModeTimerRef.current); };
+  }, [navDest]);
+
+  // Speak each new turn instruction aloud when in destination mode
+  useEffect(() => {
+    if (!navStep?.instruction || !navDest || !voiceEnabled) return;
+    if (!("speechSynthesis" in window)) return;
+    if (navStep.instruction === spokenInstructionRef.current) return;
+    spokenInstructionRef.current = navStep.instruction;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(navStep.instruction);
+    u.rate = 1.05;
+    window.speechSynthesis.speak(u);
+  }, [navStep, navDest, voiceEnabled]);
+
+  // Cancel speech and reset distance when navigation ends or voice is muted
+  useEffect(() => {
+    if (!navDest || !voiceEnabled) {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    }
+    if (!navDest) {
+      spokenInstructionRef.current = null;
+      setNavDistM(null);
+      setSpeedMph(null);
+      setRerouting(false);
+      setRouteInfo(null);
+    }
+  }, [navDest, voiceEnabled]);
 
   // After 10 seconds of map idle, fly back to GPS — skip when route navigation is active
   useEffect(() => {
@@ -127,7 +174,12 @@ export default function Command() {
   ) => {
     setter((prev) => {
       const next = !prev;
-      if (user) updateDriverPreferences(user.uid, { [key]: next });
+      if (user) {
+        updateDriverPreferences(user.uid, { [key]: next }).catch((e) => {
+          console.warn("[Command] failed to save preference:", e);
+          setter(prev);
+        });
+      }
       return next;
     });
   };
@@ -278,15 +330,15 @@ export default function Command() {
       setNavSearching(true);
       try {
         const loc = currentCoords ?? mapCenter;
-        const prox = `&proximity=${loc[1]},${loc[0]}`;
         const res = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?types=address,place,poi&language=en${prox}&access_token=${TOKEN}`
+          `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(q)}&proximity=${loc[1]},${loc[0]}&session_token=${sessionTokenRef.current}&types=poi,place,address&language=en&limit=5&access_token=${TOKEN}`
         );
         const data = await res.json();
         setNavResults(
-          (data.features ?? []).slice(0, 5).map((f: any) => ({
-            name: f.place_name as string,
-            coords: [f.center[1], f.center[0]] as [number, number],
+          (data.suggestions ?? []).slice(0, 5).map((s: any) => ({
+            name: s.name ?? "",
+            sub: s.place_formatted ?? s.address ?? "",
+            mapbox_id: s.mapbox_id,
           }))
         );
       } catch {
@@ -296,6 +348,71 @@ export default function Command() {
       }
     }, 350);
   };
+
+  const selectPlace = async (r: { name: string; sub: string; mapbox_id: string }) => {
+    try {
+      const res = await fetch(
+        `https://api.mapbox.com/search/searchbox/v1/retrieve/${r.mapbox_id}?session_token=${sessionTokenRef.current}&access_token=${TOKEN}`
+      );
+      const data = await res.json();
+      const f = data.features?.[0];
+      if (!f) return;
+      const coords: [number, number] = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+      const fullName = f.properties?.full_address ?? `${r.name}, ${r.sub}`;
+      setNavDest({ coords, name: fullName });
+      setNavStep(null);
+      setNavOpen(false);
+      setNavQuery("");
+      setNavResults([]);
+      sessionTokenRef.current = crypto.randomUUID();
+    } catch { /* silently fail */ }
+  };
+
+  const handleCameraApproach = () => {
+    if (cameraWarnTimerRef.current) clearTimeout(cameraWarnTimerRef.current);
+    setCameraWarning(true);
+    if (voiceEnabled && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance("Speed camera ahead"), { rate: 1.05 }));
+    }
+    cameraWarnTimerRef.current = setTimeout(() => setCameraWarning(false), 5000);
+  };
+
+  const handleRerouting = () => {
+    setRerouting(true);
+    setNavStep(null);
+    setNavDistM(null);
+    setRouteInfo(null);
+    if (voiceEnabled && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance("Recalculating route"), { rate: 1.05 }));
+    }
+  };
+
+  const handleNavStepChange = (step: RouteStep | null) => {
+    setNavStep(step);
+    if (step) setRerouting(false);
+  };
+
+  const formatDist = (m: number) => {
+    const ft = m * 3.28084;
+    if (ft < 1000) return `${Math.round(ft / 100) * 100} ft`;
+    const mi = m / 1609.34;
+    return mi < 10 ? `${mi.toFixed(1)} mi` : `${Math.round(mi)} mi`;
+  };
+
+  const TurnIcon = ({ type, modifier, size = 18, className = "text-white" }: { type: string; modifier?: string; size?: number; className?: string }) => {
+    const mod = modifier ?? "";
+    if (type === "arrive") return <MapPin size={size} className={className} />;
+    if (mod === "uturn") return <CornerDownLeft size={size} className={className} />;
+    if (mod.includes("right")) return <CornerUpRight size={size} className={className} />;
+    if (mod.includes("left")) return <CornerUpLeft size={size} className={className} />;
+    return <ArrowUp size={size} className={className} />;
+  };
+
+  const surgeZones = liveOpps
+    .filter(o => o.lat != null && o.lng != null && o.radiusM != null)
+    .map(o => ({ lat: o.lat!, lng: o.lng!, radiusM: o.radiusM!, label: o.title }));
 
   return (
     <div className="relative h-full overflow-hidden">
@@ -318,15 +435,74 @@ export default function Command() {
             to={navDest?.coords}
             forceResetToken={mapResetToken}
             followBearing={headingUp}
+            navMode={navMode}
             onCenterChange={() => { lastMapMoveRef.current = Date.now(); }}
             onClickLocation={() => setDrawerOpen(false)}
-            onStepChange={setNavStep}
+            onStepChange={handleNavStepChange}
+            onDistanceChange={setNavDistM}
+            onSpeedLimitChange={navDest ? setSpeedLimit : undefined}
+            onCameraApproach={navDest ? handleCameraApproach : undefined}
+            onSpeedChange={navDest ? setSpeedMph : undefined}
+            onRerouting={navDest ? handleRerouting : undefined}
+            onRouteInfoChange={navDest ? setRouteInfo : undefined}
+            surgeZones={surgeZones}
           />
         )}
+        {/* Speed limit badge */}
+        {speedLimit !== null && navDest && (
+          <div className="absolute bottom-[168px] left-4 z-10 pointer-events-none">
+            <div className="w-11 bg-white border-[2.5px] border-black rounded text-center shadow-xl leading-none">
+              <p className="text-[6px] font-black text-black tracking-tight pt-0.5">SPEED</p>
+              <p className="text-[6px] font-black text-black tracking-tight">LIMIT</p>
+              <p className="text-[20px] font-black text-black leading-snug pb-0.5">{speedLimit}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Camera warning toast */}
+        {cameraWarning && (
+          <div className="absolute bottom-[220px] left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-red-500/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-xl pointer-events-none whitespace-nowrap">
+            <Camera size={13} className="text-white flex-shrink-0" />
+            <span className="text-white text-xs font-bold tracking-wide">Speed camera ahead</span>
+          </div>
+        )}
+
+        {/* Speedometer badge */}
+        {speedMph !== null && navDest && (
+          <div className="absolute bottom-[110px] right-4 z-10 pointer-events-none">
+            <div className="w-11 h-11 bg-white border-[2.5px] border-black rounded-full flex flex-col items-center justify-center shadow-xl leading-none">
+              <p className="text-[18px] font-black text-black">{speedMph}</p>
+              <p className="text-[6px] font-bold text-black tracking-tight">mph</p>
+            </div>
+          </div>
+        )}
+
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
 
-        {/* Left side map buttons */}
+        {/* Left side map buttons: Audio · Destination · Preferences */}
         <div className="absolute bottom-[160px] left-4 z-10 flex flex-col gap-2">
+          <button
+            type="button"
+            aria-label={voiceEnabled ? "Mute voice guidance" : "Unmute voice guidance"}
+            onClick={() => {
+              const next = !voiceEnabled;
+              setVoiceEnabled(next);
+              localStorage.setItem("wego_voice", next ? "on" : "off");
+            }}
+            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            {voiceEnabled
+              ? <Volume2 size={18} className="text-primary" />
+              : <VolumeX size={18} className="text-muted-foreground" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => navDest ? (setNavDest(null), setNavStep(null)) : setNavOpen(true)}
+            aria-label={navDest ? "Cancel navigation" : "Navigate to destination"}
+            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${navDest ? "bg-destructive" : "bg-primary"}`}
+          >
+            {navDest ? <X size={20} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={20} strokeWidth={2.5} className="text-background" />}
+          </button>
           <button
             type="button"
             onClick={() => setPrefsOpen(true)}
@@ -335,17 +511,9 @@ export default function Command() {
           >
             <SlidersHorizontal size={18} className="text-primary" />
           </button>
-          <button
-            type="button"
-            onClick={() => navigate("/history")}
-            aria-label="Trip history"
-            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
-          >
-            <History size={18} className="text-primary" />
-          </button>
         </div>
 
-        {/* Recenter + Nav buttons */}
+        {/* Right side map buttons: Recenter · Road Issue · Compass */}
         <div className="absolute bottom-[160px] right-4 z-10 flex flex-col gap-2">
           <button
             type="button"
@@ -357,14 +525,6 @@ export default function Command() {
             className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
             <Navigation size={18} className="text-primary" />
-          </button>
-          <button
-            type="button"
-            onClick={() => navDest ? (setNavDest(null), setNavStep(null)) : setNavOpen(true)}
-            aria-label={navDest ? "Cancel navigation" : "Navigate to destination"}
-            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${navDest ? "bg-destructive" : "bg-primary"}`}
-          >
-            {navDest ? <X size={20} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={20} strokeWidth={2.5} className="text-background" />}
           </button>
           <button
             type="button"
@@ -402,21 +562,63 @@ export default function Command() {
           </span>
         </button>
         {navDest && (
-          <div className="w-[calc(100%-32px)] flex items-center gap-2 px-3 py-2 bg-card/95 backdrop-blur-sm border border-primary/30 rounded-xl shadow-lg">
-            <Navigation size={13} className="text-primary flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              {navStep && <p className="text-xs font-semibold text-foreground truncate">{navStep.instruction}</p>}
-              <p className="text-[11px] text-muted-foreground truncate">{navDest.name.split(",")[0]}</p>
+          rerouting ? (
+            <div className="w-[calc(100%-32px)]">
+              <div className="flex items-center gap-3 bg-card/95 backdrop-blur-sm border border-primary/20 rounded-xl shadow-lg px-4 py-3">
+                <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                <p className="text-sm font-bold text-foreground flex-1 min-w-0">Recalculating route…</p>
+                <button type="button" aria-label="Cancel navigation"
+                  onClick={() => { setNavDest(null); setNavStep(null); setRerouting(false); }}
+                  className="flex-shrink-0">
+                  <X size={14} className="text-muted-foreground" />
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              aria-label="Cancel navigation"
-              onClick={() => { setNavDest(null); setNavStep(null); }}
-              className="w-5 h-5 rounded-full bg-muted/60 flex items-center justify-center flex-shrink-0"
-            >
-              <X size={10} />
-            </button>
-          </div>
+          ) : (
+            <div className="w-[calc(100%-32px)] space-y-1">
+              {/* Main turn card */}
+              <div className="flex items-stretch bg-card/95 backdrop-blur-sm border border-primary/20 rounded-xl shadow-lg overflow-hidden">
+                {/* Colored icon block */}
+                <div className="w-12 bg-primary flex-shrink-0 flex items-center justify-center">
+                  {navStep
+                    ? <TurnIcon type={navStep.type} modifier={navStep.modifier} size={20} />
+                    : <Navigation size={18} className="text-white" />}
+                </div>
+                {/* Text */}
+                <div className="flex-1 min-w-0 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-foreground leading-snug flex-1 min-w-0 truncate">
+                      {navStep?.instruction ?? "Calculating route…"}
+                    </p>
+                    {navDistM != null && (
+                      <span className="text-sm font-bold text-primary flex-shrink-0 tabular-nums">
+                        {formatDist(navDistM)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                    {routeInfo
+                      ? `${formatDist(routeInfo.remainingM)} remaining  ·  ${Math.ceil(routeInfo.remainingSecs / 60)} min`
+                      : navStep?.name || navDest.name.split(",")[0]}
+                  </p>
+                </div>
+                {/* Cancel */}
+                <button type="button" aria-label="Cancel navigation"
+                  onClick={() => { setNavDest(null); setNavStep(null); setRerouting(false); setRouteInfo(null); }}
+                  className="px-2.5 flex items-center border-l border-border/40">
+                  <X size={14} className="text-muted-foreground" />
+                </button>
+              </div>
+              {/* Next step preview */}
+              {navStep?.nextStep && (
+                <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg shadow">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex-shrink-0">then</span>
+                  <TurnIcon type={navStep.nextStep.type} modifier={navStep.nextStep.modifier} size={13} className="text-muted-foreground flex-shrink-0" />
+                  <p className="text-xs text-foreground font-medium truncate">{navStep.nextStep.instruction}</p>
+                </div>
+              )}
+            </div>
+          )
         )}
         {onlineError && (
           <div className="bg-destructive text-destructive-foreground text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
@@ -489,24 +691,30 @@ export default function Command() {
 
           {/* Daily Opportunities */}
           <div className="space-y-3">
-            <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
-              {(liveOpps.length > 0 ? liveOpps : FALLBACK_OPPORTUNITIES).map((opp) => {
-                const Icon = ICON_MAP[opp.iconName] ?? Target;
-                return (
-                  <button key={opp.id} type="button" className="flex-1 min-w-[140px] bg-background border border-border rounded-xl p-3 text-left space-y-2 hover:border-primary/40 active:scale-95 transition-all duration-150">
-                    <div className="flex items-start justify-between">
-                      <div className="p-1.5 rounded-lg bg-primary/10"><Icon size={16} className="text-primary" /></div>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">{opp.tag}</span>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">{opp.title}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{opp.detail}</p>
-                    </div>
-                    <p className="text-base font-bold text-primary">{opp.bonus}</p>
-                  </button>
-                );
-              })}
-            </div>
+            {liveOpps.length === 0 ? (
+              <div className="py-5 text-center">
+                <p className="text-xs text-muted-foreground">No active bonus zones right now. Check back soon.</p>
+              </div>
+            ) : (
+              <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
+                {liveOpps.map((opp) => {
+                  const Icon = ICON_MAP[opp.iconName] ?? Target;
+                  return (
+                    <button key={opp.id} type="button" className="flex-1 min-w-[140px] bg-background border border-border rounded-xl p-3 text-left space-y-2 hover:border-primary/40 active:scale-95 transition-all duration-150">
+                      <div className="flex items-start justify-between">
+                        <div className="p-1.5 rounded-lg bg-primary/10"><Icon size={16} className="text-primary" /></div>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">{opp.tag}</span>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{opp.title}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{opp.detail}</p>
+                      </div>
+                      <p className="text-base font-bold text-primary">{opp.bonus}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="bg-background border border-border rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-foreground flex items-center gap-1.5"><Target size={13} className="text-primary" />Weekly Ride Goal</p>
@@ -653,19 +861,13 @@ export default function Command() {
                 <button
                   key={i}
                   type="button"
-                  onClick={() => {
-                    setNavDest(r);
-                    setNavStep(null);
-                    setNavOpen(false);
-                    setNavQuery("");
-                    setNavResults([]);
-                  }}
+                  onClick={() => selectPlace(r)}
                   className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 border-b border-border/50 text-left"
                 >
                   <MapPin size={16} className="text-primary mt-0.5 flex-shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{r.name.split(",")[0]}</p>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{r.name}</p>
+                    <p className="text-sm font-semibold text-foreground truncate">{r.name}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{r.sub}</p>
                   </div>
                 </button>
               ))}

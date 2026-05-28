@@ -143,11 +143,31 @@ service cloud.firestore {
     }
 
     // ── Disputes ──────────────────────────────────────────────────────────────
-    // Passengers can file disputes; support staff read them externally.
+    // Passengers file disputes. Read restricted to the passenger who filed.
     match /disputes/{disputeId} {
-      allow create: if isAuth();
-      allow read:   if isAuth();
+      allow create: if isAuth() && request.resource.data.passengerId == request.auth.uid;
+      allow read:   if isAuth() && resource.data.passengerId == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    // ── Withdrawal Requests ───────────────────────────────────────────────────
+    // Drivers submit payout requests for their own earnings only.
+    match /withdrawalRequests/{reqId} {
+      allow create: if isAuth()
+        && request.resource.data.driverId == request.auth.uid
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0;
+      allow read:   if isAuth() && resource.data.driverId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── Road Reports ──────────────────────────────────────────────────────────
+    // Drivers and passengers can report road issues; reads are admin-only.
+    match /roadReports/{reportId} {
+      allow create: if isAuth()
+        && (request.resource.data.driverId == request.auth.uid
+            || request.resource.data.userId == request.auth.uid);
+      allow read, update, delete: if false;
     }
 
     // ── Ride Chat ─────────────────────────────────────────────────────────────

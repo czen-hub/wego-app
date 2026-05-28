@@ -19,10 +19,6 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: "dist/spa",
     commonjsOptions: { transformMixedEsModules: true },
-    rollupOptions: {
-      external: ["mapbox-gl"],
-      output: { globals: { "mapbox-gl": "mapboxgl" } },
-    },
   },
   plugins: [react(), expressPlugin()],
   resolve: {

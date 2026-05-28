@@ -74,8 +74,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               referralCode: data.referralCode ?? "",
             });
           }
-        } catch {
-          // Profile load failed silently — app still works with Firebase user
+        } catch (err) {
+          console.error("Driver profile load failed:", err);
         }
       } else {
         setProfile(null);

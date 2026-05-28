@@ -136,29 +136,29 @@ export default function Governance() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
             Digital Member ID
           </p>
-          <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${cfg.cardGradient} border border-white/10 p-4 space-y-3`}>
+          <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${cfg.cardGradient} border border-white/10 p-5 space-y-4`}>
             <div className="card-shine absolute inset-0 opacity-10" />
 
-            <div className="relative z-10 space-y-3">
+            <div className="relative z-10 space-y-4">
               <div className="flex justify-between items-center">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/15 border border-white/30 rounded-full">
-                  <Shield size={11} className="text-white/80" />
-                  <span className="text-[10px] font-semibold text-white">Verified</span>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/25 border border-white/50 rounded-full">
+                  <Shield size={13} className="text-white" />
+                  <span className="text-xs font-bold text-white">Verified</span>
                 </div>
-                <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${cfg.badgeBg}`}>
-                  <Icon size={11} className={cfg.iconColor} />
-                  <span className={`text-[10px] font-bold ${cfg.badgeText}`}>{cfg.label}</span>
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${cfg.badgeBg}`}>
+                  <Icon size={13} className={cfg.iconColor} />
+                  <span className={`text-xs font-bold ${cfg.badgeText}`}>{cfg.label}</span>
                 </div>
               </div>
 
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-[10px] text-white/50 mb-0.5">Member Name</p>
-                  <p className="text-lg font-bold text-white leading-tight">{profile?.name || "Member"}</p>
+                  <p className="text-sm text-white/90 mb-0.5">Member Name</p>
+                  <p className="text-xl font-bold text-white leading-tight">{profile?.name || "Member"}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] text-white/50 mb-0.5">Status</p>
-                  <p className="text-xs font-semibold text-white/90">{profile?.membershipStatus === "founding" ? "Founding Member" : "Member"}</p>
+                  <p className="text-sm text-white/90 mb-0.5">Status</p>
+                  <p className="text-sm font-semibold text-white">{profile?.membershipStatus === "founding" ? "Founding Member" : "Member"}</p>
                 </div>
               </div>
 
@@ -166,22 +166,22 @@ export default function Governance() {
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <p className="text-[10px] text-white/50 mb-0.5">Dues Paid</p>
-                  <p className="text-sm font-bold text-white">$500</p>
+                  <p className="text-sm text-white/90 mb-0.5">Dues Paid</p>
+                  <p className="text-base font-bold text-white">$500</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-white/50 mb-0.5">Rides</p>
-                  <p className="text-sm font-bold text-white">{rides}</p>
+                  <p className="text-sm text-white/90 mb-0.5">Rides</p>
+                  <p className="text-base font-bold text-white">{rides}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-white/50 mb-0.5">Voting</p>
-                  <p className="text-sm font-bold text-white">1 Share</p>
+                  <p className="text-sm text-white/90 mb-0.5">Voting</p>
+                  <p className="text-base font-bold text-white">1 Share</p>
                 </div>
               </div>
 
               {toNext !== null ? (
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] text-white/50">
+                  <div className="flex justify-between text-xs text-white/65">
                     <span>{tier.charAt(0).toUpperCase() + tier.slice(1)}</span>
                     <span>{toNext} rides to {cfg.nextLabel}</span>
                   </div>

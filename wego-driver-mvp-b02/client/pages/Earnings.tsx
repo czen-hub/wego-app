@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, Zap, Cpu, Shield, History } from "lucide-react";
+import { TrendingUp, Zap, Cpu, Shield, Banknote, ArrowDownToLine, ChevronRight, X, CheckCircle, Clock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { listenToCompletedRides, type Ride } from "@/lib/db";
+import { listenToCompletedRides, getBankAccount, requestWithdrawal, type Ride, type BankAccount } from "@/lib/db";
 
 function calcStats(rs: Ride[]) {
   const gross = rs.reduce((s, r) => s + r.fare, 0);
@@ -16,6 +16,12 @@ export default function Earnings() {
   const { user } = useAuth();
   const [rides, setRides] = useState<Ride[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
+  const [bankLoaded, setBankLoaded] = useState(false);
+  const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawDone, setWithdrawDone] = useState(false);
+  const [withdrawError, setWithdrawError] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -26,8 +32,17 @@ export default function Earnings() {
     return unsub;
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    getBankAccount(user.uid).then((acct) => {
+      setBankAccount(acct);
+      setBankLoaded(true);
+    });
+  }, [user]);
+
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
+  weekAgo.setHours(0, 0, 0, 0);
   const weekRides = rides.filter(r => r.completedAt && r.completedAt >= weekAgo);
 
   const week = calcStats(weekRides);
@@ -52,6 +67,59 @@ export default function Earnings() {
           <h1 className="text-3xl font-bold text-foreground">Transparency Ledger</h1>
           <p className="text-muted-foreground text-sm">Your earnings with full breakdown</p>
         </div>
+
+        {/* Payout card */}
+        {bankLoaded && (
+          bankAccount ? (
+            <div className="p-4 border border-border rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Banknote size={16} className="text-primary" />
+                  <p className="text-sm font-semibold text-foreground">Weekly Payout</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate("/settings", { state: { openModal: "payout" } })}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  {bankAccount.bankName} ****{bankAccount.accountNumberLast4}
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">This week's net earnings</p>
+                  <p className="text-2xl font-bold text-primary">${loaded ? week.take.toFixed(2) : "—"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setWithdrawDone(false); setWithdrawModalOpen(true); }}
+                  disabled={!loaded || week.take <= 0}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl active:scale-95 transition-transform disabled:opacity-40 flex-shrink-0"
+                >
+                  <ArrowDownToLine size={15} />
+                  Request Payout
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Payouts process every Monday. Requesting early will be reviewed within 1–2 business days.</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate("/settings", { state: { openModal: "payout" } })}
+              className="w-full p-4 border border-dashed border-amber-500/40 rounded-xl bg-amber-500/5 flex items-center gap-3 active:scale-[0.99] transition-transform"
+            >
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
+                <Banknote size={18} className="text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-sm font-semibold text-foreground">Add Bank Account</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Link your bank to receive weekly payouts</p>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground flex-shrink-0" />
+            </button>
+          )
+        )}
 
         {/* Loading shimmer */}
         {!loaded && (
@@ -84,6 +152,15 @@ export default function Earnings() {
                   <p className="text-lg font-bold text-destructive">-${week.coop.toFixed(2)}</p>
                 </div>
               </div>
+              <div className="flex justify-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => navigate("/history")}
+                  className="text-[11px] font-semibold text-primary active:opacity-70"
+                >
+                  View full history →
+                </button>
+              </div>
             </div>
 
             {/* WeGo Advantage */}
@@ -106,15 +183,6 @@ export default function Earnings() {
                 </div>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => navigate("/history")}
-              className="w-full flex items-center gap-3 px-4 py-2.5 bg-card border border-border rounded-xl active:scale-[0.99] transition-transform"
-            >
-              <History size={14} className="text-primary flex-shrink-0" />
-              <span className="text-xs font-medium text-foreground">Trip History</span>
-            </button>
 
             {/* Where Your 12% Goes */}
             <div className="space-y-1.5">
@@ -154,7 +222,7 @@ export default function Earnings() {
                 onClick={() => navigate("/history")}
                 className="mt-2 flex items-center gap-1.5 mx-auto px-4 py-2 bg-primary/10 border border-primary/20 rounded-xl text-sm font-semibold text-primary active:scale-95 transition-transform"
               >
-                <History size={13} />
+                <Clock size={13} />
                 View all past trips
               </button>
             )}
@@ -207,6 +275,86 @@ export default function Earnings() {
         </div>
 
       </div>
+
+      {/* Withdrawal confirm modal */}
+      {withdrawModalOpen && bankAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-5">
+            {withdrawDone ? (
+              <div className="flex flex-col items-center gap-3 py-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                  <CheckCircle size={32} className="text-primary" />
+                </div>
+                <h2 className="text-lg font-bold text-foreground">Payout Requested</h2>
+                <p className="text-sm text-muted-foreground">Your request for <span className="text-primary font-semibold">${week.take.toFixed(2)}</span> has been submitted. Funds will arrive in <span className="font-medium text-foreground">{bankAccount.bankName} ****{bankAccount.accountNumberLast4}</span> within 1–2 business days.</p>
+                <button type="button" onClick={() => setWithdrawModalOpen(false)}
+                  className="w-full py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform mt-1">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-foreground">Request Payout</h2>
+                  <button type="button" aria-label="Close" onClick={() => setWithdrawModalOpen(false)}
+                    className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
+                    <X size={15} className="text-muted-foreground" />
+                  </button>
+                </div>
+                <div className="bg-background border border-border rounded-xl p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span className="font-bold text-primary">${week.take.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">To account</span>
+                    <span className="font-medium text-foreground">{bankAccount.bankName} ****{bankAccount.accountNumberLast4}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Account type</span>
+                    <span className="font-medium text-foreground">{bankAccount.accountType === "checking" ? "Checking" : "Savings"}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Processing time</span>
+                    <span className="font-medium text-foreground">1–2 business days</span>
+                  </div>
+                </div>
+                {withdrawError && (
+                  <p className="text-xs text-destructive text-center">Request failed. Please try again.</p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setWithdrawModalOpen(false)}
+                    className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={withdrawing}
+                    onClick={async () => {
+                      if (!user) return;
+                      setWithdrawing(true);
+                      setWithdrawError(false);
+                      try {
+                        await requestWithdrawal(user.uid, week.take);
+                        setWithdrawDone(true);
+                      } catch {
+                        setWithdrawError(true);
+                      } finally {
+                        setWithdrawing(false);
+                      }
+                    }}
+                    className="py-3 rounded-xl bg-primary text-white font-semibold text-sm active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {withdrawing
+                      ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Processing…</>
+                      : "Confirm"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

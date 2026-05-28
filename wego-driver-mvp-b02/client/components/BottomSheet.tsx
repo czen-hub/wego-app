@@ -23,7 +23,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
+        className={`absolute inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         onClick={onClose}
@@ -31,7 +31,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
 
       {/* Sheet */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ease-out max-h-[88vh] ${
+        className={`absolute bottom-0 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ease-out max-h-[88vh] ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
       >

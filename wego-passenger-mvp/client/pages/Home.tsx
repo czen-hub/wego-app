@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, MapPin, ChevronUp, ChevronDown, Clock, Building2, X, Home as HomeIcon, Briefcase, Navigation, Compass, Car, Package, Utensils, CalendarDays } from "lucide-react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import ClientMap from "@/components/ClientMap";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
@@ -16,15 +18,40 @@ function formatRelativeDate(d: Date): string {
 
 const DEFAULT_COORDS: [number, number] = [37.3541, -121.9552]; // Santa Clara fallback
 
-function useSavedPlace(key: "home" | "work") {
+function useSavedPlace(key: "home" | "work", userId: string | null) {
+  const firestoreField = key === "home" ? "savedHome" : "savedWork";
   const [value, setValue] = useState<string>(() => localStorage.getItem(`wego_${key}`) ?? "");
+  const userIdRef = useRef(userId);
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    getDoc(doc(db, "passengers", userId)).then((snap) => {
+      if (!snap.exists()) return;
+      const val = snap.data()[firestoreField];
+      if (typeof val === "string" && val) {
+        setValue(val);
+        localStorage.setItem(`wego_${key}`, val);
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
   const save = (address: string) => {
     localStorage.setItem(`wego_${key}`, address);
     setValue(address);
+    const uid = userIdRef.current;
+    if (uid) {
+      setDoc(doc(db, "passengers", uid), { [firestoreField]: address }, { merge: true }).catch(() => {});
+    }
   };
   const clear = () => {
     localStorage.removeItem(`wego_${key}`);
     setValue("");
+    const uid = userIdRef.current;
+    if (uid) {
+      setDoc(doc(db, "passengers", uid), { [firestoreField]: "" }, { merge: true }).catch(() => {});
+    }
   };
   return { value, save, clear };
 }
@@ -79,8 +106,8 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const touchStartY = useRef(0);
-  const home = useSavedPlace("home");
-  const work = useSavedPlace("work");
+  const home = useSavedPlace("home", user?.uid ?? null);
+  const work = useSavedPlace("work", user?.uid ?? null);
   const [editingPlace, setEditingPlace] = useState<"home" | "work" | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -341,33 +368,22 @@ const handleTouchStart = (e: React.TouchEvent) => {
             <div className="space-y-1">
               {/* Live geocoded results */}
               {geocodeResults.map((r) => (
-                <div key={r.label + r.sublabel} className="flex items-stretch gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => { handleSelectDestination(r.label, r.mapboxId); setQuery(""); }}
-                    className="flex-1 flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-muted/30 border border-border flex items-center justify-center flex-shrink-0">
-                      {r.isBusiness
-                        ? <Building2 size={14} className="text-muted-foreground" />
-                        : <MapPin size={14} className="text-muted-foreground" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{r.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">{r.sublabel}</p>
-                    </div>
-                  </button>
-                  <div className="flex flex-col gap-1">
-                    <button type="button" title="Save as Home" onClick={() => { home.save(r.fullAddress || r.label); setQuery(""); }}
-                      className="flex-1 w-9 flex items-center justify-center bg-background border border-border rounded-xl text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
-                      <HomeIcon size={13} />
-                    </button>
-                    <button type="button" title="Save as Work" onClick={() => { work.save(r.fullAddress || r.label); setQuery(""); }}
-                      className="flex-1 w-9 flex items-center justify-center bg-background border border-border rounded-xl text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
-                      <Briefcase size={13} />
-                    </button>
+                <button
+                  key={r.label + r.sublabel}
+                  type="button"
+                  onClick={() => { handleSelectDestination(r.label, r.mapboxId); setQuery(""); }}
+                  className="w-full flex items-center gap-3 p-3 bg-background border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
+                >
+                  <div className="w-8 h-8 rounded-full bg-muted/30 border border-border flex items-center justify-center flex-shrink-0">
+                    {r.isBusiness
+                      ? <Building2 size={14} className="text-muted-foreground" />
+                      : <MapPin size={14} className="text-muted-foreground" />}
                   </div>
-                </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{r.label}</p>
+                    <p className="text-xs text-muted-foreground truncate">{r.sublabel}</p>
+                  </div>
+                </button>
               ))}
 
               {/* Loading indicator */}
@@ -394,25 +410,6 @@ const handleTouchStart = (e: React.TouchEvent) => {
                   <p className="text-xs text-muted-foreground">Use this address</p>
                 </div>
               </button>
-              {/* Save as Home / Work */}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => { home.save(query.trim()); setQuery(""); }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-background border border-border rounded-xl text-xs font-medium text-foreground active:scale-95 transition-all"
-                >
-                  <HomeIcon size={13} className="text-primary" />
-                  Save as Home
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { work.save(query.trim()); setQuery(""); }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-background border border-border rounded-xl text-xs font-medium text-foreground active:scale-95 transition-all"
-                >
-                  <Briefcase size={13} className="text-primary" />
-                  Save as Work
-                </button>
-              </div>
             </div>
               )}
             </div>

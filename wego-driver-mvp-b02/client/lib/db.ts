@@ -82,6 +82,8 @@ export interface Message {
   type: "notification" | "system" | "coop" | "earnings";
   read: boolean;
   createdAt: Date | null;
+  rideId?: string;
+  fromName?: string;
 }
 
 export interface EarningsEntry {
@@ -103,11 +105,22 @@ export interface Opportunity {
   tag: string;
   iconName: string;
   active: boolean;
+  lat?: number;
+  lng?: number;
+  radiusM?: number;
 }
 
 export interface DriverGoal {
   weeklyGoal: number;
   bonusAmount: number;
+}
+
+export interface BankAccount {
+  holderName: string;
+  bankName: string;
+  accountType: "checking" | "savings";
+  routingNumberLast4: string;
+  accountNumberLast4: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -292,10 +305,15 @@ export async function completeRide(rideId: string) {
 }
 
 export async function endRideEarly(rideId: string, proratedFare: number) {
+  const coopFee = parseFloat((proratedFare * 0.12).toFixed(2));
+  const driverTake = parseFloat((proratedFare - coopFee).toFixed(2));
   await updateDoc(doc(db, "rides", rideId), {
     status: "completed",
     earlyEnd: true,
     proratedFare,
+    fare: proratedFare,
+    driverTake,
+    coopFee,
     completedAt: serverTimestamp(),
   });
 }
@@ -325,6 +343,8 @@ export function listenToMessages(
         type: (data.type as Message["type"]) ?? "notification",
         read: (data.read as boolean) ?? false,
         createdAt: toDate(data.createdAt),
+        rideId: (data.rideId as string) ?? undefined,
+        fromName: (data.fromName as string) ?? undefined,
       };
     });
     msgs.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
@@ -415,6 +435,7 @@ export function listenToWeeklyEarnings(
 ): () => void {
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
+  weekAgo.setHours(0, 0, 0, 0);
 
   const q = query(
     collection(db, "earnings"),
@@ -621,6 +642,9 @@ export function listenToOpportunities(
         tag:      (data.tag      as string) ?? "",
         iconName: (data.iconName as string) ?? "Plane",
         active:   (data.active   as boolean) ?? true,
+        lat:      data.lat  as number | undefined,
+        lng:      data.lng  as number | undefined,
+        radiusM:  data.radiusM as number | undefined,
       } satisfies Opportunity;
     });
     callback(opps);
@@ -640,6 +664,46 @@ export async function reportRoadIssue(opts: {
     type: opts.type,
     location: new GeoPoint(opts.lat, opts.lng),
     createdAt: serverTimestamp(),
+  });
+}
+
+export async function saveBankAccount(
+  driverId: string,
+  data: { holderName: string; bankName: string; accountType: "checking" | "savings"; routingNumber: string; accountNumber: string }
+): Promise<void> {
+  await setDoc(doc(db, "drivers", driverId), {
+    payoutAccount: {
+      holderName: data.holderName,
+      bankName: data.bankName,
+      accountType: data.accountType,
+      routingNumberLast4: data.routingNumber.slice(-4),
+      accountNumberLast4: data.accountNumber.slice(-4),
+      updatedAt: serverTimestamp(),
+    },
+  }, { merge: true });
+}
+
+export async function getBankAccount(driverId: string): Promise<BankAccount | null> {
+  const { getDoc: gd } = await import("firebase/firestore");
+  const snap = await gd(doc(db, "drivers", driverId));
+  if (!snap.exists()) return null;
+  const pa = snap.data()?.payoutAccount;
+  if (!pa) return null;
+  return {
+    holderName: (pa.holderName as string) ?? "",
+    bankName: (pa.bankName as string) ?? "",
+    accountType: (pa.accountType as "checking" | "savings") ?? "checking",
+    routingNumberLast4: (pa.routingNumberLast4 as string) ?? "",
+    accountNumberLast4: (pa.accountNumberLast4 as string) ?? "",
+  };
+}
+
+export async function requestWithdrawal(driverId: string, amount: number): Promise<void> {
+  await addDoc(collection(db, "withdrawalRequests"), {
+    driverId,
+    amount,
+    status: "pending",
+    requestedAt: serverTimestamp(),
   });
 }
 

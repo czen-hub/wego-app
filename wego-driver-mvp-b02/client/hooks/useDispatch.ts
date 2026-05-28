@@ -108,7 +108,7 @@ export function useDispatch(): UseDispatchReturn {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocationError(null);
-        updateDriverLocation(user.uid, pos.coords.latitude, pos.coords.longitude).catch(() => {});
+        updateDriverLocation(user.uid, pos.coords.latitude, pos.coords.longitude).catch((e) => console.warn("[useDispatch] location update failed:", e));
       },
       (error) => setGeoError(error),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -117,7 +117,7 @@ export function useDispatch(): UseDispatchReturn {
     locationWatchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setLocationError(null);
-        updateDriverLocation(user.uid, pos.coords.latitude, pos.coords.longitude).catch(() => {});
+        updateDriverLocation(user.uid, pos.coords.latitude, pos.coords.longitude).catch((e) => console.warn("[useDispatch] location update failed:", e));
       },
       (error) => setGeoError(error),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }

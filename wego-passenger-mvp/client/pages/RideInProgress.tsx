@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, CheckCircle, Clock, ChevronLeft, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield, ArrowUp, ArrowDown, Navigation, Compass } from "lucide-react";
+import { MapPin, CheckCircle, Clock, ChevronLeft, ChevronRight, Star, Phone, MessageSquare, Send, X, TriangleAlert, Shield, ArrowUp, ArrowDown, Navigation, Compass } from "lucide-react";
 import ClientMap from "@/components/ClientMap";
 
 import { listenToPassengerRide, listenToRideMessages, sendRideMessage, cancelRide, submitRating, disputeRide, logStopWithDetails, updateStopDetails, swapStopAndDropoff, type Ride, type ChatMessage } from "@/lib/db";
@@ -63,7 +63,7 @@ const IN_VEHICLE_METERS = 200;
 export default function RideInProgress() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const rideMock: RideData = (location.state as RideData) ?? DEFAULT_RIDE;
   const [liveRide, setLiveRide] = useState<Ride | null>(null);
 
@@ -110,22 +110,26 @@ export default function RideInProgress() {
   const [passengerCoords, setPassengerCoords] = useState<[number, number] | null>(null);
   const [mapResetToken, setMapResetToken] = useState(0);
   const [headingUp, setHeadingUp] = useState(false);
+  const [driverCardExpanded, setDriverCardExpanded] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [autoCloseIn, setAutoCloseIn] = useState(10);
   const autoCloseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMapMoveRef = useRef<number>(0);
   const [contactWindowSecs, setContactWindowSecs] = useState(300);
   const contactWindowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const contactWindowSecsRef = useRef(300);
+  useEffect(() => { contactWindowSecsRef.current = contactWindowSecs; }, [contactWindowSecs]);
   const [stopFareDeltaPreview, setStopFareDeltaPreview] = useState<number | null>(null);
   const [stopFareCalculating, setStopFareCalculating] = useState(false);
   const [lastKnownRide, setLastKnownRide] = useState<Ride | null>(null);
-  const [driverProfile, setDriverProfile] = useState<{ name: string; car: string; plate: string } | null>(null);
+  const [driverProfile, setDriverProfile] = useState<{ name: string; car: string; plate: string; phone: string } | null>(null);
   const [completedRideData, setCompletedRideData] = useState<{
     driverName: string; driverCar: string; driverPlate: string;
     pickupAddress: string; dropoffAddress: string;
     fare: number; driverTake: number; coopFee: number;
     stopFeeTotal: number; stopCount: number;
     stops: Array<{ address: string; lat: number; lng: number; fareDelta: number }>;
+    earlyEnd?: boolean;
   } | null>(null);
   const effectiveRideIdRef = useRef<string | null>(null);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
@@ -183,7 +187,14 @@ export default function RideInProgress() {
       setChatMessages(msgs);
       if (msgs.length > prev) {
         const hasNewDriverMsg = msgs.slice(prev).some(m => m.senderType === "driver");
-        if (hasNewDriverMsg) setChatOpen(true);
+        if (hasNewDriverMsg) {
+          setChatOpen(true);
+          // Pause auto-close so passenger stays on completion screen to read the message
+          if (autoCloseTimerRef.current) {
+            clearInterval(autoCloseTimerRef.current);
+            autoCloseTimerRef.current = null;
+          }
+        }
       }
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
@@ -208,9 +219,28 @@ export default function RideInProgress() {
           name:  name  || prev?.name  || "",
           car:   car   || prev?.car   || "",
           plate: plate || prev?.plate || "",
+          phone: prev?.phone || "",
         }));
       }
-      if (status === "completed") setPhase("complete");
+      if (status === "completed") {
+        // Read fare from this snapshot immediately — avoids showing stale lastKnownRide.fare
+        // while waiting for the separate getDoc call below.
+        setCompletedRideData(prev => ({
+          driverName:    name  || prev?.driverName    || "",
+          driverCar:     car   || prev?.driverCar     || "",
+          driverPlate:   plate || prev?.driverPlate   || "",
+          pickupAddress: (data.pickupAddress  as string) || prev?.pickupAddress  || "",
+          dropoffAddress:(data.dropoffAddress as string) || prev?.dropoffAddress || "",
+          fare:          ((data.fare       as number) || prev?.fare       || 0),
+          driverTake:    ((data.driverTake as number) || prev?.driverTake || 0),
+          coopFee:       ((data.coopFee    as number) || prev?.coopFee    || 0),
+          stops:         ((data.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>)?.length ? (data.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>) : prev?.stops) ?? [],
+          stopFeeTotal:  ((data.stopFeeTotal as number) || prev?.stopFeeTotal || 0),
+          stopCount:     ((data.stopCount    as number) || prev?.stopCount    || 0),
+          earlyEnd:      (data.earlyEnd as boolean) || false,
+        }));
+        setPhase("complete");
+      }
       if (status === "cancelled") setCancelled(true);
     });
     return unsub;
@@ -231,20 +261,20 @@ export default function RideInProgress() {
         name: (data.name as string) || "",
         car: make ? `${(data.vehicleYear as string) || ""} ${make} ${(data.vehicleModel as string) || ""}`.trim() : "",
         plate: (data.licensePlate as string) || "",
+        phone: (data.phone as string) || "",
       });
     });
     return unsub;
   }, [liveRide?.driverId, phase]);
 
-  // Sync stopCoords with Firestore pendingStop — clears amber waypoint when driver acknowledges stop
+  // Sync stopCoords with Firestore pendingStop.
+  // Only SET when pendingStop exists — do NOT clear when driver acknowledges (pendingStop→null),
+  // because the driver is still en route to the stop and the via marker should stay on the map.
+  // stopCoords is cleared only when the ride resets (new ride ID, handled below).
   useEffect(() => {
-    if (!liveRide) return;
-    if (liveRide.pendingStop) {
-      const { lat, lng } = liveRide.pendingStop;
-      if (lat !== 0 || lng !== 0) setStopCoords([lat, lng]);
-    } else {
-      setStopCoords(null);
-    }
+    if (!liveRide?.pendingStop) return;
+    const { lat, lng } = liveRide.pendingStop;
+    if (lat !== 0 || lng !== 0) setStopCoords([lat, lng]);
   }, [pendingStopKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset stop state when a new ride becomes active — prevents state carry-over between rides
@@ -280,14 +310,18 @@ export default function RideInProgress() {
   // Auto-close countdown on completion screen — must live before any early returns (Rules of Hooks)
   function resetAutoClose() {
     if (autoCloseTimerRef.current) clearInterval(autoCloseTimerRef.current);
-    setAutoCloseIn(8);
+    setAutoCloseIn(30);
     autoCloseTimerRef.current = setInterval(() => {
       setAutoCloseIn((n) => {
         if (n <= 1) {
+          if (contactWindowSecsRef.current > 0) {
+            // Contact window still open — stay on screen, reset countdown
+            return 30;
+          }
           clearInterval(autoCloseTimerRef.current!);
           autoCloseTimerRef.current = null;
           navigate("/");
-          return 10;
+          return 30;
         }
         return n - 1;
       });
@@ -345,6 +379,37 @@ export default function RideInProgress() {
       const meterNote = waitMeterCharge > 0 ? ` + $${waitMeterCharge.toFixed(2)} meter` : "";
       return { fee, label, driverNote: `Driver drove to your location and is waiting. $${distanceFee.toFixed(2)} distance + $3.00 waiting${meterNote}.` };
     }
+    if (phase === "in_progress") {
+      const enRouteFee = enRouteFeeRef.current;
+      const fare = liveRide?.fare ?? rideMock.fare;
+      const pCoords: [number, number] | undefined = liveRide?.pickupLocation
+        ? [liveRide.pickupLocation.latitude, liveRide.pickupLocation.longitude]
+        : rideMock.fromCoords;
+      const dCoords: [number, number] | undefined = liveRide?.dropoffLocation
+        ? [liveRide.dropoffLocation.latitude, liveRide.dropoffLocation.longitude]
+        : rideMock.toCoords;
+      if (driverCoords && pCoords && dCoords) {
+        const coveredM = haversineMeters(pCoords[0], pCoords[1], driverCoords[0], driverCoords[1]);
+        const totalM = haversineMeters(pCoords[0], pCoords[1], dCoords[0], dCoords[1]);
+        const ratio = Math.min(coveredM / Math.max(totalM, 1), 1);
+        const distanceFee = parseFloat((ratio * fare).toFixed(2));
+        const fee = parseFloat(Math.max(enRouteFee, distanceFee).toFixed(2));
+        return {
+          fee,
+          label: `${Math.round(ratio * 100)}% of distance covered`,
+          driverNote: "Charged for the distance your driver covered toward your destination. 100% goes to your driver.",
+        };
+      }
+      // Fallback: time-based when GPS unavailable
+      const estimatedSecs = (liveRide?.estimatedMinutes ?? rideMock.estimatedMinutes ?? 10) * 60;
+      const ratio = Math.min(elapsed / Math.max(estimatedSecs, 1), 1);
+      const fee = Math.max(enRouteFee, parseFloat((ratio * fare).toFixed(2)));
+      return {
+        fee,
+        label: `${Math.round(ratio * 100)}% of trip completed`,
+        driverNote: "Charged for the portion of the trip covered. 100% goes to your driver.",
+      };
+    }
     return { fee: 0, label: "Free", driverNote: "" };
   };
 
@@ -363,16 +428,27 @@ export default function RideInProgress() {
     setCancelOpen(false);
   };
 
+  const [chatSendError, setChatSendError] = useState(false);
+
   const sendMessage = async () => {
     const text = chatInput.trim();
     if (!text || !user || !chatRideId) return;
     setChatInput("");
-    await sendRideMessage(chatRideId, user.uid, "passenger", text);
+    setChatSendError(false);
+    const driverId = (liveRide ?? lastKnownRide)?.driverId;
+    try {
+      await sendRideMessage(chatRideId, user.uid, "passenger", text, driverId, profile?.name);
+    } catch {
+      setChatInput(text);
+      setChatSendError(true);
+    }
   };
 
   const handleCall = () => {
-    setCalling(true);
-    setTimeout(() => setCalling(false), 3000);
+    const phone = driverProfile?.phone;
+    if (phone) {
+      window.location.href = `tel:${phone}`;
+    }
   };
 
   // Auto-recenter: fire once 4s after first GPS fix, then every 8s of map idle
@@ -430,6 +506,7 @@ export default function RideInProgress() {
         stops: (d.stops as Array<{ address: string; lat: number; lng: number; fareDelta: number }>) || [],
         stopFeeTotal: (d.stopFeeTotal as number) || 0,
         stopCount: (d.stopCount as number) || 0,
+        earlyEnd: (d.earlyEnd as boolean) || false,
       });
     }).catch(() => {
       // Falls back to displayRide / driverProfile already cached in state
@@ -538,8 +615,8 @@ export default function RideInProgress() {
     if (stopLatLng && fromCoords && dropoffCoords) {
       try {
         const [directRes, viaRes] = await Promise.all([
-          fetch(`https://router.project-osrm.org/route/v1/driving/${fromCoords[1]},${fromCoords[0]};${dropoffCoords[1]},${dropoffCoords[0]}?overview=false`).then(r => r.json()),
-          fetch(`https://router.project-osrm.org/route/v1/driving/${fromCoords[1]},${fromCoords[0]};${stopLatLng[1]},${stopLatLng[0]};${dropoffCoords[1]},${dropoffCoords[0]}?overview=false`).then(r => r.json()),
+          fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${fromCoords[1]},${fromCoords[0]};${dropoffCoords[1]},${dropoffCoords[0]}?overview=false&access_token=${MAPBOX_TOKEN}`).then(r => r.json()),
+          fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${fromCoords[1]},${fromCoords[0]};${stopLatLng[1]},${stopLatLng[0]};${dropoffCoords[1]},${dropoffCoords[0]}?overview=false&access_token=${MAPBOX_TOKEN}`).then(r => r.json()),
         ]);
         const extraMeters = Math.max(0, (viaRes.routes?.[0]?.distance ?? 0) - (directRes.routes?.[0]?.distance ?? 0));
         const extraSecs   = Math.max(0, (viaRes.routes?.[0]?.duration ?? 0) - (directRes.routes?.[0]?.duration ?? 0));
@@ -700,8 +777,15 @@ export default function RideInProgress() {
             <div className="w-20 h-20 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
               <CheckCircle size={40} className="text-primary" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground">{isFood ? "Order Delivered!" : isCourier ? "Package Delivered!" : "You've arrived!"}</h1>
-            <p className="text-muted-foreground text-center text-sm">{isFood ? "Your order has been delivered" : isCourier ? "Your package has been delivered" : "Thanks for riding with WeGo"}</p>
+            <h1 className="text-3xl font-bold text-foreground">
+              {completedRideData?.earlyEnd ? "Trip Ended Early" : isFood ? "Order Delivered!" : isCourier ? "Package Delivered!" : "You've arrived!"}
+            </h1>
+            {completedRideData?.earlyEnd && (
+              <div className="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                Prorated — you were only charged for the distance covered
+              </div>
+            )}
+            <p className="text-muted-foreground text-center text-sm">{isFood ? "Your order has been delivered" : isCourier ? "Your package has been delivered" : completedRideData?.earlyEnd ? "Your driver ended the trip before the destination." : "Thanks for riding with WeGo"}</p>
           </div>
 
           {/* Receipt */}
@@ -905,7 +989,9 @@ export default function RideInProgress() {
           >
             Back to Home
           </button>
-          <p className="text-center text-xs text-muted-foreground">Closing automatically in {autoCloseIn}s · tap anywhere to reset</p>
+          {contactWindowSecs === 0 && (
+            <p className="text-center text-xs text-muted-foreground">Closing automatically in {autoCloseIn}s · tap anywhere to reset</p>
+          )}
         </div>
 
         {/* Post-trip chat modal */}
@@ -938,6 +1024,9 @@ export default function RideInProgress() {
                 ))}
                 <div ref={chatEndRef} />
               </div>
+              {chatSendError && (
+                <p className="px-4 pt-2 text-xs text-destructive">Failed to send — tap send to retry.</p>
+              )}
               <div className="flex items-center gap-2 px-4 py-3 border-t border-border">
                 <input
                   type="text"
@@ -975,8 +1064,8 @@ export default function RideInProgress() {
     setStopFareCalculating(true);
     try {
       const [directRes, viaRes] = await Promise.all([
-        fetch(`https://router.project-osrm.org/route/v1/driving/${fromCoords[1]},${fromCoords[0]};${toCoords[1]},${toCoords[0]}?overview=false`).then(r => r.json()),
-        fetch(`https://router.project-osrm.org/route/v1/driving/${fromCoords[1]},${fromCoords[0]};${stopLatLng[1]},${stopLatLng[0]};${toCoords[1]},${toCoords[0]}?overview=false`).then(r => r.json()),
+        fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${fromCoords[1]},${fromCoords[0]};${toCoords[1]},${toCoords[0]}?overview=false&access_token=${MAPBOX_TOKEN}`).then(r => r.json()),
+        fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${fromCoords[1]},${fromCoords[0]};${stopLatLng[1]},${stopLatLng[0]};${toCoords[1]},${toCoords[0]}?overview=false&access_token=${MAPBOX_TOKEN}`).then(r => r.json()),
       ]);
       const extraMeters = Math.max(0, (viaRes.routes?.[0]?.distance ?? 0) - (directRes.routes?.[0]?.distance ?? 0));
       const extraSecs = Math.max(0, (viaRes.routes?.[0]?.duration ?? 0) - (directRes.routes?.[0]?.duration ?? 0));
@@ -1133,7 +1222,20 @@ export default function RideInProgress() {
                 <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto" />
                 <p className="font-semibold text-foreground">{isFood || isCourier ? "Finding your delivery driver..." : "Finding your driver..."}</p>
                 {matchTimeout ? (
-                  <p className="text-xs text-destructive font-medium">Taking longer than expected. You can cancel for free.</p>
+                  <>
+                    <p className="text-xs text-destructive font-medium">Taking longer than expected. You can cancel for free.</p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const rideId = liveRide?.id;
+                        if (rideId) { try { await cancelRide(rideId); } catch {} }
+                        navigate("/");
+                      }}
+                      className="mt-1 px-4 py-2 rounded-xl bg-destructive/10 border border-destructive/30 text-sm font-semibold text-destructive active:scale-95 transition-transform"
+                    >
+                      Cancel Ride
+                    </button>
+                  </>
                 ) : (
                   <p className="text-xs text-muted-foreground">Usually takes 2–5 minutes in your area</p>
                 )}
@@ -1142,42 +1244,57 @@ export default function RideInProgress() {
           </div>
         )}
 
-        {/* Driver card — shown for en_route, arrived, in_progress */}
+        {/* Driver card — collapsed strip by default */}
         {(phase === "en_route" || phase === "arrived" || phase === "in_progress") && (
-          <div className="glass-card p-4 border border-border rounded-xl space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+          <div className="glass-card border border-border rounded-xl overflow-hidden">
+            {/* Always-visible strip */}
+            <button
+              type="button"
+              onClick={() => setDriverCardExpanded((v) => !v)}
+              className="w-full flex items-center gap-3 px-4 py-2.5 active:bg-muted/30 transition-colors"
+            >
+              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                 {liveRide?.driverName?.charAt(0) || "?"}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground">{liveRide?.driverName || "Your Driver"}</p>
+              <p className="text-sm font-semibold text-foreground flex-1 text-left truncate">{liveRide?.driverName || "Your Driver"}</p>
+              {chatMessages.length > 0 && !chatOpen && (
+                <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+              )}
+              <ChevronRight size={14} className={`text-muted-foreground flex-shrink-0 transition-transform ${driverCardExpanded ? "rotate-90" : ""}`} />
+            </button>
+
+            {/* Expanded detail */}
+            {driverCardExpanded && (
+              <div className="px-4 pb-4 border-t border-border/50 pt-3 space-y-3">
                 <div className="flex items-center gap-1">
                   <Star size={11} fill="currentColor" className="text-yellow-400" />
                   <span className="text-xs text-muted-foreground">{(liveRide?.driverRating || 4.95).toFixed(2)}</span>
                 </div>
+                <div className="bg-background border border-border/50 rounded-lg px-3 py-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{liveRide?.driverCar || "Connecting…"}</p>
+                    <p className="text-sm font-bold text-foreground tracking-widest">{liveRide?.driverPlate || "—"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">WeGo Driver</p>
+                    <p className="text-xs font-semibold text-primary">Verified</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" aria-label="Message driver"
+                    onClick={() => { setChatOpen(true); setDriverCardExpanded(false); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border text-sm font-medium active:scale-95 transition-all ${chatMessages.length > 0 && !chatOpen ? "bg-primary border-primary text-white" : "bg-card border-border text-primary"}`}>
+                    <MessageSquare size={15} />
+                    Message
+                  </button>
+                  <button type="button" aria-label="Call driver" onClick={handleCall}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border text-sm font-medium active:scale-95 transition-all ${calling ? "bg-green-500 border-green-500 text-white" : "bg-card border-border text-primary"}`}>
+                    <Phone size={15} />
+                    Call
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button type="button" aria-label="Message driver" onClick={() => setChatOpen(true)}
-                  className={`w-10 h-10 rounded-full border flex items-center justify-center active:scale-95 transition-all ${chatMessages.length > 0 && !chatOpen ? "bg-primary border-primary" : "bg-card border-border"}`}>
-                  <MessageSquare size={16} className={chatMessages.length > 0 && !chatOpen ? "text-white" : "text-primary"} />
-                </button>
-                <button type="button" aria-label="Call driver" onClick={handleCall}
-                  className={`w-10 h-10 rounded-full border flex items-center justify-center active:scale-95 transition-all ${calling ? "bg-green-500 border-green-500" : "bg-card border-border"}`}>
-                  <Phone size={16} className={calling ? "text-white" : "text-primary"} />
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-background border border-border/50 rounded-lg px-3 py-2 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">{liveRide?.driverCar || "Connecting…"}</p>
-                <p className="text-sm font-bold text-foreground tracking-widest">{liveRide?.driverPlate || "—"}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-muted-foreground">WeGo Driver</p>
-                <p className="text-xs font-semibold text-primary">Verified</p>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1390,11 +1507,15 @@ export default function RideInProgress() {
           </>
         )}
 
-        {/* Cancel — only available before ride starts */}
-        {(phase === "matching" || phase === "en_route" || phase === "arrived") && (
+        {/* Cancel / end early — available in all active phases */}
+        {(phase === "matching" || phase === "en_route" || phase === "arrived" || phase === "in_progress") && (
           <button type="button" onClick={() => setCancelOpen(true)}
-            className="w-full py-3 rounded-2xl border border-destructive/30 text-destructive text-sm font-semibold active:scale-95 transition-transform hover:bg-destructive/5">
-            {isFood ? "Cancel Order" : isCourier ? "Cancel Delivery" : "Cancel Ride"}
+            className={`w-full py-3 rounded-2xl border text-sm font-semibold active:scale-95 transition-transform ${
+              phase === "in_progress"
+                ? "border-border text-muted-foreground hover:bg-muted/10"
+                : "border-destructive/30 text-destructive hover:bg-destructive/5"
+            }`}>
+            {phase === "in_progress" ? "End Ride Early" : isFood ? "Cancel Order" : isCourier ? "Cancel Delivery" : "Cancel Ride"}
           </button>
         )}
       </div>
@@ -1500,12 +1621,13 @@ export default function RideInProgress() {
       {/* Cancel confirmation modal */}
       {cancelOpen && (() => {
         const { fee, label, driverNote } = getCancellationFee();
+        const isEarlyEnd = phase === "in_progress";
         return (
           <div className="absolute inset-0 z-50 flex items-end justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={() => setCancelOpen(false)} />
             <div className="relative w-full max-w-[430px] bg-card border-t border-border rounded-t-2xl px-4 pt-4 pb-8 space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-base font-bold text-foreground">Cancel Ride?</p>
+                <p className="text-base font-bold text-foreground">{isEarlyEnd ? "End Ride Early?" : "Cancel Ride?"}</p>
                 <button type="button" aria-label="Close" onClick={() => setCancelOpen(false)}
                   className="w-8 h-8 rounded-full bg-muted/30 flex items-center justify-center">
                   <X size={15} className="text-muted-foreground" />
@@ -1535,7 +1657,7 @@ export default function RideInProgress() {
                 </button>
                 <button type="button" onClick={confirmCancel}
                   className="py-3 rounded-xl bg-destructive/10 border border-destructive/40 text-destructive font-semibold text-sm active:scale-95 transition-transform">
-                  {fee === 0 ? "Cancel — Free" : `Cancel — Pay $${fee.toFixed(2)}`}
+                  {isEarlyEnd ? `End Ride — $${fee.toFixed(2)}` : fee === 0 ? "Cancel — Free" : `Cancel — Pay $${fee.toFixed(2)}`}
                 </button>
               </div>
             </div>
@@ -1571,20 +1693,9 @@ export default function RideInProgress() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 min-h-[120px]">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 min-h-[80px]">
               {chatMessages.length === 0 && (
-                <div className="space-y-2">
-                  {["On my way out", "Please wait 2 min", "Can you pull forward?", "I see you"].map((t) => (
-                    <button key={t} type="button" onClick={async () => {
-                        if (!user || !chatRideId) return;
-                        await sendRideMessage(chatRideId, user.uid, "passenger", t);
-                      }}
-                      className="block w-full text-left px-3 py-2 rounded-xl bg-muted/30 border border-border text-sm text-foreground hover:border-primary/40 transition-colors">
-                      {t}
-                    </button>
-                  ))}
-                  <p className="text-xs text-muted-foreground text-center pt-1">Quick messages or type your own below</p>
-                </div>
+                <p className="text-xs text-muted-foreground text-center pt-2">No messages yet</p>
               )}
               {chatMessages.map((msg) => (
                 <div key={msg.id} className={`flex w-full ${msg.senderType === "passenger" ? "justify-end" : "justify-start"}`}>
@@ -1596,7 +1707,24 @@ export default function RideInProgress() {
               <div ref={chatEndRef} />
             </div>
 
+            {/* Quick reply chips — always visible */}
+            <div className="flex-shrink-0 flex gap-2 overflow-x-auto px-4 py-2 border-t border-border/50 scrollbar-none">
+              {["On my way out", "Please wait 2 min", "Can you pull forward?", "I see you", "Almost there"].map((t) => (
+                <button key={t} type="button" onClick={async () => {
+                    if (!user || !chatRideId) return;
+                    const driverId = (liveRide ?? lastKnownRide)?.driverId;
+                    await sendRideMessage(chatRideId, user.uid, "passenger", t, driverId, profile?.name);
+                  }}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-full bg-muted/40 border border-border text-xs text-foreground active:scale-95 active:bg-primary/10 active:border-primary/40 transition-all whitespace-nowrap">
+                  {t}
+                </button>
+              ))}
+            </div>
+
             {/* Input */}
+            {chatSendError && (
+              <p className="px-4 pt-2 text-xs text-destructive">Failed to send — tap send to retry.</p>
+            )}
             <div className="flex items-center gap-2 px-4 py-3 border-t border-border">
               <input
                 type="text"
@@ -1653,7 +1781,7 @@ export default function RideInProgress() {
                     onClick={async () => {
                       if (liveRide?.id) {
                         try {
-                          await disputeRide(liveRide.id, "passenger_not_picked_up");
+                          await disputeRide(liveRide.id, "passenger_not_picked_up", user!.uid);
                         } catch {
                           showError("Report failed — check your connection and try again");
                           return;

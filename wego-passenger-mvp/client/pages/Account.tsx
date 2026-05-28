@@ -171,6 +171,10 @@ export default function Account() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Photo must be under 5 MB.");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => setPhoto(ev.target?.result as string);
     reader.readAsDataURL(file);
@@ -215,6 +219,7 @@ export default function Account() {
   // Help & sign out
   const [helpOpen, setHelpOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState(false);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -329,6 +334,16 @@ export default function Account() {
             </button>
           </div>
 
+          {/* Appearance */}
+          <Section title="Appearance">
+            <Row
+              icon={theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}
+              label="Dark Mode"
+              sublabel={theme === "dark" ? "Currently dark — tap to switch to light" : "Currently light — tap to switch to dark"}
+              right={<Toggle on={theme === "dark"} onToggle={() => setTheme(theme === "dark" ? "light" : "dark")} label="Toggle theme" />}
+            />
+          </Section>
+
           {/* Notifications */}
           <Section title="Notifications">
             <Row
@@ -372,16 +387,6 @@ export default function Account() {
               icon={<Plus size={18} />}
               label="Add Payment Method"
               onClick={() => { setPaymentOpen(false); setAddCardOpen(true); }}
-            />
-          </Section>
-
-          {/* Appearance */}
-          <Section title="Appearance">
-            <Row
-              icon={theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}
-              label="Dark Mode"
-              sublabel={theme === "dark" ? "Currently dark — tap to switch to light" : "Currently light — tap to switch to dark"}
-              right={<Toggle on={theme === "dark"} onToggle={() => setTheme(theme === "dark" ? "light" : "dark")} label="Toggle theme" />}
             />
           </Section>
 
@@ -884,15 +889,21 @@ export default function Account() {
 
       {/* ── SIGN OUT ─────────────────────────────────────────────────────── */}
       {signOutOpen && (
-        <Modal title="Sign Out" onClose={() => setSignOutOpen(false)}>
+        <Modal title="Sign Out" onClose={() => { setSignOutOpen(false); setSignOutError(false); }}>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">Are you sure you want to sign out of your WeGo account?</p>
+            {signOutError && (
+              <p className="text-xs text-destructive text-center">Sign out failed — please try again.</p>
+            )}
             <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => setSignOutOpen(false)}
+              <button type="button" onClick={() => { setSignOutOpen(false); setSignOutError(false); }}
                 className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
                 Cancel
               </button>
-              <button type="button" onClick={async () => { try { await logOut(); } catch {} }}
+              <button type="button" onClick={async () => {
+                try { await logOut(); }
+                catch { setSignOutError(true); }
+              }}
                 className="py-3 rounded-xl bg-red-500 text-white font-semibold text-sm active:scale-95 transition-transform">
                 Sign Out
               </button>

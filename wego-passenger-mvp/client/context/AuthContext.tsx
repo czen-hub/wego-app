@@ -58,8 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               totalRides: data.totalRides ?? 0,
             });
           }
-        } catch {
-          // Profile load failed silently
+        } catch (err) {
+          console.error("Passenger profile load failed:", err);
         }
       } else {
         setProfile(null);

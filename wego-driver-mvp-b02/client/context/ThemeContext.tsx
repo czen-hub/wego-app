@@ -16,7 +16,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    return (localStorage.getItem("wego-theme") as Theme) ?? "dark";
+    return (localStorage.getItem("wego-theme") as Theme) ?? "light";
   });
 
   useEffect(() => {

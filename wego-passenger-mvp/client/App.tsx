@@ -9,7 +9,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, WifiOff } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -38,8 +39,22 @@ function AppLayout({
   children: React.ReactNode;
   contentClassName?: string;
 }) {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
   return (
-    <div className="w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden">
+    <div className="app-layout w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden">
+      {!isOnline && (
+        <div className="flex-shrink-0 flex items-center justify-center gap-2 bg-destructive px-4 py-2 z-50">
+          <WifiOff size={14} className="text-white flex-shrink-0" />
+          <p className="text-xs font-semibold text-white">No internet connection</p>
+        </div>
+      )}
       <div className={`flex-1 min-h-0 ${contentClassName}`}>
         <ErrorBoundary>{children}</ErrorBoundary>
       </div>
@@ -94,7 +109,7 @@ const App = () => (
                   path="/"
                   element={
                     <ProtectedRoute>
-                      <AppLayout><Home /></AppLayout>
+                      <AppLayout contentClassName="relative h-full overflow-hidden flex flex-col"><Home /></AppLayout>
                     </ProtectedRoute>
                   }
                 />

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-
-declare const mapboxgl: any;
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 const REFETCH_M = 150;
@@ -268,6 +268,12 @@ export default function ClientMap({
     }
 
     const mb = mapboxgl;
+
+    if (!mb.supported()) {
+      console.error("[Map] WebGL not supported in this browser");
+      return;
+    }
+
     mbRef.current = mb;
     mb.accessToken = TOKEN;
 
@@ -284,8 +290,13 @@ export default function ClientMap({
       maxPitch: 60,
       attributionControl: false,
       accessToken: TOKEN,
+      fadeDuration: 0,
     });
     mapRef.current = map;
+
+    map.on("error", (e) => {
+      console.error("[Map] runtime error:", e.error?.message ?? JSON.stringify(e));
+    });
 
     setTimeout(() => map.resize(), 100);
 
@@ -659,7 +670,7 @@ export default function ClientMap({
   return (
     <div
       ref={containerRef}
-      className={`${className} ${interactive ? "cursor-grab active:cursor-grabbing" : ""}`}
+      className={`map-fill ${interactive ? "cursor-grab active:cursor-grabbing" : ""}`}
     />
   );
 }

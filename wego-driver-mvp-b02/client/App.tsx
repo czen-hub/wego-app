@@ -11,7 +11,8 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { DispatchProvider } from "@/context/DispatchContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import GlobalRideAlert from "@/components/GlobalRideAlert";
-import { Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, WifiOff } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import Login from "./pages/Login";
 import Command from "./pages/Command";
@@ -36,15 +37,31 @@ const queryClient = new QueryClient({
   },
 });
 
-const AppLayout = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden">
-    <div className="flex-1 overflow-y-auto">
-      <ErrorBoundary>{children}</ErrorBoundary>
+const AppLayout = ({ children, noPadTop, contentClassName = "overflow-y-auto" }: { children: React.ReactNode; noPadTop?: boolean; contentClassName?: string }) => {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  return (
+    <div className={`${noPadTop ? "" : "app-layout"} relative w-full max-w-[430px] mx-auto h-screen flex flex-col bg-background overflow-hidden`}>
+      {!isOnline && (
+        <div className="flex-shrink-0 flex items-center justify-center gap-2 bg-destructive px-4 py-2 z-50">
+          <WifiOff size={14} className="text-white flex-shrink-0" />
+          <p className="text-xs font-semibold text-white">No internet connection</p>
+        </div>
+      )}
+      <div className={`flex-1 min-h-0 ${contentClassName}`}>
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </div>
+      <ErrorBoundary><GlobalRideAlert /></ErrorBoundary>
+      <BottomNav />
     </div>
-    <ErrorBoundary><GlobalRideAlert /></ErrorBoundary>
-    <BottomNav />
-  </div>
-);
+  );
+};
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -93,7 +110,7 @@ const App = () => (
                   path="/"
                   element={
                     <ProtectedRoute>
-                      <AppLayout><Command /></AppLayout>
+                      <AppLayout noPadTop contentClassName="relative h-full overflow-hidden flex flex-col"><Command /></AppLayout>
                     </ProtectedRoute>
                   }
                 />

@@ -1,5 +1,12 @@
 {
   "projects": {
     "default": "wego-app-53f6d"
+  },
+  "targets": {
+    "wego-app-53f6d": {
+      "hosting": {
+        "passenger": ["wego-app-53f6d"]
+      }
+    }
   }
 }

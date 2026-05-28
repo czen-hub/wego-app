@@ -96,7 +96,7 @@ export default function RideHistory() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
-                  {ride.passengerName.charAt(0)}
+                  {ride.passengerName?.charAt(0) ?? "?"}
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">{ride.passengerName}</p>
