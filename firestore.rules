@@ -2,34 +2,43 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAuth()      { return request.auth != null; }
-    function isSelf(uid)   { return request.auth.uid == uid; }
+    function isAuth()    { return request.auth != null; }
+    function isSelf(uid) { return request.auth.uid == uid; }
+    function isAdmin()   {
+      return isAuth() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ── Admins (only readable by the admin themselves; written via Firebase console) ──
+    match /admins/{uid} {
+      allow read:  if isAuth() && isSelf(uid);
+      allow write: if false;
+    }
 
     // ── Drivers ───────────────────────────────────────────────────────────────
     // Any authenticated user can read driver docs (passenger app shows driver info).
-    // Only the driver themselves can write their own document.
+    // Only the driver themselves or an admin can write.
     match /drivers/{driverId} {
       allow read:  if isAuth();
-      allow write: if isAuth() && isSelf(driverId);
+      allow write: if isAuth() && (isSelf(driverId) || isAdmin());
     }
 
     // ── Passengers ────────────────────────────────────────────────────────────
     // Drivers need to read passenger name/rating on accepted rides.
-    // Only the passenger themselves can write their own document.
+    // Only the passenger themselves or an admin can write.
     match /passengers/{passengerId} {
       allow read:  if isAuth();
-      allow write: if isAuth() && isSelf(passengerId);
+      allow write: if isAuth() && (isSelf(passengerId) || isAdmin());
     }
 
     // ── Rides ─────────────────────────────────────────────────────────────────
     match /rides/{rideId} {
 
-      // Read: own ride (as passenger or driver) OR unclaimed queued ride.
-      allow read: if isAuth() && (
+      // Read: admin sees all; otherwise own ride (as passenger or driver) OR unclaimed queued ride.
+      allow read: if isAdmin() || (isAuth() && (
         resource.data.passengerId == request.auth.uid ||
         resource.data.driverId   == request.auth.uid ||
         resource.data.status in ['pending', 'reserved']
-      );
+      ));
 
       // Create: passengers only, must set themselves as owner, status must be pending.
       allow create: if isAuth()
@@ -37,7 +46,7 @@ service cloud.firestore {
         && request.resource.data.status      == 'pending'
         && request.resource.data.driverId    == null;
 
-      allow update: if isAuth() && (
+      allow update: if isAdmin() || (isAuth() && (
 
         // Passenger cancels pending, accepted, or reserved ride (no active driver yet).
         (resource.data.passengerId == request.auth.uid
@@ -105,24 +114,24 @@ service cloud.firestore {
         (resource.data.status == 'completed'
           && (resource.data.passengerId == request.auth.uid
               || resource.data.driverId == request.auth.uid))
-      );
+      ));
 
       // No hard deletes — cancelled status is the soft-delete.
       allow delete: if false;
     }
 
     // ── Earnings ──────────────────────────────────────────────────────────────
-    // Drivers write and read their own earnings only.
+    // Drivers write and read their own earnings. Admin reads all.
     match /earnings/{entryId} {
       allow create: if isAuth() && request.resource.data.driverId == request.auth.uid;
-      allow read:   if isAuth() && resource.data.driverId == request.auth.uid;
+      allow read:   if isAdmin() || (isAuth() && resource.data.driverId == request.auth.uid);
       allow update, delete: if false;
     }
 
     // ── Messages ──────────────────────────────────────────────────────────────
-    // Drivers read their own inbox; updates allowed for marking read.
+    // Drivers read their own inbox; updates allowed for marking read. Admin reads all.
     match /messages/{msgId} {
-      allow read:   if isAuth() && resource.data.driverId == request.auth.uid;
+      allow read:   if isAdmin() || (isAuth() && resource.data.driverId == request.auth.uid);
       allow update: if isAuth() && resource.data.driverId == request.auth.uid;
       allow create: if isAuth();
       allow delete: if false;
@@ -131,7 +140,7 @@ service cloud.firestore {
     // ── Opportunities ─────────────────────────────────────────────────────────
     match /opportunities/{oppId} {
       allow read: if isAuth();
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
     // ── Governance Votes ──────────────────────────────────────────────────────
@@ -143,31 +152,34 @@ service cloud.firestore {
     }
 
     // ── Disputes ──────────────────────────────────────────────────────────────
-    // Passengers file disputes. Read restricted to the passenger who filed.
+    // Passengers file disputes. Read restricted to the passenger who filed or admin.
     match /disputes/{disputeId} {
       allow create: if isAuth() && request.resource.data.passengerId == request.auth.uid;
-      allow read:   if isAuth() && resource.data.passengerId == request.auth.uid;
-      allow update, delete: if false;
+      allow read:   if isAdmin() || (isAuth() && resource.data.passengerId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
     // ── Withdrawal Requests ───────────────────────────────────────────────────
-    // Drivers submit payout requests for their own earnings only.
+    // Drivers submit payout requests for their own earnings only. Admin reads + updates all.
     match /withdrawalRequests/{reqId} {
       allow create: if isAuth()
         && request.resource.data.driverId == request.auth.uid
         && request.resource.data.amount is number
         && request.resource.data.amount > 0;
-      allow read:   if isAuth() && resource.data.driverId == request.auth.uid;
-      allow update, delete: if false;
+      allow read:   if isAdmin() || (isAuth() && resource.data.driverId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
     // ── Road Reports ──────────────────────────────────────────────────────────
-    // Drivers and passengers can report road issues; reads are admin-only.
+    // Drivers and passengers can report road issues; admin reads and manages.
     match /roadReports/{reportId} {
       allow create: if isAuth()
         && (request.resource.data.driverId == request.auth.uid
             || request.resource.data.userId == request.auth.uid);
-      allow read, update, delete: if false;
+      allow read, update: if isAdmin();
+      allow delete: if false;
     }
 
     // ── Ride Chat ─────────────────────────────────────────────────────────────
@@ -177,9 +189,9 @@ service cloud.firestore {
         && request.resource.data.senderId == request.auth.uid
         && (get(/databases/$(database)/documents/rides/$(request.resource.data.rideId)).data.passengerId == request.auth.uid
             || get(/databases/$(database)/documents/rides/$(request.resource.data.rideId)).data.driverId  == request.auth.uid);
-      allow read: if isAuth()
+      allow read: if isAdmin() || (isAuth()
         && (get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.passengerId == request.auth.uid
-            || get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.driverId  == request.auth.uid);
+            || get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.driverId  == request.auth.uid));
       allow update, delete: if false;
     }
   }

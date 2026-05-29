@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Moon, Sun, Bell, BellOff, Car, Map, Shield, ChevronRight, ChevronLeft,
   LogOut, User, Phone, Mail, Star, HelpCircle, FileText,
-  Camera, Upload, CheckCircle, Eye, EyeOff, Lock, Pencil, Users, Copy, Banknote
+  Camera, Upload, CheckCircle, Eye, EyeOff, Lock, Pencil, Users, Copy, Banknote, ClipboardCheck
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/context/ThemeContext";
@@ -177,7 +177,7 @@ function UploadBox({
 type ModalId =
   | "editProfile" | "vehicleInfo" | "insurance" | "inspection"
   | "phone" | "email" | "password" | "help" | "payout"
-  | "agreement" | "privacy" | null;
+  | "agreement" | "privacy" | "verification" | null;
 
 const DRIVER_FAQS = [
   { q: "What are the cancellation fees if a passenger cancels?", a: "You are protected by distance-based cancellation fees that go 100% to you — WeGo keeps none of it.\n\n• Free: passenger cancels within 5 min of booking (driver not yet dispatched)\n• $5.00: passenger cancels while you are nearby (< 5 miles en route)\n• $9.00: passenger cancels while you are 5–10 miles en route\n• $14.00: passenger cancels after you drove 10+ miles including highway\n• Distance fee + $3.00: passenger cancels after you have already arrived (e.g. drove 10+ miles = $14 + $3 = $17)\n\nFees are credited to your account within 24 hours." },
@@ -714,6 +714,23 @@ export default function Settings() {
             </div>
           </Section>
 
+          {/* Driver Verification */}
+          <Section title="Driver Verification">
+            <div className="px-4 py-4 space-y-3">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Submit your driving license, background check consent, and vehicle registration to become a verified WeGo driver. Verified drivers get priority dispatch.
+              </p>
+              <button
+                type="button"
+                onClick={() => setModal("verification")}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary/10 border border-primary/25 rounded-xl text-sm font-semibold text-primary active:scale-95 transition-transform"
+              >
+                <ClipboardCheck size={16} />
+                Submit Verification Documents
+              </button>
+            </div>
+          </Section>
+
           {/* Support */}
           <Section title="Support">
             <Row icon={<HelpCircle size={18} />} label="Help Center" sublabel="FAQs, guides, and driver support" onClick={() => setModal("help")} />
@@ -1034,6 +1051,38 @@ export default function Settings() {
           <div className="p-3 bg-muted/20 border border-border rounded-xl">
             <p className="text-[11px] text-muted-foreground">For the full member agreement, contact support@wegoapp.com or request a copy from the member services committee.</p>
           </div>
+        </div>
+      </BottomSheet>
+
+      {/* Driver Verification */}
+      <BottomSheet open={modal === "verification"} onClose={close} title="Driver Verification">
+        <div className="space-y-4">
+          <div className="p-4 bg-primary/5 border border-primary/15 rounded-xl space-y-2">
+            <p className="text-sm font-semibold text-foreground">What to prepare</p>
+            <ul className="text-xs text-muted-foreground space-y-1.5 leading-relaxed">
+              <li>• Valid driver's license (front and back)</li>
+              <li>• Vehicle registration document</li>
+              <li>• Proof of insurance (current policy)</li>
+              <li>• Recent vehicle inspection report</li>
+              <li>• Background check consent (signed)</li>
+            </ul>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Click the button below to open the secure verification form. Upload each document as a photo or PDF. We review submissions within 3–5 business days.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              window.open("https://forms.gle/REPLACE_WITH_YOUR_FORM_ID", "_blank", "noopener,noreferrer");
+            }}
+            className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-2xl active:scale-95 transition-transform btn-glow flex items-center justify-center gap-2"
+          >
+            <ClipboardCheck size={18} />
+            Open Verification Form
+          </button>
+          <p className="text-center text-xs text-muted-foreground">
+            Documents are handled securely and only used for WeGo driver approval.
+          </p>
         </div>
       </BottomSheet>
 
