@@ -226,6 +226,9 @@ export default function Command() {
           driverTake: activeRide.driverTake,
           estimatedTime: activeRide.estimatedMinutes,
           isAdvanced: activeRide.isAdvanced,
+          scheduledDate: activeRide.scheduledDate ?? null,
+          scheduledHour: activeRide.scheduledHour ?? null,
+          scheduledMinute: activeRide.scheduledMinute ?? null,
           type: activeRide.type,
           rideId: activeRide.id,
           pickupCoords: activeRide.pickupLocation
@@ -280,6 +283,9 @@ export default function Command() {
           driverTake: pendingRide.driverTake,
           estimatedTime: pendingRide.estimatedMinutes,
           isAdvanced: pendingRide.isAdvanced,
+          scheduledDate: pendingRide.scheduledDate ?? null,
+          scheduledHour: pendingRide.scheduledHour ?? null,
+          scheduledMinute: pendingRide.scheduledMinute ?? null,
           type: pendingRide.type,
           rideId: pendingRide.id,
           pickupCoords: pendingRide.pickupLocation

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { TrendingUp, Zap, Cpu, Shield, Banknote, ArrowDownToLine, ChevronRight, X, CheckCircle, Clock } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import { listenToCompletedRides, getBankAccount, requestWithdrawal, type Ride, type BankAccount } from "@/lib/db";
 
@@ -57,6 +58,26 @@ export default function Earnings() {
   const noWeek    = loaded && week.count === 0;
   const hasWeek   = loaded && week.count > 0;
   const hasAllTime = loaded && all.count > 0;
+
+  // Build last-7-days chart data
+  const chartData = useMemo(() => {
+    const days: { label: string; take: number; isToday: boolean }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const next = new Date(d);
+      next.setDate(next.getDate() + 1);
+      const dayRides = rides.filter(r => r.completedAt && r.completedAt >= d && r.completedAt < next);
+      const take = dayRides.reduce((s, r) => s + r.driverTake, 0);
+      days.push({
+        label: i === 0 ? "Today" : d.toLocaleDateString("en-US", { weekday: "short" }),
+        take: parseFloat(take.toFixed(2)),
+        isToday: i === 0,
+      });
+    }
+    return days;
+  }, [rides]);
 
   return (
     <div className="bg-background pt-4 px-4 pb-6">
@@ -161,6 +182,43 @@ export default function Earnings() {
                   View full history →
                 </button>
               </div>
+            </div>
+
+            {/* Weekly earnings bar chart */}
+            <div className="p-4 border border-border rounded-xl space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Daily Earnings — Last 7 Days</p>
+              <ResponsiveContainer width="100%" height={120}>
+                <BarChart data={chartData} barCategoryGap="30%">
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis hide domain={[0, "auto"]} />
+                  <Tooltip
+                    cursor={{ fill: "hsl(var(--primary) / 0.08)" }}
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "0.75rem",
+                      fontSize: 12,
+                      color: "hsl(var(--foreground))",
+                    }}
+                    formatter={(v: number) => [`$${v.toFixed(2)}`, "Take-home"]}
+                    labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+                  />
+                  <Bar dataKey="take" radius={[4, 4, 0, 0]}>
+                    {chartData.map((entry, i) => (
+                      <Cell
+                        key={i}
+                        fill={entry.isToday ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.35)"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="text-[10px] text-muted-foreground text-center">Today's bar is highlighted</p>
             </div>
 
             {/* WeGo Advantage */}

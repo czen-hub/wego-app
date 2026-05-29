@@ -463,7 +463,7 @@ export default function Home() {
                     </button>
                     <button type="button" aria-label="Edit home" onClick={() => openEditPlace("home")} className="text-xs text-muted-foreground hover:text-primary px-1 flex-shrink-0">Edit</button>
                     {home.value && (
-                      <button type="button" aria-label="Clear home" onClick={() => home.clear()} className="text-muted-foreground p-1 flex-shrink-0">
+                      <button type="button" aria-label="Clear home" onClick={() => home.clear()} className="text-muted-foreground w-8 h-8 flex items-center justify-center flex-shrink-0">
                         <X size={13} />
                       </button>
                     )}
@@ -520,7 +520,7 @@ export default function Home() {
                     </button>
                     <button type="button" aria-label="Edit work" onClick={() => openEditPlace("work")} className="text-xs text-muted-foreground hover:text-primary px-1 flex-shrink-0">Edit</button>
                     {work.value && (
-                      <button type="button" aria-label="Clear work" onClick={() => work.clear()} className="text-muted-foreground p-1 flex-shrink-0">
+                      <button type="button" aria-label="Clear work" onClick={() => work.clear()} className="text-muted-foreground w-8 h-8 flex items-center justify-center flex-shrink-0">
                         <X size={13} />
                       </button>
                     )}

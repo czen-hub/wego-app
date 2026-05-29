@@ -8,19 +8,9 @@ import { updateRideStatus, logEarningsEntry, incrementDriverRideCount, sendRideM
 import { useAuth } from "@/context/AuthContext";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { haversineMeters, formatTime, calcWaitCharge } from "@/lib/trip";
 
 type TripPhase = "to-pickup" | "waiting" | "in-progress" | "complete";
-
-function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 interface TripData {
   riderName: string;
@@ -32,6 +22,9 @@ interface TripData {
   estimatedTime: number;
   type?: "ride" | "courier" | "food";
   isAdvanced?: boolean;
+  scheduledDate?: string | null;
+  scheduledHour?: number | null;
+  scheduledMinute?: number | null;
   pickupCoords?: [number, number];
   dropoffCoords?: [number, number];
   rideId?: string;
@@ -120,6 +113,7 @@ export default function TripInProgress() {
   const [mapResetToken, setMapResetToken] = useState(0);
   const [headingUp, setHeadingUp] = useState(true);
   const tripNavMode = phase === "to-pickup" || phase === "in-progress";
+  const [scheduledSecsRemaining, setScheduledSecsRemaining] = useState<number | null>(null);
   const lastMapMoveRef = useRef<number>(0);
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -137,6 +131,21 @@ export default function TripInProgress() {
     }, 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Countdown clock for scheduled (advanced) pickups
+  useEffect(() => {
+    if (!trip.isAdvanced || trip.scheduledHour == null || trip.scheduledMinute == null) return;
+    const compute = () => {
+      const now = new Date();
+      const target = new Date(now);
+      target.setHours(trip.scheduledHour!, trip.scheduledMinute!, 0, 0);
+      if (target.getTime() - now.getTime() < -30 * 60 * 1000) target.setDate(target.getDate() + 1);
+      return Math.round((target.getTime() - now.getTime()) / 1000);
+    };
+    setScheduledSecsRemaining(compute());
+    const id = setInterval(() => setScheduledSecsRemaining(compute()), 1000);
+    return () => clearInterval(id);
+  }, [trip.isAdvanced, trip.scheduledHour, trip.scheduledMinute]);
 
   const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem("wego_voice") !== "off");
   const voiceEnabledRef = useRef(localStorage.getItem("wego_voice") !== "off");
@@ -338,16 +347,10 @@ export default function TripInProgress() {
     return () => clearInterval(id);
   }, [phase]);
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, "0");
-    const s = (secs % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
-
   const freeWaitSecs = trip.isAdvanced ? 480 : 300;
   const waitRemaining = Math.max(0, freeWaitSecs - waitElapsed);
   const meterSecs = trip.isAdvanced ? Math.max(0, waitElapsed - freeWaitSecs) : 0;
-  const meterCharge = parseFloat(Math.min((meterSecs / 60) * 0.50, 1.00).toFixed(2));
+  const meterCharge = calcWaitCharge(waitElapsed, trip.isAdvanced ?? false);
   const canLeave = waitElapsed >= freeWaitSecs;
 
   const [currentStep, setCurrentStep] = useState<RouteStep | null>(null);
@@ -1125,6 +1128,34 @@ export default function TripInProgress() {
             </div>
           )}
         </div>}
+
+        {/* Scheduled pickup countdown */}
+        {phase === "to-pickup" && trip.isAdvanced && scheduledSecsRemaining !== null && (
+          <div className={`glass-card px-4 py-3 border rounded-xl flex items-center gap-3 ${scheduledSecsRemaining < 0 ? "border-amber-500/40 bg-amber-500/5" : "border-primary/30 bg-primary/5"}`}>
+            <Clock size={16} className={scheduledSecsRemaining < 0 ? "text-amber-500 flex-shrink-0" : "text-primary flex-shrink-0"} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Scheduled Pickup</p>
+              <p className={`text-sm font-bold ${scheduledSecsRemaining < 0 ? "text-amber-500" : "text-foreground"}`}>
+                {trip.scheduledHour != null && trip.scheduledMinute != null
+                  ? `${trip.scheduledHour % 12 || 12}:${String(trip.scheduledMinute).padStart(2, "0")} ${trip.scheduledHour >= 12 ? "PM" : "AM"}`
+                  : "—"}
+              </p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              {scheduledSecsRemaining >= 0 ? (
+                <>
+                  <p className="text-xl font-bold font-mono text-primary tabular-nums">{formatTime(scheduledSecsRemaining)}</p>
+                  <p className="text-[10px] text-muted-foreground">until pickup</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-bold font-mono text-amber-500 tabular-nums">+{formatTime(Math.abs(scheduledSecsRemaining))}</p>
+                  <p className="text-[10px] text-amber-500">overdue</p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Action Button */}
         {phase === "to-pickup" && (
