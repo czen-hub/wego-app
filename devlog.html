@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WeGo — Dev Time Log</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #09090b;
+    --surface: #18181b;
+    --border:  #27272a;
+    --primary: #3b82f6;
+    --primary-dim: rgba(59,130,246,0.15);
+    --primary-glow: rgba(59,130,246,0.35);
+    --fg:      #fafafa;
+    --muted:   #71717a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Plus Jakarta Sans", sans-serif;
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .container { max-width: 960px; margin: 0 auto; }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  .header-logo {
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .logo-dot {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800; color: #fff;
+    box-shadow: 0 4px 20px var(--primary-glow);
+  }
+  .header h1 { font-size: 1.4rem; font-weight: 800; }
+  .header p { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .badge {
+    background: var(--primary-dim);
+    border: 1px solid rgba(59,130,246,0.3);
+    color: var(--primary);
+    font-size: 0.7rem; font-weight: 700;
+    padding: 4px 10px; border-radius: 999px;
+    letter-spacing: 0.05em;
+    align-self: flex-start; margin-top: 4px;
+  }
+
+  /* ── Stats row ── */
+  .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width:600px){ .stats { grid-template-columns: repeat(2,1fr); } }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 1.1rem 1.2rem;
+  }
+  .stat-value { font-size: 1.9rem; font-weight: 800; color: var(--fg); line-height: 1; }
+  .stat-value.blue { color: var(--primary); }
+  .stat-label { font-size: 0.7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .card-title {
+    font-size: 0.7rem; font-weight: 700; color: var(--primary);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 1.2rem;
+  }
+
+  /* ── Chart wrappers ── */
+  .chart-wrap { position: relative; height: 200px; }
+
+  /* ── Calendar heatmap ── */
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+  }
+  .cal-day-label {
+    font-size: 0.6rem; color: var(--muted); text-align: center;
+    padding-bottom: 4px; font-weight: 600;
+  }
+  .cal-cell {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    background: var(--border);
+    position: relative;
+    cursor: default;
+    transition: transform 0.1s;
+  }
+  .cal-cell:hover { transform: scale(1.15); }
+  .cal-cell[data-hours]::after {
+    content: attr(data-date);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%; transform: translateX(-50%);
+    background: #fff; color: #000;
+    font-size: 0.6rem; font-weight: 700;
+    padding: 3px 6px; border-radius: 6px;
+    white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity 0.15s;
+    z-index: 10;
+  }
+  .cal-cell:hover::after { opacity: 1; }
+  .cal-cell.l0 { background: var(--border); }
+  .cal-cell.l1 { background: rgba(59,130,246,0.20); }
+  .cal-cell.l2 { background: rgba(59,130,246,0.40); }
+  .cal-cell.l3 { background: rgba(59,130,246,0.65); }
+  .cal-cell.l4 { background: rgba(59,130,246,0.90); box-shadow: 0 2px 10px rgba(59,130,246,0.4); }
+  .cal-legend { display: flex; align-items: center; gap: 6px; margin-top: 10px; justify-content: flex-end; }
+  .cal-legend span { font-size: 0.6rem; color: var(--muted); }
+  .cal-legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+  /* ── Milestones ── */
+  .milestone-list { display: flex; flex-direction: column; gap: 0.75rem; }
+  .milestone {
+    display: flex; gap: 0.9rem; align-items: flex-start;
+  }
+  .ms-dot-col { display: flex; flex-direction: column; align-items: center; padding-top: 4px; }
+  .ms-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--primary); flex-shrink: 0;
+    box-shadow: 0 0 8px var(--primary-glow);
+  }
+  .ms-line {
+    width: 1px; flex: 1; background: var(--border);
+    margin-top: 4px; min-height: 20px;
+  }
+  .milestone:last-child .ms-line { display: none; }
+  .ms-date { font-size: 0.65rem; color: var(--muted); font-weight: 600; white-space: nowrap; min-width: 54px; padding-top: 2px; }
+  .ms-body {}
+  .ms-title { font-size: 0.8rem; font-weight: 700; color: var(--fg); line-height: 1.3; }
+  .ms-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+
+  /* ── Two-col ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+  @media (max-width:600px){ .two-col { grid-template-columns: 1fr; } }
+
+  /* ── Session table ── */
+  .session-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .session-table th {
+    text-align: left; padding: 6px 10px 10px;
+    font-size: 0.65rem; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--border);
+  }
+  .session-table td {
+    padding: 9px 10px; border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .session-table tr:last-child td { border-bottom: none; }
+  .session-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .pill {
+    display: inline-flex; align-items: center;
+    background: var(--primary-dim); color: var(--primary);
+    font-size: 0.65rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px;
+    border: 1px solid rgba(59,130,246,0.25);
+  }
+  .bar-inline {
+    display: inline-block; height: 6px; border-radius: 3px;
+    background: var(--primary); vertical-align: middle; margin-left: 6px;
+    opacity: 0.7;
+  }
+  .date-cell { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+  .hours-cell { font-weight: 700; color: var(--fg); }
+  .commits-cell { color: var(--muted); }
+  .focus-cell { color: var(--fg); line-height: 1.4; }
+
+  /* ── Footer ── */
+  .footer { text-align: center; margin-top: 3rem; font-size: 0.7rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <div class="logo-dot">W</div>
+      <div>
+        <h1>WeGo Dev Time Log</h1>
+        <p>Driver + Passenger MVP · May 2 – May 28, 2026</p>
+      </div>
+    </div>
+    <span class="badge">LIVE DATA · GIT-DERIVED</span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value blue" id="stat-hours">—</div>
+      <div class="stat-label">Total Hours</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-days">—</div>
+      <div class="stat-label">Active Days</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-commits">—</div>
+      <div class="stat-label">Commits</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-streak">—</div>
+      <div class="stat-label">Day Streak</div>
+    </div>
+  </div>
+
+  <!-- Hours per day bar chart -->
+  <div class="card">
+    <div class="card-title">Hours per Day</div>
+    <div class="chart-wrap">
+      <canvas id="barChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Cumulative hours + commits per day -->
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Cumulative Hours</div>
+      <div class="chart-wrap">
+        <canvas id="lineChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Commits per Day</div>
+      <div class="chart-wrap">
+        <canvas id="commitChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity heatmap -->
+  <div class="card">
+    <div class="card-title">Activity Calendar — May 2026</div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend">
+      <span>Less</span>
+      <div class="cal-legend-dot l0"></div>
+      <div class="cal-legend-dot l1"></div>
+      <div class="cal-legend-dot l2"></div>
+      <div class="cal-legend-dot l3"></div>
+      <div class="cal-legend-dot l4"></div>
+      <span>More</span>
+    </div>
+  </div>
+
+  <!-- Two col: milestones + session table -->
+  <div class="two-col">
+    <!-- Milestones -->
+    <div class="card" style="overflow-y:auto; max-height:420px;">
+      <div class="card-title">Key Milestones</div>
+      <div class="milestone-list" id="milestoneList"></div>
+    </div>
+
+    <!-- Session table -->
+    <div class="card" style="overflow-y:auto; max-height:420px;">
+      <div class="card-title">Session Breakdown</div>
+      <table class="session-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Hours</th>
+            <th>Commits</th>
+            <th>Focus</th>
+          </tr>
+        </thead>
+        <tbody id="sessionTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">Built from git log · WeGo Cooperative · tenzin · 2026</div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────
+const sessions = [
+  {
+    date: '2026-05-02', label: 'May 2', hours: 1.0, commits: 1,
+    focus: 'Initial commit — driver & passenger MVPs',
+  },
+  {
+    date: '2026-05-03', label: 'May 3', hours: 1.0, commits: 3,
+    focus: 'Driver audit, Legacy page, marketing site',
+  },
+  {
+    date: '2026-05-08', label: 'May 8', hours: 2.0, commits: 1,
+    focus: 'Firebase backend — auth, Firestore, real-time dispatch',
+  },
+  {
+    date: '2026-05-09', label: 'May 9', hours: 1.0, commits: 1,
+    focus: 'Maps, fare reduction, Firebase hosting config',
+  },
+  {
+    date: '2026-05-10', label: 'May 10', hours: 2.5, commits: 13,
+    focus: 'Passenger Firebase history, GPS tracking, RideRequest redesign',
+  },
+  {
+    date: '2026-05-11', label: 'May 11', hours: 1.0, commits: 9,
+    focus: 'GitHub Pages CI/CD workflow',
+  },
+  {
+    date: '2026-05-16', label: 'May 16', hours: 1.5, commits: 1,
+    focus: 'UI/UX layout parity, trip flows, Reserve time picker',
+  },
+  {
+    date: '2026-05-17', label: 'May 17', hours: 5.0, commits: 26,
+    focus: 'Marketing website — styles, FAQ, pitch deck, legal docs',
+  },
+  {
+    date: '2026-05-18', label: 'May 18', hours: 3.0, commits: 8,
+    focus: 'Security audit, live driver dot, ETA, map routing',
+  },
+  {
+    date: '2026-05-19', label: 'May 19', hours: 2.5, commits: 8,
+    focus: 'Stop-on-the-way, Nominatim autocomplete, route tracking',
+  },
+  {
+    date: '2026-05-20', label: 'May 20', hours: 2.0, commits: 3,
+    focus: 'Live Firestore opportunities, real inbox, multi-stop fares',
+  },
+  {
+    date: '2026-05-21', label: 'May 21', hours: 3.0, commits: 3,
+    focus: 'Obsidian & Amber theme, critical audit fixes',
+  },
+  {
+    date: '2026-05-24', label: 'May 24', hours: 2.5, commits: 2,
+    focus: 'Complete ride flow — chat, stops, early end, SVG icons',
+  },
+  {
+    date: '2026-05-25', label: 'May 25', hours: 1.5, commits: 14,
+    focus: 'SearchBox geocoding, Google Maps nav, Trip History polish',
+  },
+  {
+    date: '2026-05-28', label: 'May 28', hours: 3.0, commits: 4,
+    focus: 'Full UI redesign — Plus Jakarta Sans, btn-glow, Carbon Blue theme',
+  },
+];
+
+const milestones = [
+  { date: 'May 2',  title: 'Project started',         sub: 'Driver + Passenger MVPs — initial commit' },
+  { date: 'May 8',  title: 'Firebase backend',         sub: 'Auth, Firestore, real-time dispatch, error boundaries' },
+  { date: 'May 10', title: 'Live apps',                sub: 'Firebase hosting, GPS tracking, ride history' },
+  { date: 'May 17', title: 'Marketing site',           sub: 'Pitch deck, FAQ, legal docs, full website' },
+  { date: 'May 18', title: 'Security hardened',        sub: '6 audit findings fixed — P1/P2/P3 all resolved' },
+  { date: 'May 19', title: 'Stop-on-the-way',          sub: 'Geocode, fare delta, map reroute, driver alerts' },
+  { date: 'May 21', title: 'Obsidian & Amber theme',   sub: 'Brand identity — Space Grotesk, black + amber' },
+  { date: 'May 24', title: 'Full ride flow',           sub: 'Chat, stops, early end, post-trip contact window' },
+  { date: 'May 28', title: 'Carbon Blue redesign',     sub: 'Unified design system — driver = passenger quality' },
+];
+
+// ── Compute totals ─────────────────────────────────────────
+const totalHours   = sessions.reduce((s, d) => s + d.hours, 0);
+const totalCommits = sessions.reduce((s, d) => s + d.commits, 0);
+const totalDays    = sessions.length;
+
+document.getElementById('stat-hours').textContent   = totalHours.toFixed(1) + 'h';
+document.getElementById('stat-days').textContent    = totalDays;
+document.getElementById('stat-commits').textContent = totalCommits;
+document.getElementById('stat-streak').textContent  = '5'; // May 17-21
+
+// ── Chart.js defaults ─────────────────────────────────────
+Chart.defaults.color = '#71717a';
+Chart.defaults.borderColor = '#27272a';
+Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
+
+const labels = sessions.map(s => s.label);
+const hours  = sessions.map(s => s.hours);
+const commits = sessions.map(s => s.commits);
+
+// Bar chart — hours per day
+new Chart(document.getElementById('barChart'), {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Hours',
+      data: hours,
+      backgroundColor: hours.map(h =>
+        h >= 4 ? 'rgba(59,130,246,0.90)' :
+        h >= 2.5 ? 'rgba(59,130,246,0.65)' :
+        h >= 1.5 ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.28)'
+      ),
+      borderRadius: 7,
+      borderSkipped: false,
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { font: { size: 10 }, callback: v => v + 'h' },
+        beginAtZero: true,
+      },
+    },
+  },
+});
+
+// Line chart — cumulative hours
+let cumulative = 0;
+const cumulativeHours = hours.map(h => { cumulative += h; return +cumulative.toFixed(1); });
+
+new Chart(document.getElementById('lineChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Cumulative Hours',
+      data: cumulativeHours,
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,0.10)',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: '#3b82f6',
+      pointRadius: 3,
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { font: { size: 9 }, callback: v => v + 'h' },
+        beginAtZero: true,
+      },
+    },
+  },
+});
+
+// Commit chart
+new Chart(document.getElementById('commitChart'), {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Commits',
+      data: commits,
+      backgroundColor: 'rgba(139,92,246,0.55)',
+      borderRadius: 7,
+      borderSkipped: false,
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { font: { size: 9 }, stepSize: 5 },
+        beginAtZero: true,
+      },
+    },
+  },
+});
+
+// ── Calendar heatmap ──────────────────────────────────────
+const calGrid = document.getElementById('calGrid');
+const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+dayLabels.forEach(d => {
+  const el = document.createElement('div');
+  el.className = 'cal-day-label'; el.textContent = d;
+  calGrid.appendChild(el);
+});
+
+// May 2026: starts on Friday (day 5)
+// Build a map of date → hours
+const hoursMap = {};
+sessions.forEach(s => { hoursMap[s.date] = s.hours; });
+
+const maxH = Math.max(...hours);
+const firstDay = new Date('2026-05-01').getDay(); // 5 = Friday
+
+// Pad empty cells before May 1
+for (let i = 0; i < firstDay; i++) {
+  const el = document.createElement('div');
+  el.className = 'cal-cell l0'; el.style.opacity = '0';
+  calGrid.appendChild(el);
+}
+
+for (let d = 1; d <= 31; d++) {
+  const dateStr = `2026-05-${String(d).padStart(2,'0')}`;
+  const h = hoursMap[dateStr] || 0;
+  const level = h === 0 ? 0 : h < 1.5 ? 1 : h < 2.5 ? 2 : h < 4 ? 3 : 4;
+  const el = document.createElement('div');
+  el.className = `cal-cell l${level}`;
+  el.setAttribute('data-date', h > 0 ? `May ${d} · ${h}h` : `May ${d}`);
+  el.title = h > 0 ? `May ${d}: ${h}h worked` : `May ${d}: no work`;
+  calGrid.appendChild(el);
+}
+
+// ── Milestones ────────────────────────────────────────────
+const msContainer = document.getElementById('milestoneList');
+milestones.forEach(m => {
+  msContainer.innerHTML += `
+    <div class="milestone">
+      <div class="ms-dot-col"><div class="ms-dot"></div><div class="ms-line"></div></div>
+      <div>
+        <div class="ms-date">${m.date}</div>
+        <div class="ms-body">
+          <div class="ms-title">${m.title}</div>
+          <div class="ms-sub">${m.sub}</div>
+        </div>
+      </div>
+    </div>`;
+});
+
+// ── Session table ─────────────────────────────────────────
+const tbody = document.getElementById('sessionTbody');
+const maxBar = Math.max(...hours);
+sessions.forEach(s => {
+  const barW = Math.round((s.hours / maxBar) * 48);
+  tbody.innerHTML += `
+    <tr>
+      <td class="date-cell">${s.label}</td>
+      <td class="hours-cell">${s.hours}h<span class="bar-inline" style="width:${barW}px"></span></td>
+      <td class="commits-cell">${s.commits}</td>
+      <td class="focus-cell">${s.focus}</td>
+    </tr>`;
+});
+</script>
+</body>
+</html>

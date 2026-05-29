@@ -1170,7 +1170,7 @@ export default function RideInProgress() {
             aria-label="Toggle heading-up mode"
             className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"}`}
           >
-            <Compass size={18} className={headingUp ? "text-background" : "text-primary"} />
+            <Compass size={18} className={headingUp ? "text-primary-foreground" : "text-primary"} />
           </button>
         </div>
 

@@ -310,7 +310,9 @@ export default function TripInProgress() {
 
   const handleCall = () => {
     if (passengerPhone) {
+      setCalling(true);
       window.location.href = `tel:${passengerPhone}`;
+      setTimeout(() => setCalling(false), 10000);
     }
   };
 
@@ -1126,9 +1128,15 @@ export default function TripInProgress() {
 
         {/* Action Button */}
         {phase === "to-pickup" && (
-          <button type="button" onClick={() => {
+          <button type="button" onClick={async () => {
               setPhase("waiting");
-              if (trip.rideId) updateRideStatus(trip.rideId, "arrived").catch(() => {});
+              if (trip.rideId) {
+                try {
+                  await updateRideStatus(trip.rideId, "arrived");
+                } catch {
+                  showError("Couldn't update status — check your connection");
+                }
+              }
             }}
             className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform btn-glow">
             <CheckCircle size={22} />
@@ -1167,12 +1175,18 @@ export default function TripInProgress() {
               </div>
             )}
 
-            <button type="button" onClick={() => {
+            <button type="button" onClick={async () => {
                 if (pinRequired) {
                   setPinModalOpen(true);
                 } else {
                   setPhase("in-progress");
-                  if (trip.rideId) updateRideStatus(trip.rideId, "inProgress").catch(() => {});
+                  if (trip.rideId) {
+                    try {
+                      await updateRideStatus(trip.rideId, "inProgress");
+                    } catch {
+                      showError("Couldn't update status — check your connection");
+                    }
+                  }
                 }
               }}
               disabled={pickupIssueNeedsAcknowledgement}
