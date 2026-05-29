@@ -525,12 +525,7 @@ export async function swapStopAndDropoff(rideId: string, opts: {
 }
 
 // ── Fare estimate ──────────────────────────────────────────────────────────
-
-export function estimateFare(distanceMiles: number, type: RideType = "ride"): number {
-  const base = type === "food" ? 3.0 : 2.5;
-  const perMile = type === "ride" ? 1.85 : 1.65;
-  return Math.max(base + distanceMiles * perMile, 7);
-}
+export { estimateFare } from "./fare";
 
 export async function incrementPassengerRideCount(passengerId: string): Promise<void> {
   try {
