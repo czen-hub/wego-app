@@ -171,6 +171,10 @@ export async function requestRide(opts: {
   const pinArr = new Uint32Array(1);
   crypto.getRandomValues(pinArr);
   const pin = String(1000 + (pinArr[0] % 9000));
+  const passengerSnap = await getDoc(doc(db, "passengers", opts.passengerId)).catch(() => null);
+  const passengerData = passengerSnap?.data() ?? {};
+  const riderRating = (passengerData.rating as number) ?? 5.0;
+
   return addDoc(collection(db, "rides"), {
     status: "pending",
     type: opts.type ?? "ride",
@@ -195,7 +199,7 @@ export async function requestRide(opts: {
     stops: (opts.plannedStops ?? []).map(s => ({ address: s.address, lat: s.lat, lng: s.lng, fareDelta: 0 })),
     stopCount: opts.initialStopCount ?? 0,
     stopFeeTotal: opts.initialStopFeeTotal ?? 0,
-    riderRating: 0,
+    riderRating,
     passengerRatingGiven: 0,
     driverRatingGiven: 0,
     disputed: false,
@@ -253,6 +257,9 @@ export async function createReservedRide(opts: {
   const pinArr = new Uint32Array(1);
   crypto.getRandomValues(pinArr);
   const pin = String(1000 + (pinArr[0] % 9000));
+  const passengerSnap2 = await getDoc(doc(db, "passengers", opts.passengerId)).catch(() => null);
+  const passengerData2 = passengerSnap2?.data() ?? {};
+  const riderRating2 = (passengerData2.rating as number) ?? 5.0;
   return addDoc(collection(db, "rides"), {
     status: "reserved",
     type: "ride",
@@ -276,7 +283,7 @@ export async function createReservedRide(opts: {
     pinRequired: false,
     stopCount: 0,
     stopFeeTotal: 0,
-    riderRating: 0,
+    riderRating: riderRating2,
     passengerRatingGiven: 0,
     driverRatingGiven: 0,
     disputed: false,

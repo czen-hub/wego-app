@@ -3,6 +3,7 @@ import {
   doc,
   updateDoc,
   setDoc,
+  getDoc,
   onSnapshot,
   query,
   where,
@@ -321,6 +322,33 @@ export async function endRideEarly(rideId: string, proratedFare: number) {
 export async function submitRating(rideId: string, rating: number, raterType: "passenger" | "driver"): Promise<void> {
   const field = raterType === "driver" ? "driverRatingGiven" : "passengerRatingGiven";
   await updateDoc(doc(db, "rides", rideId), { [field]: rating });
+
+  // When driver rates, update the passenger's rolling average rating on their profile
+  if (raterType === "driver") {
+    try {
+      const rideSnap = await getDoc(doc(db, "rides", rideId));
+      const passengerId = rideSnap.data()?.passengerId as string | null;
+      if (passengerId) {
+        const passengerRef = doc(db, "passengers", passengerId);
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(passengerRef);
+          const data = snap.data() ?? {};
+          const currentRating = (data.rating as number) ?? 5.0;
+          // Default ratingCount to 10 so early ratings don't swing the average wildly
+          const ratingCount = (data.ratingCount as number) ?? 10;
+          const newCount = ratingCount + 1;
+          const newRating = Math.round(((currentRating * ratingCount + rating) / newCount) * 100) / 100;
+          if (snap.exists()) {
+            tx.update(passengerRef, { rating: newRating, ratingCount: newCount });
+          } else {
+            tx.set(passengerRef, { rating: newRating, ratingCount: newCount }, { merge: true });
+          }
+        });
+      }
+    } catch {
+      // Non-critical — ride rating already saved
+    }
+  }
 }
 
 // ── Messages ───────────────────────────────────────────────────────────────
