@@ -348,7 +348,6 @@ export function listenToMessages(
       };
     });
     msgs.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
-    msgs = msgs.slice(0, 20);
     callback(msgs);
   }, (err) => console.error("Error in listenToMessages:", err));
 }
