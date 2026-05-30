@@ -413,6 +413,18 @@ export default function ClientMap({
     map.once("load", () => {
       if (dead) return;
 
+      map.addSource("route-alt", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "route-alt",
+        type: "line",
+        source: "route-alt",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#64748b", "line-width": 3, "line-opacity": 0.45 },
+      });
+
       map.addSource("route", {
         type: "geojson",
         data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} },
@@ -574,6 +586,16 @@ export default function ClientMap({
         properties: {},
       });
 
+    const setAltRoutes = (coordsArr: [number, number][][]) =>
+      (mapRef.current?.getSource("route-alt") as any)?.setData({
+        type: "FeatureCollection",
+        features: coordsArr.map((c) => ({
+          type: "Feature" as const,
+          geometry: { type: "LineString" as const, coordinates: c },
+          properties: {},
+        })),
+      });
+
     // destination marker
     toMkRef.current?.remove();
     toMkRef.current = null;
@@ -633,6 +655,7 @@ export default function ClientMap({
           : [[from[1], from[0]], [to[1], to[0]]];
         setSource("route", []);
         setSource("route-dash", pts);
+        setAltRoutes([]);
 
         const same = Math.abs(from[0] - to[0]) < 0.001 && Math.abs(from[1] - to[1]) < 0.001;
         lastProgrammaticRef.current = Date.now() + 500;
@@ -654,7 +677,7 @@ export default function ClientMap({
           : `${from[1]},${from[0]};${to[1]},${to[0]}`;
 
         fetch(
-          `https://api.mapbox.com/directions/v5/mapbox/driving/${wpts}?steps=true&geometries=geojson&overview=full&annotations=maxspeed&access_token=${TOKEN}`,
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${wpts}?steps=true&geometries=geojson&overview=full&annotations=maxspeed&alternatives=true&access_token=${TOKEN}`,
           { signal: ctrl.signal },
         )
           .then((r) => r.json())
@@ -675,6 +698,7 @@ export default function ClientMap({
             for (const leg of route.legs ?? []) steps.push(...(leg.steps ?? []));
             stepsRef.current = steps;
             hasSolidRef.current = true;
+            setAltRoutes((data.routes ?? []).slice(1).map((r: any) => r.geometry.coordinates));
 
             if (steps.length > 0) {
               stepIdxRef.current = 0;
@@ -766,6 +790,7 @@ export default function ClientMap({
     } else {
       setSource("route", []);
       setSource("route-dash", []);
+      setAltRoutes([]);
       hasSolidRef.current = false;
       fetchingRef.current = false;
       lastFromRef.current = null;

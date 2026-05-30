@@ -5,7 +5,7 @@ import {
   Package, UtensilsCrossed, MapPin, CheckCircle, X, Search,
   SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation,
   CornerUpRight, CornerUpLeft, CornerDownLeft, ArrowUp,
-  AlertTriangle, Compass, Volume2, VolumeX, Camera,
+  AlertTriangle, Compass, Volume2, VolumeX, Camera, RefreshCcw,
   type LucideIcon,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
@@ -92,6 +92,8 @@ export default function Command() {
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartY = useRef(0);
   const spokenInstructionRef = useRef<string | null>(null);
+  const distAnnouncedRef = useRef<{ instruction: string; initialDist: number; mileFired: boolean; halfFired: boolean; nearFired: boolean }>({ instruction: "", initialDist: 0, mileFired: false, halfFired: false, nearFired: false });
+  const arrivedRef = useRef(false);
   const navigatedRef = useRef(!!(location.state as { tripCompleted?: boolean } | null)?.tripCompleted);
 
   // Sync navDestRef so the interval below can read it without a stale closure
@@ -112,6 +114,7 @@ export default function Command() {
   useEffect(() => {
     if (!navStep?.instruction || !navDest || !voiceEnabled) return;
     if (!("speechSynthesis" in window)) return;
+    if (navStep.type === "arrive") return; // handled by arrival effect below
     if (navStep.instruction === spokenInstructionRef.current) return;
     spokenInstructionRef.current = navStep.instruction;
     window.speechSynthesis.cancel();
@@ -133,6 +136,45 @@ export default function Command() {
       setRouteInfo(null);
     }
   }, [navDest, voiceEnabled]);
+
+  // Multi-stage distance announcements: "In 1 mile…", "In a half mile…", "In 500 feet…"
+  useEffect(() => {
+    if (!navStep?.instruction || navStep.type === "arrive" || !navDest || !voiceEnabled || navDistM === null) return;
+    if (!("speechSynthesis" in window)) return;
+    // Reset thresholds when the step changes; the step-change voice effect handles the initial speak
+    if (distAnnouncedRef.current.instruction !== navStep.instruction) {
+      distAnnouncedRef.current = { instruction: navStep.instruction, initialDist: navDistM, mileFired: false, halfFired: false, nearFired: false };
+      return;
+    }
+    const { initialDist, mileFired, halfFired, nearFired } = distAnnouncedRef.current;
+    const ft = navDistM * 3.28084;
+    if (initialDist > 1200 && !mileFired && navDistM < 1800 && navDistM > 1400) {
+      distAnnouncedRef.current.mileFired = true;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance(`In 1 mile, ${navStep.instruction}`), { rate: 1.05 }));
+    } else if (initialDist > 600 && !halfFired && navDistM < 900 && navDistM > 700) {
+      distAnnouncedRef.current.halfFired = true;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance(`In a half mile, ${navStep.instruction}`), { rate: 1.05 }));
+    } else if (initialDist > 300 && !nearFired && ft < 600 && ft > 200) {
+      distAnnouncedRef.current.nearFired = true;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance(`In ${Math.round(ft / 100) * 100} feet, ${navStep.instruction}`), { rate: 1.05 }));
+    }
+  }, [navDistM, navStep?.instruction, navStep?.type, navDest, voiceEnabled]);
+
+  // Arrival detection: "You have arrived" voice + auto-clear navigation after 4 s
+  useEffect(() => {
+    if (navStep?.type !== "arrive") { arrivedRef.current = false; return; }
+    if (arrivedRef.current) return;
+    arrivedRef.current = true;
+    if (voiceEnabled && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance("You have arrived at your destination"), { rate: 1.05 }));
+    }
+    const t = setTimeout(() => { setNavDest(null); setNavStep(null); arrivedRef.current = false; }, 4000);
+    return () => clearTimeout(t);
+  }, [navStep?.type, voiceEnabled]);
 
   // After 10 seconds of map idle, fly back to GPS — skip when route navigation is active
   useEffect(() => {
@@ -410,6 +452,13 @@ export default function Command() {
   const TurnIcon = ({ type, modifier, size = 18, className = "text-white" }: { type: string; modifier?: string; size?: number; className?: string }) => {
     const mod = modifier ?? "";
     if (type === "arrive") return <MapPin size={size} className={className} />;
+    if (type === "rotary" || type === "roundabout" || type === "exit rotary" || type === "exit roundabout") return <RefreshCcw size={size} className={className} />;
+    if (type === "merge" || type === "on ramp") {
+      return mod.includes("left") ? <CornerUpLeft size={size} className={className} /> : <CornerUpRight size={size} className={className} />;
+    }
+    if (type === "off ramp" || type === "fork") {
+      return mod.includes("left") ? <CornerUpLeft size={size} className={className} /> : <CornerUpRight size={size} className={className} />;
+    }
     if (mod === "uturn") return <CornerDownLeft size={size} className={className} />;
     if (mod.includes("right")) return <CornerUpRight size={size} className={className} />;
     if (mod.includes("left")) return <CornerUpLeft size={size} className={className} />;
