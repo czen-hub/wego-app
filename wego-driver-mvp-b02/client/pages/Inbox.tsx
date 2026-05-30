@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Bell, Star, AlertCircle, Info, ChevronRight, ChevronLeft, Check, Tag, Send, MessageCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { listenToMessages, markMessageRead as markMsgRead, markAllMessagesRead, sendRideMessage, type Message as DbMessage } from "@/lib/db";
+import {
+  listenToMessages, markMessageRead as markMsgRead, markAllMessagesRead,
+  sendRideMessage, listenToRideMessages,
+  type Message as DbMessage, type ChatMessage,
+} from "@/lib/db";
 
 type MessageType = "wego" | "rider" | "alert" | "system" | "promo";
 type Tab = "all" | "messages" | "alerts" | "promotions";
@@ -19,18 +23,16 @@ interface Message {
   rideId?: string;
 }
 
-// A "thread" groups all messages from the same rideId (passenger lost-item conversations).
-// Non-ride messages are single-item pseudo-threads.
 interface Thread {
-  threadId: string;        // rideId for passenger threads, msg.id for singles
+  threadId: string;
   type: MessageType;
   from: string;
   subject: string;
-  preview: string;         // most recent message body
+  preview: string;
   time: string;
   hasUnread: boolean;
   messageCount: number;
-  messages: Message[];     // newest first
+  messages: Message[];
 }
 
 const DB_TYPE_MAP: Record<DbMessage["type"], MessageType> = {
@@ -75,7 +77,6 @@ function fromDb(m: DbMessage): Message {
   };
 }
 
-// Group messages with the same rideId into conversation threads.
 function buildThreads(messages: Message[]): Thread[] {
   const rideGroups = new Map<string, Message[]>();
   const singles: Message[] = [];
@@ -92,7 +93,6 @@ function buildThreads(messages: Message[]): Thread[] {
 
   const threads: Thread[] = [];
 
-  // Passenger conversation threads (grouped by rideId)
   for (const [rideId, msgs] of rideGroups) {
     const sorted = [...msgs].sort((a, b) => (b.rawTime?.getTime() ?? 0) - (a.rawTime?.getTime() ?? 0));
     const newest = sorted[0];
@@ -109,7 +109,6 @@ function buildThreads(messages: Message[]): Thread[] {
     });
   }
 
-  // Individual non-passenger messages
   for (const msg of singles) {
     threads.push({
       threadId: msg.id,
@@ -124,7 +123,6 @@ function buildThreads(messages: Message[]): Thread[] {
     });
   }
 
-  // Sort threads newest first
   threads.sort((a, b) => {
     const ta = a.messages[0]?.rawTime?.getTime() ?? 0;
     const tb = b.messages[0]?.rawTime?.getTime() ?? 0;
@@ -169,7 +167,10 @@ export default function Inbox() {
   const [selected, setSelected] = useState<Thread | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [replyText, setReplyText] = useState("");
-  const [replySent, setReplySent] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  // Live ride_chats for the open passenger thread
+  const [chatMsgs, setChatMsgs] = useState<ChatMessage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -181,13 +182,18 @@ export default function Inbox() {
     return unsub;
   }, [user]);
 
-  // If the selected thread is a passenger thread, keep it live as messages arrive
+  // Subscribe to ride_chats when a passenger thread is open
   useEffect(() => {
-    if (!selected || selected.type !== "rider") return;
-    const updated = buildThreads(messages).find((t) => t.threadId === selected.threadId);
-    if (updated) setSelected(updated);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages]);
+    if (!selected || selected.type !== "rider") {
+      setChatMsgs([]);
+      return;
+    }
+    const unsub = listenToRideMessages(selected.threadId, (msgs) => {
+      setChatMsgs(msgs);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    });
+    return unsub;
+  }, [selected?.threadId, selected?.type]);
 
   const threads = buildThreads(messages);
   const unreadCount = threads.filter((t) => t.hasUnread).length;
@@ -202,24 +208,27 @@ export default function Inbox() {
   const filtered = threads.filter(TAB_FILTERS[activeTab]);
 
   const openThread = (thread: Thread) => {
-    // Mark all unread messages in this thread as read
     const unreadIds = thread.messages.filter((m) => !m.read).map((m) => m.id);
     if (unreadIds.length) {
       markAllMessagesRead(unreadIds).catch(() => {});
       setMessages((prev) => prev.map((m) => unreadIds.includes(m.id) ? { ...m, read: true } : m));
     }
-    setSelected({ ...thread, hasUnread: false, messages: thread.messages.map((m) => ({ ...m, read: true })) });
+    setSelected({ ...thread, hasUnread: false });
     setReplyText("");
-    setReplySent(false);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
   const sendReply = async () => {
-    if (!replyText.trim() || !selected?.threadId || !user) return;
-    await sendRideMessage(selected.threadId, user.uid, "driver", replyText.trim());
+    if (!replyText.trim() || !selected?.threadId || !user || sending) return;
+    const text = replyText.trim();
     setReplyText("");
-    setReplySent(true);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    setSending(true);
+    try {
+      await sendRideMessage(selected.threadId, user.uid, "driver", text);
+    } catch {
+      setReplyText(text); // restore on failure
+    } finally {
+      setSending(false);
+    }
   };
 
   const markAllRead = () => {
@@ -231,9 +240,6 @@ export default function Inbox() {
   // ── Thread detail view ──────────────────────────────────────────────────────
   if (selected) {
     const isPassengerThread = selected.type === "rider";
-    const chronological = [...selected.messages].sort(
-      (a, b) => (a.rawTime?.getTime() ?? 0) - (b.rawTime?.getTime() ?? 0)
-    );
 
     return (
       <div className="pt-4 px-4 pb-6">
@@ -255,62 +261,69 @@ export default function Inbox() {
             <div>
               <p className="text-base font-semibold text-foreground">{selected.from}</p>
               {isPassengerThread && (
-                <p className="text-xs text-muted-foreground">
-                  {selected.messageCount} message{selected.messageCount !== 1 ? "s" : ""} · Lost item inquiry
-                </p>
+                <p className="text-xs text-muted-foreground">Lost item inquiry · {chatMsgs.length} message{chatMsgs.length !== 1 ? "s" : ""}</p>
               )}
             </div>
           </div>
 
-          {/* Message bubbles for passenger threads, single body for others */}
+          {/* Passenger conversation: uses ride_chats (bidirectional) */}
           {isPassengerThread ? (
-            <div className="bg-card border border-border rounded-xl p-4 space-y-3 min-h-48 max-h-[60vh] overflow-y-auto">
-              {chronological.map((msg) => (
-                <div key={msg.id} className="flex flex-col gap-1">
-                  <div className="max-w-[80%] self-start bg-secondary rounded-2xl rounded-tl-sm px-4 py-2.5">
-                    <p className="text-sm text-foreground leading-relaxed">{msg.body}</p>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground pl-1">{msg.time}</p>
-                </div>
-              ))}
-              <div ref={bottomRef} />
-            </div>
+            <>
+              <div className="bg-card border border-border rounded-xl p-4 space-y-3 min-h-48 max-h-[55vh] overflow-y-auto">
+                {chatMsgs.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center pt-4">No messages yet.</p>
+                )}
+                {chatMsgs.map((msg) => {
+                  const isMe = msg.senderType === "driver";
+                  return (
+                    <div key={msg.id} className={`flex flex-col gap-1 ${isMe ? "items-end" : "items-start"}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                        isMe
+                          ? "bg-primary text-primary-foreground rounded-tr-sm"
+                          : "bg-secondary text-foreground rounded-tl-sm"
+                      }`}>
+                        <p className="text-sm leading-relaxed">{msg.text}</p>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground px-1">{timeAgo(msg.createdAt)}</p>
+                    </div>
+                  );
+                })}
+                <div ref={bottomRef} />
+              </div>
+
+              {/* Reply input — always visible */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) sendReply(); }}
+                  placeholder="Reply to passenger…"
+                  disabled={sending}
+                  className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
+                />
+                <button
+                  type="button"
+                  aria-label="Send reply"
+                  onClick={sendReply}
+                  disabled={!replyText.trim() || sending}
+                  className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform flex-shrink-0"
+                >
+                  {sending
+                    ? <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    : <Send size={16} className="text-primary-foreground" />
+                  }
+                </button>
+              </div>
+            </>
           ) : (
+            /* Single non-passenger message */
             <div className="bg-card border border-border rounded-xl p-5">
               <p className="text-sm font-semibold text-foreground mb-1">{selected.subject}</p>
               <p className="text-xs text-muted-foreground mb-4">{selected.time}</p>
               <div className="border-t border-border pt-4">
                 <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{selected.messages[0]?.body}</p>
               </div>
-            </div>
-          )}
-
-          {/* Reply box — only for passenger threads */}
-          {isPassengerThread && (
-            <div className="space-y-2">
-              {replySent ? (
-                <p className="text-sm text-primary font-medium text-center py-2">Reply sent to passenger</p>
-              ) : (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) sendReply(); }}
-                    placeholder="Reply to passenger…"
-                    className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Send reply"
-                    onClick={sendReply}
-                    disabled={!replyText.trim()}
-                    className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform flex-shrink-0"
-                  >
-                    <Send size={16} className="text-primary-foreground" />
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -322,7 +335,6 @@ export default function Inbox() {
   return (
     <div className="pt-4 pb-6">
       <div className="max-w-2xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 mb-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Inbox</h1>
@@ -342,7 +354,6 @@ export default function Inbox() {
           )}
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 px-4 mb-4 overflow-x-auto pb-1">
           {tabs.map((tab) => {
             const count = threads.filter(TAB_FILTERS[tab.id]).filter((t) => t.hasUnread).length;
@@ -370,7 +381,6 @@ export default function Inbox() {
           })}
         </div>
 
-        {/* Thread list */}
         <div className="px-4 space-y-2">
           {!loaded ? (
             <div className="space-y-2">
