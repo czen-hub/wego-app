@@ -718,3 +718,29 @@ export async function getDriverGoal(driverId: string): Promise<DriverGoal> {
   }
   return { weeklyGoal: 20, bonusAmount: 25 };
 }
+
+// ── Saved places (home + destination mode) ─────────────────────────────────
+
+export interface SavedPlace {
+  lat: number;
+  lng: number;
+  address: string;
+}
+
+export async function getDriverSavedPlaces(driverId: string): Promise<{ home: SavedPlace | null; destMode: SavedPlace | null }> {
+  const { getDoc: gd } = await import("firebase/firestore");
+  const snap = await gd(doc(db, "drivers", driverId));
+  if (!snap.exists()) return { home: null, destMode: null };
+  const data = snap.data();
+  const parse = (p: any): SavedPlace | null =>
+    p && typeof p.lat === "number" && typeof p.lng === "number" ? { lat: p.lat, lng: p.lng, address: (p.address as string) ?? "" } : null;
+  return { home: parse(data.homeAddress), destMode: parse(data.destModeTarget) };
+}
+
+export async function setDriverHomeAddress(driverId: string, place: SavedPlace | null): Promise<void> {
+  await setDoc(doc(db, "drivers", driverId), { homeAddress: place }, { merge: true });
+}
+
+export async function setDriverDestModeTarget(driverId: string, place: SavedPlace | null): Promise<void> {
+  await setDoc(doc(db, "drivers", driverId), { destModeTarget: place }, { merge: true });
+}

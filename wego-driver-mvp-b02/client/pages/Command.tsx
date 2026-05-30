@@ -6,6 +6,7 @@ import {
   SlidersHorizontal, Car, PawPrint, Eye, EyeOff, Navigation,
   CornerUpRight, CornerUpLeft, CornerDownLeft, ArrowUp,
   AlertTriangle, Compass, Volume2, VolumeX, Camera, RefreshCcw,
+  Home, Pencil,
   type LucideIcon,
 } from "lucide-react";
 import RideCard from "@/components/RideCard";
@@ -14,9 +15,17 @@ import ClientMap, { type RouteStep } from "@/components/ClientMap";
 import { useDispatchContext } from "@/context/DispatchContext";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useAuth } from "@/context/AuthContext";
-import { type Ride, type EarningsEntry, type Opportunity, type RoadIssueType, listenToWeeklyEarnings, listenToOpportunities, getDriverGoal, updateDriverPreferences, getDriverPreferences, reportRoadIssue } from "@/lib/db";
+import { type Ride, type EarningsEntry, type Opportunity, type RoadIssueType, type SavedPlace, listenToWeeklyEarnings, listenToOpportunities, getDriverGoal, updateDriverPreferences, getDriverPreferences, reportRoadIssue, getDriverSavedPlaces, setDriverHomeAddress, setDriverDestModeTarget } from "@/lib/db";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
+
+function bearingBetween(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const dLng = r(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(r(lat2));
+  const x = Math.cos(r(lat1)) * Math.sin(r(lat2)) - Math.sin(r(lat1)) * Math.cos(r(lat2)) * Math.cos(dLng);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Plane, Music, Target, Package, UtensilsCrossed, Car,
@@ -64,6 +73,11 @@ export default function Command() {
   const navModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navDestRef = useRef<{ coords: [number, number]; name: string } | null>(null);
   const sessionTokenRef = useRef(crypto.randomUUID());
+  const [destMode, setDestMode] = useState(false);
+  const [destModeTarget, setDestModeTarget] = useState<{ coords: [number, number]; address: string } | null>(null);
+  const [homeAddress, setHomeAddress] = useState<{ coords: [number, number]; address: string } | null>(null);
+  const [recentSearches, setRecentSearches] = useState<{ name: string; sub: string; coords: [number, number] }[]>([]);
+  const [settingHome, setSettingHome] = useState(false);
   const [issueOpen, setIssueOpen] = useState(false);
   const [headingUp, setHeadingUp] = useState(false);
   const [issueSubmitting, setIssueSubmitting] = useState(false);
@@ -206,6 +220,12 @@ export default function Command() {
     if (r.type === "ride" && !acceptRides) return false;
     if (r.type === "courier" && !acceptCourier) return false;
     if (r.type === "food" && !acceptFood) return false;
+    if (destMode && destModeTarget && currentCoords && r.dropoffLocation) {
+      const toDropoff = bearingBetween(currentCoords[0], currentCoords[1], r.dropoffLocation.latitude, r.dropoffLocation.longitude);
+      const toDest   = bearingBetween(currentCoords[0], currentCoords[1], destModeTarget.coords[0], destModeTarget.coords[1]);
+      const diff = Math.abs(((toDropoff - toDest) + 540) % 360 - 180);
+      if (diff > 45) return false;
+    }
     return true;
   }) ?? null;
   const hasRequest = pendingRide !== null;
@@ -220,6 +240,14 @@ export default function Command() {
       setAcceptFood(prefs.acceptFood);
       setAcceptPets(prefs.acceptPets);
     });
+    getDriverSavedPlaces(user.uid).then(({ home, destMode: dm }) => {
+      if (home) setHomeAddress({ coords: [home.lat, home.lng], address: home.address });
+      if (dm) { setDestModeTarget({ coords: [dm.lat, dm.lng], address: dm.address }); setDestMode(true); }
+    });
+    try {
+      const raw = localStorage.getItem("wego_recent_nav");
+      if (raw) setRecentSearches(JSON.parse(raw));
+    } catch {}
   }, [user]);
 
   const togglePref = (
@@ -409,6 +437,36 @@ export default function Command() {
     }, 350);
   };
 
+  const applyNavDest = (coords: [number, number], fullName: string, shortName: string, sub: string) => {
+    if (settingHome) {
+      const place: SavedPlace = { lat: coords[0], lng: coords[1], address: fullName };
+      setHomeAddress({ coords, address: fullName });
+      setSettingHome(false);
+      setNavOpen(false);
+      setNavQuery("");
+      setNavResults([]);
+      if (user) setDriverHomeAddress(user.uid, place).catch(() => {});
+      return;
+    }
+    setNavDest({ coords, name: fullName });
+    setNavStep(null);
+    setNavOpen(false);
+    setNavQuery("");
+    setNavResults([]);
+    setSettingHome(false);
+    const entry = { name: shortName, sub, coords };
+    setRecentSearches((prev) => {
+      const next = [entry, ...prev.filter(e => !(e.name === shortName && e.sub === sub))].slice(0, 5);
+      try { localStorage.setItem("wego_recent_nav", JSON.stringify(next)); } catch {}
+      return next;
+    });
+    if (destMode && user) {
+      const place: SavedPlace = { lat: coords[0], lng: coords[1], address: fullName };
+      setDestModeTarget({ coords, address: fullName });
+      setDriverDestModeTarget(user.uid, place).catch(() => {});
+    }
+  };
+
   const selectPlace = async (r: { name: string; sub: string; mapbox_id: string }) => {
     try {
       const res = await fetch(
@@ -419,11 +477,7 @@ export default function Command() {
       if (!f) return;
       const coords: [number, number] = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
       const fullName = f.properties?.full_address ?? `${r.name}, ${r.sub}`;
-      setNavDest({ coords, name: fullName });
-      setNavStep(null);
-      setNavOpen(false);
-      setNavQuery("");
-      setNavResults([]);
+      applyNavDest(coords, fullName, r.name, r.sub);
       sessionTokenRef.current = crypto.randomUUID();
     } catch { /* silently fail */ }
   };
@@ -628,6 +682,19 @@ export default function Command() {
             {isOnline ? "Online" : "Offline"}
           </span>
         </button>
+        {destMode && destModeTarget && (
+          <div className="flex items-center gap-2 bg-primary/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg">
+            <Home size={11} className="text-white flex-shrink-0" />
+            <span className="text-[11px] font-bold text-white truncate max-w-[130px]">{destModeTarget.address.split(",")[0]}</span>
+            <button type="button" aria-label="Clear destination mode" onClick={() => {
+              setDestMode(false);
+              setDestModeTarget(null);
+              if (user) setDriverDestModeTarget(user.uid, null).catch(() => {});
+            }}>
+              <X size={11} className="text-white/70" />
+            </button>
+          </div>
+        )}
         {navDest && (
           rerouting ? (
             <div className="w-[calc(100%-32px)]">
@@ -894,7 +961,7 @@ export default function Command() {
       {/* ── IN-APP NAVIGATION SEARCH ── */}
       {navOpen && (
         <div className="fixed inset-0 z-[9999] flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { setNavOpen(false); setNavQuery(""); setNavResults([]); }} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setNavOpen(false); setNavQuery(""); setNavResults([]); setSettingHome(false); }} />
           <div className="relative w-full max-w-[430px] mx-auto bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col max-h-[80vh]">
             {/* Search input */}
             <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-border">
@@ -904,35 +971,104 @@ export default function Command() {
                 type="text"
                 value={navQuery}
                 onChange={(e) => searchPlaces(e.target.value)}
-                placeholder="Search destination..."
+                placeholder={settingHome ? "Search for your home address…" : "Search destination…"}
                 className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none"
               />
               {navSearching && <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />}
-              <button
-                type="button"
-                aria-label="Close search"
-                onClick={() => { setNavOpen(false); setNavQuery(""); setNavResults([]); }}
-              >
+              <button type="button" aria-label="Close search"
+                onClick={() => { setNavOpen(false); setNavQuery(""); setNavResults([]); setSettingHome(false); }}>
                 <X size={18} className="text-muted-foreground" />
               </button>
             </div>
-            {/* Results */}
+
             <div className="overflow-y-auto flex-1 pb-8">
-              {navResults.length === 0 && navQuery.length >= 2 && !navSearching && (
+              {/* ── Home + Destination Mode (shown when not actively searching) ── */}
+              {navQuery.length < 2 && (
+                <>
+                  {/* Destination Mode toggle */}
+                  {!settingHome && (
+                    <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">Destination Mode</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {destMode
+                            ? destModeTarget
+                              ? `Filtering → ${destModeTarget.address.split(",")[0]}`
+                              : "Search to set your destination"
+                            : "Only show rides headed your way"}
+                        </p>
+                      </div>
+                      <Toggle
+                        on={destMode}
+                        onToggle={() => {
+                          const next = !destMode;
+                          setDestMode(next);
+                          if (!next) {
+                            setDestModeTarget(null);
+                            if (user) setDriverDestModeTarget(user.uid, null).catch(() => {});
+                          }
+                        }}
+                        label="Toggle destination mode"
+                      />
+                    </div>
+                  )}
+
+                  {/* Home row */}
+                  <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-muted/30 flex items-center justify-center flex-shrink-0">
+                      <Home size={16} className="text-primary" />
+                    </div>
+                    {homeAddress ? (
+                      <>
+                        <button type="button" className="flex-1 min-w-0 text-left"
+                          onClick={() => applyNavDest(homeAddress.coords, homeAddress.address, "Home", homeAddress.address)}>
+                          <p className="text-sm font-semibold text-foreground">Home</p>
+                          <p className="text-xs text-muted-foreground truncate">{homeAddress.address}</p>
+                        </button>
+                        <button type="button" aria-label="Edit home address"
+                          onClick={() => setSettingHome(true)}
+                          className="flex-shrink-0 text-muted-foreground active:text-primary">
+                          <Pencil size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className="flex-1 text-left"
+                        onClick={() => setSettingHome(true)}>
+                        <p className="text-sm font-semibold text-foreground">Set home address</p>
+                        <p className="text-xs text-muted-foreground">Search and save your home</p>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Recent searches */}
+                  {recentSearches.length > 0 && (
+                    <>
+                      <p className="px-4 pt-3 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Recent</p>
+                      {recentSearches.map((r, i) => (
+                        <button key={i} type="button"
+                          onClick={() => applyNavDest(r.coords, `${r.name}, ${r.sub}`, r.name, r.sub)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 border-b border-border/50 text-left">
+                          <Clock size={15} className="text-muted-foreground flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{r.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{r.sub}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* ── Search results ── */}
+              {navQuery.length >= 2 && !navSearching && navResults.length === 0 && (
                 <p className="text-center text-sm text-muted-foreground py-10">No results found</p>
               )}
-              {navResults.length === 0 && navQuery.length < 2 && (
-                <p className="text-center text-sm text-muted-foreground py-10">Type to search for a destination</p>
-              )}
               {navResults.map((r, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => selectPlace(r)}
-                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 border-b border-border/50 text-left"
-                >
+                <button key={i} type="button" onClick={() => selectPlace(r)}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/30 active:bg-muted/50 border-b border-border/50 text-left">
                   <MapPin size={16} className="text-primary mt-0.5 flex-shrink-0" />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground truncate">{r.name}</p>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">{r.sub}</p>
                   </div>
