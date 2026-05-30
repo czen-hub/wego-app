@@ -94,6 +94,7 @@ export default function Command() {
   const spokenInstructionRef = useRef<string | null>(null);
   const distAnnouncedRef = useRef<{ instruction: string; initialDist: number; mileFired: boolean; halfFired: boolean; nearFired: boolean }>({ instruction: "", initialDist: 0, mileFired: false, halfFired: false, nearFired: false });
   const arrivedRef = useRef(false);
+  const prevSpeedLimitRef = useRef<number | null>(null);
   const navigatedRef = useRef(!!(location.state as { tripCompleted?: boolean } | null)?.tripCompleted);
 
   // Sync navDestRef so the interval below can read it without a stale closure
@@ -132,6 +133,7 @@ export default function Command() {
       spokenInstructionRef.current = null;
       setNavDistM(null);
       setSpeedMph(null);
+      setSpeedLimit(null);
       setRerouting(false);
       setRouteInfo(null);
     }
@@ -175,6 +177,16 @@ export default function Command() {
     const t = setTimeout(() => { setNavDest(null); setNavStep(null); arrivedRef.current = false; }, 4000);
     return () => clearTimeout(t);
   }, [navStep?.type, voiceEnabled]);
+
+  // Announce speed limit changes while on a route (queued, never interrupts turn instructions)
+  useEffect(() => {
+    if (speedLimit === null || !navDest) { prevSpeedLimitRef.current = null; return; }
+    if (speedLimit === prevSpeedLimitRef.current) return;
+    const prev = prevSpeedLimitRef.current;
+    prevSpeedLimitRef.current = speedLimit;
+    if (!voiceEnabled || !("speechSynthesis" in window) || prev === null) return;
+    window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance(`Speed limit ${speedLimit}`), { rate: 1.05 }));
+  }, [speedLimit, navDest, voiceEnabled]);
 
   // After 10 seconds of map idle, fly back to GPS — skip when route navigation is active
   useEffect(() => {
