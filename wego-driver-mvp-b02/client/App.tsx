@@ -11,22 +11,31 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { DispatchProvider } from "@/context/DispatchContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import GlobalRideAlert from "@/components/GlobalRideAlert";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Loader2, WifiOff } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
-import Login from "./pages/Login";
-import Command from "./pages/Command";
-import Earnings from "./pages/Earnings";
-import Legacy from "./pages/Legacy";
-import Governance from "./pages/Governance";
-import Inbox from "./pages/Inbox";
-import Settings from "./pages/Settings";
-import TripInProgress from "./pages/TripInProgress";
-import CourierJobs from "./pages/CourierJobs";
-import FoodPickups from "./pages/FoodPickups";
-import ScheduledRides from "./pages/ScheduledRides";
-import RideHistory from "./pages/RideHistory";
-import NotFound from "./pages/NotFound";
+
+const Login        = lazy(() => import("./pages/Login"));
+const Command      = lazy(() => import("./pages/Command"));
+const Earnings     = lazy(() => import("./pages/Earnings"));
+const Legacy       = lazy(() => import("./pages/Legacy"));
+const Governance   = lazy(() => import("./pages/Governance"));
+const Inbox        = lazy(() => import("./pages/Inbox"));
+const Settings     = lazy(() => import("./pages/Settings"));
+const TripInProgress = lazy(() => import("./pages/TripInProgress"));
+const CourierJobs  = lazy(() => import("./pages/CourierJobs"));
+const FoodPickups  = lazy(() => import("./pages/FoodPickups"));
+const ScheduledRides = lazy(() => import("./pages/ScheduledRides"));
+const RideHistory  = lazy(() => import("./pages/RideHistory"));
+const NotFound     = lazy(() => import("./pages/NotFound"));
+
+function PageLoader() {
+  return (
+    <div className="h-full flex items-center justify-center">
+      <Loader2 size={24} className="animate-spin text-primary" />
+    </div>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,6 +104,7 @@ const App = () => (
           <BrowserRouter>
             <DispatchProvider>
             <ErrorBoundary>
+              <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route
                   path="/login"
@@ -198,6 +208,7 @@ const App = () => (
                 />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </Suspense>
             </ErrorBoundary>
             </DispatchProvider>
           </BrowserRouter>

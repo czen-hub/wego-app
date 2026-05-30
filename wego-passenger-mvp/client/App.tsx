@@ -9,19 +9,28 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Loader2, WifiOff } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
-import Login from "./pages/Login";
-import Home from "./pages/Home";
-import RideRequest from "./pages/RideRequest";
-import RideInProgress from "./pages/RideInProgress";
-import RideHistory from "./pages/RideHistory";
-import Account from "./pages/Account";
-import CourierRequest from "./pages/CourierRequest";
-import FoodDelivery from "./pages/FoodDelivery";
-import ReserveRide from "./pages/ReserveRide";
-import NotFound from "./pages/NotFound";
+
+const Login          = lazy(() => import("./pages/Login"));
+const Home           = lazy(() => import("./pages/Home"));
+const RideRequest    = lazy(() => import("./pages/RideRequest"));
+const RideInProgress = lazy(() => import("./pages/RideInProgress"));
+const RideHistory    = lazy(() => import("./pages/RideHistory"));
+const Account        = lazy(() => import("./pages/Account"));
+const CourierRequest = lazy(() => import("./pages/CourierRequest"));
+const FoodDelivery   = lazy(() => import("./pages/FoodDelivery"));
+const ReserveRide    = lazy(() => import("./pages/ReserveRide"));
+const NotFound       = lazy(() => import("./pages/NotFound"));
+
+function PageLoader() {
+  return (
+    <div className="h-full flex items-center justify-center">
+      <Loader2 size={24} className="animate-spin text-primary" />
+    </div>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -94,6 +103,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <ErrorBoundary>
+              <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route
                   path="/login"
@@ -175,6 +185,7 @@ const App = () => (
                 />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </Suspense>
             </ErrorBoundary>
           </BrowserRouter>
         </AuthProvider>
