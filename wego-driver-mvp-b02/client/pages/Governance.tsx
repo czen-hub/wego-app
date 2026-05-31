@@ -55,7 +55,15 @@ interface Initiative {
   id: string;
   title: string;
   description: string;
-  deadline: string;
+  deadlineDate: Date;
+}
+
+function formatDeadline(target: Date): string {
+  const days = Math.ceil((target.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return "Voting closed";
+  if (days === 0) return "Closes today";
+  if (days === 1) return "Closes tomorrow";
+  return `Closes in ${days} days`;
 }
 
 const INITIATIVES: Initiative[] = [
@@ -63,13 +71,13 @@ const INITIATIVES: Initiative[] = [
     id: "init-08",
     title: "Initiative #08: Year 6 AV Fleet Sourcing",
     description: "Approve allocation of $450K from hardware reserve to purchase 3 additional autonomous vehicles for Q4 2026 deployment.",
-    deadline: "Closes in 5 days",
+    deadlineDate: new Date("2026-07-15"),
   },
   {
     id: "init-09",
     title: "Initiative #09: Adjust Target Pension Floor for Inflation",
     description: "Update the minimum pension floor calculation to account for 3.2% annual inflation, ensuring purchasing power for retiring members.",
-    deadline: "Closes in 8 days",
+    deadlineDate: new Date("2026-07-22"),
   },
 ];
 
@@ -136,29 +144,29 @@ export default function Governance() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
             Digital Member ID
           </p>
-          <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${cfg.cardGradient} border border-white/10 p-5 space-y-4`}>
+          <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${cfg.cardGradient} border border-white/10 p-3 space-y-2`}>
             <div className="card-shine absolute inset-0 opacity-10" />
 
-            <div className="relative z-10 space-y-4">
+            <div className="relative z-10 space-y-2">
               <div className="flex justify-between items-center">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/25 border border-white/50 rounded-full">
-                  <Shield size={13} className="text-white" />
-                  <span className="text-xs font-bold text-white">Verified</span>
+                <div className="flex items-center gap-1 px-2 py-1 bg-white/25 border border-white/50 rounded-full">
+                  <Shield size={11} className="text-white" />
+                  <span className="text-[11px] font-bold text-white">Verified</span>
                 </div>
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${cfg.badgeBg}`}>
-                  <Icon size={13} className={cfg.iconColor} />
-                  <span className={`text-xs font-bold ${cfg.badgeText}`}>{cfg.label}</span>
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-full border ${cfg.badgeBg}`}>
+                  <Icon size={11} className={cfg.iconColor} />
+                  <span className={`text-[11px] font-bold ${cfg.badgeText}`}>{cfg.label}</span>
                 </div>
               </div>
 
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-sm text-white/90 mb-0.5">Member Name</p>
-                  <p className="text-xl font-bold text-white leading-tight">{profile?.name || "Member"}</p>
+                  <p className="text-xs text-white/80">Member Name</p>
+                  <p className="text-base font-bold text-white leading-tight">{profile?.name || "Member"}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-white/90 mb-0.5">Status</p>
-                  <p className="text-sm font-semibold text-white">{profile?.membershipStatus === "founding" ? "Founding Member" : "Member"}</p>
+                  <p className="text-xs text-white/80">Status</p>
+                  <p className="text-xs font-semibold text-white">{profile?.membershipStatus === "founding" ? "Founding Member" : "Member"}</p>
                 </div>
               </div>
 
@@ -166,16 +174,16 @@ export default function Governance() {
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <p className="text-sm text-white/90 mb-0.5">Dues Paid</p>
-                  <p className="text-base font-bold text-white">$500</p>
+                  <p className="text-xs text-white/80">Dues Paid</p>
+                  <p className="text-sm font-bold text-white">$500</p>
                 </div>
                 <div>
-                  <p className="text-sm text-white/90 mb-0.5">Rides</p>
-                  <p className="text-base font-bold text-white">{rides}</p>
+                  <p className="text-xs text-white/80">Rides</p>
+                  <p className="text-sm font-bold text-white">{rides}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-white/90 mb-0.5">Voting</p>
-                  <p className="text-base font-bold text-white">1 Share</p>
+                  <p className="text-xs text-white/80">Voting</p>
+                  <p className="text-sm font-bold text-white">1 Share</p>
                 </div>
               </div>
 
@@ -231,7 +239,7 @@ export default function Governance() {
 
                   <div className="flex items-center gap-2 text-xs">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    <span className="text-muted-foreground">{initiative.deadline}</span>
+                    <span className="text-muted-foreground">{formatDeadline(initiative.deadlineDate)}</span>
                   </div>
 
                   {voted ? (

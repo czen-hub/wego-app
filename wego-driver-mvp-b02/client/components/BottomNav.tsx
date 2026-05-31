@@ -33,22 +33,22 @@ const BottomNav = () => {
               to={path}
               className="relative flex-1 flex flex-col items-center gap-1 py-2 select-none"
             >
-              {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary" />
-              )}
               <div className="relative">
                 <Icon
-                  size={22}
-                  strokeWidth={active ? 2.5 : 1.75}
-                  className={`transition-colors duration-200 ${active ? "text-primary" : "text-muted-foreground"}`}
+                  size={34}
+                  strokeWidth={active ? 3 : 2.5}
+                  className={`transition-colors duration-200 ${active ? "text-foreground" : "text-muted-foreground"}`}
                 />
                 {badge && !active && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary border-2 border-card" />
                 )}
               </div>
-              <span className={`text-[10px] font-semibold transition-colors duration-200 ${active ? "text-primary" : "text-muted-foreground"}`}>
+              <span className={`text-[10px] font-semibold transition-colors duration-200 ${active ? "text-foreground font-black" : "text-muted-foreground"}`}>
                 {label}
               </span>
+              {active && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-foreground" />
+              )}
             </Link>
           );
         })}

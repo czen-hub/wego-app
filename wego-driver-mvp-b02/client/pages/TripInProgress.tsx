@@ -977,7 +977,7 @@ export default function TripInProgress() {
             onClick={() => setVoiceEnabled((v) => { const next = !v; localStorage.setItem("wego_voice", next ? "on" : "off"); return next; })}
             className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${voiceEnabled ? "bg-white" : "bg-black"}`}
           >
-            {voiceEnabled ? <Volume2 size={18} className="text-black" /> : <VolumeX size={18} className="text-white" />}
+            {voiceEnabled ? <Volume2 size={22} strokeWidth={3} className="text-black" /> : <VolumeX size={22} strokeWidth={3} className="text-white" />}
           </button>
           <button
             type="button"
@@ -985,7 +985,7 @@ export default function TripInProgress() {
             aria-label="Report road issue"
             className="w-[42px] h-[42px] bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <AlertTriangle size={18} className="text-black" />
+            <AlertTriangle size={22} strokeWidth={3} className="text-black" />
           </button>
           <button
             type="button"
@@ -1005,7 +1005,7 @@ export default function TripInProgress() {
             aria-label="Recenter map"
             className="w-[42px] h-[42px] bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <Navigation size={18} className="text-black" />
+            <Navigation size={22} strokeWidth={3} className="text-black" />
           </button>
           <button
             type="button"
@@ -1020,7 +1020,7 @@ export default function TripInProgress() {
             aria-label="Show full route"
             className="w-[42px] h-[42px] bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <MapPin size={18} className="text-black" />
+            <MapPin size={22} strokeWidth={3} className="text-black" />
           </button>
           <button
             type="button"
@@ -1032,7 +1032,7 @@ export default function TripInProgress() {
             aria-label="Toggle heading-up mode"
             className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-black" : "bg-white"}`}
           >
-            <Compass size={18} className={headingUp ? "text-white" : "text-black"} />
+            <Compass size={22} strokeWidth={3} className={headingUp ? "text-white" : "text-black"} />
           </button>
         </div>
 

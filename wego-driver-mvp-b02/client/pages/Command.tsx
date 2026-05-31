@@ -603,7 +603,7 @@ export default function Command() {
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
 
         {/* Left side map buttons: Audio · Destination · Adjust · Preferences */}
-        <div className="absolute bottom-[160px] left-4 z-10 flex flex-col gap-2">
+        <div className="absolute bottom-[80px] left-4 z-10 flex flex-col gap-2">
           <button
             type="button"
             aria-label={voiceEnabled ? "Mute voice guidance" : "Unmute voice guidance"}
@@ -615,8 +615,8 @@ export default function Command() {
             className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
             {voiceEnabled
-              ? <Volume2 size={22} className="text-black" />
-              : <VolumeX size={22} className="text-black/40" />}
+              ? <Volume2 size={26} className="text-black" />
+              : <VolumeX size={26} className="text-black/40" />}
           </button>
           <button
             type="button"
@@ -624,30 +624,28 @@ export default function Command() {
             aria-label={navDest ? "Cancel navigation" : "Navigate to destination"}
             className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${navDest ? "bg-black" : "bg-white"}`}
           >
-            {navDest ? <X size={22} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={22} strokeWidth={2.5} className="text-black" />}
+            {navDest ? <X size={26} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={26} strokeWidth={2.5} className="text-black" />}
           </button>
-          {navDest && (
-            <button
-              type="button"
-              onClick={() => setAdjustingDest((a) => !a)}
-              aria-label={adjustingDest ? "Resume navigation" : "Adjust destination"}
-              className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${adjustingDest ? "bg-black" : "bg-white"}`}
-            >
-              <MapPin size={22} className={adjustingDest ? "text-white" : "text-black"} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => { setIssueDone(false); setIssueOpen(true); }}
+            aria-label="Report road issue"
+            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <AlertTriangle size={26} className="text-black" />
+          </button>
           <button
             type="button"
             onClick={() => setPrefsOpen(true)}
             aria-label="Open preferences"
             className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <SlidersHorizontal size={22} className="text-black" />
+            <SlidersHorizontal size={26} className="text-black" />
           </button>
         </div>
 
-        {/* Right side map buttons: Speed Limit · Recenter · Road Issue · Compass */}
-        <div className="absolute bottom-[160px] right-4 z-10 flex flex-col gap-2 items-center">
+        {/* Right side map buttons: Speed Limit · Recenter · Wide View · Compass */}
+        <div className="absolute bottom-[80px] right-4 z-10 flex flex-col gap-2 items-center">
           {speedLimit !== null && (
             <div className="w-12 bg-white border-[3px] border-black rounded-lg text-center shadow-xl leading-none pointer-events-none py-0.5">
               <p className="text-[7px] font-black text-black tracking-tight pt-0.5">SPEED</p>
@@ -664,15 +662,15 @@ export default function Command() {
             aria-label="Recenter map"
             className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <Navigation size={22} className="text-black" />
+            <Navigation size={26} className="text-black" />
           </button>
           <button
             type="button"
-            onClick={() => { setIssueDone(false); setIssueOpen(true); }}
-            aria-label="Report road issue"
-            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            onClick={() => setAdjustingDest((a) => !a)}
+            aria-label={adjustingDest ? "Resume navigation" : "Wide view"}
+            className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${adjustingDest ? "bg-black" : "bg-white"}`}
           >
-            <AlertTriangle size={22} className="text-black" />
+            <MapPin size={26} className={adjustingDest ? "text-white" : "text-black"} />
           </button>
           <button
             type="button"
@@ -684,7 +682,7 @@ export default function Command() {
             aria-label="Toggle heading-up mode"
             className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-black" : "bg-white"}`}
           >
-            <Compass size={22} className={headingUp ? "text-white" : "text-black"} />
+            <Compass size={26} className={headingUp ? "text-white" : "text-black"} />
           </button>
         </div>
       </div>
@@ -751,10 +749,10 @@ export default function Command() {
           <button
             type="button"
             onClick={handleToggleOnline}
-            className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg active:scale-95 transition-transform"
+            className="flex items-center gap-2 px-5 py-2.5 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg active:scale-95 transition-transform"
           >
-            <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-primary animate-pulse" : "bg-slate-400"}`} />
-            <span className={`text-xs font-bold uppercase tracking-widest ${isOnline ? "text-primary" : "text-muted-foreground"}`}>
+            <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-primary animate-pulse" : "bg-slate-400"}`} />
+            <span className={`text-sm font-black uppercase tracking-widest ${isOnline ? "text-primary" : "text-muted-foreground"}`}>
               {isOnline ? "Online" : "Offline"}
             </span>
           </button>
@@ -821,21 +819,22 @@ export default function Command() {
       {/* ── BOTTOM SHEET ── */}
       <div
         className={`absolute bottom-0 left-0 right-0 z-20 bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ease-out max-h-[72%] ${
-          drawerOpen ? "translate-y-0" : "translate-y-[calc(100%-104px)]"
+          drawerOpen ? "translate-y-0" : "translate-y-[calc(100%-28px)]"
         }`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Handle area — tap anywhere to toggle */}
+        {/* Handle area — tap to toggle */}
         <div
-          className="flex-shrink-0 pt-2.5 pb-3 px-4 cursor-pointer"
+          className="flex-shrink-0 pt-2 pb-2 px-4 cursor-pointer"
           onClick={() => { if (!hasRequest) setDrawerOpen((o) => !o); }}
         >
-          <div className="w-10 h-1 bg-muted-foreground/25 rounded-full mx-auto mb-3" />
-
-          <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3">
-            <span className="flex-1 text-base font-medium text-muted-foreground select-none">Daily Opportunities</span>
-          </div>
+          <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto" />
+          {drawerOpen && (
+            <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3 mt-3">
+              <span className="flex-1 text-base font-medium text-muted-foreground select-none">Daily Opportunities</span>
+            </div>
+          )}
         </div>
 
         {/* Scrollable content */}
