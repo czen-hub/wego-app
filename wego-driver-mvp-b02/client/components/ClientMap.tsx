@@ -44,6 +44,13 @@ function dotEl(color: string, border = "white", glow = "rgba(0,0,0,0.4)") {
   return el;
 }
 
+function draggablePinEl(): HTMLElement {
+  const el = document.createElement("div");
+  el.style.cssText = "width:26px;height:34px;cursor:grab;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.45));";
+  el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="34" viewBox="0 0 26 34"><path d="M13 0C5.82 0 0 5.82 0 13c0 8.67 13 21 13 21s13-12.33 13-21C26 5.82 20.18 0 13 0z" fill="white" stroke="#1e293b" stroke-width="1.5"/><circle cx="13" cy="13" r="5" fill="#1e293b"/></svg>`;
+  return el;
+}
+
 function navArrowEl(bearing: number): { wrapper: HTMLDivElement; inner: HTMLDivElement } {
   // Mapbox sets translate(...) on the wrapper — we must not touch wrapper's transform.
   // We apply rotate(...) only to the inner element to avoid fighting Mapbox's positioning.
@@ -92,11 +99,13 @@ interface ClientMapProps {
   interactive?: boolean;
   zoomAdjust?: number;
   forceResetToken?: number;
+  fitRouteToken?: number;
   followBearing?: boolean;
   navMode?: boolean;
   onCenterChange?: (coords: [number, number]) => void;
   onClickLocation?: (coords: [number, number]) => void;
   onStepChange?: (step: RouteStep | null) => void;
+  onAllStepsChange?: (steps: RouteStep[]) => void;
   onDistanceChange?: (meters: number) => void;
   onSpeedLimitChange?: (mph: number | null) => void;
   onCameraApproach?: () => void;
@@ -104,6 +113,7 @@ interface ClientMapProps {
   onRerouting?: () => void;
   onRouteInfoChange?: (info: { remainingM: number; remainingSecs: number }) => void;
   surgeZones?: Array<{ lat: number; lng: number; radiusM: number; label: string }>;
+  onToDrag?: (coords: [number, number]) => void;
 }
 
 export default function ClientMap({
@@ -118,11 +128,13 @@ export default function ClientMap({
   interactive = false,
   zoomAdjust = 0,
   forceResetToken,
+  fitRouteToken,
   followBearing = false,
   navMode = false,
   onCenterChange,
   onClickLocation,
   onStepChange,
+  onAllStepsChange,
   onDistanceChange,
   onSpeedLimitChange,
   onCameraApproach,
@@ -130,6 +142,7 @@ export default function ClientMap({
   onRerouting,
   onRouteInfoChange,
   surgeZones,
+  onToDrag,
 }: ClientMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -162,6 +175,7 @@ export default function ClientMap({
   const onCenterChangeRef = useRef(onCenterChange);
   const onClickRef = useRef(onClickLocation);
   const onStepRef = useRef(onStepChange);
+  const onAllStepsRef = useRef(onAllStepsChange);
   const onDistanceChangeRef = useRef(onDistanceChange);
   const accuracyRef = useRef<number | null>(accuracy ?? null);
   const posBufferRef = useRef<[number, number][]>([]);
@@ -175,6 +189,7 @@ export default function ClientMap({
   const nearestCoordIdxRef = useRef(0);
   const cameraFetchGenRef = useRef(0);
   const onSpeedLimitRef = useRef(onSpeedLimitChange);
+  const lastTileSpeedLimitQueryRef = useRef(0);
   const onCameraApproachRef = useRef(onCameraApproach);
   const prevTimeRef = useRef<number | null>(null);
   const lastRerouteRef = useRef<number>(0);
@@ -184,6 +199,7 @@ export default function ClientMap({
   const onSpeedRef = useRef(onSpeedChange);
   const onReroutingRef = useRef(onRerouting);
   const onRouteInfoRef = useRef(onRouteInfoChange);
+  const onToDragRef = useRef(onToDrag);
 
   const isInteractingRef = useRef(false);
   const isTrackingRef = useRef(true);
@@ -196,12 +212,14 @@ export default function ClientMap({
   useEffect(() => { onCenterChangeRef.current = onCenterChange; }, [onCenterChange]);
   useEffect(() => { onClickRef.current = onClickLocation; }, [onClickLocation]);
   useEffect(() => { onStepRef.current = onStepChange; }, [onStepChange]);
+  useEffect(() => { onAllStepsRef.current = onAllStepsChange; }, [onAllStepsChange]);
   useEffect(() => { onDistanceChangeRef.current = onDistanceChange; }, [onDistanceChange]);
   useEffect(() => { onSpeedLimitRef.current = onSpeedLimitChange; }, [onSpeedLimitChange]);
   useEffect(() => { onCameraApproachRef.current = onCameraApproach; }, [onCameraApproach]);
   useEffect(() => { onSpeedRef.current = onSpeedChange; }, [onSpeedChange]);
   useEffect(() => { onReroutingRef.current = onRerouting; }, [onRerouting]);
   useEffect(() => { onRouteInfoRef.current = onRouteInfoChange; }, [onRouteInfoChange]);
+  useEffect(() => { onToDragRef.current = onToDrag; }, [onToDrag]);
   useEffect(() => { centerRef.current = center; }, [center]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
@@ -216,6 +234,9 @@ export default function ClientMap({
       duration: 1000,
       essential: true,
     };
+
+    // Maintain street-level zoom on every GPS tick so nothing can silently override it
+    if (navModeRef.current) options.zoom = 18;
 
     if (targetCenter) {
       options.center = [targetCenter[1], targetCenter[0]];
@@ -297,14 +318,27 @@ export default function ClientMap({
       lastProgrammaticRef.current = Date.now() + 2500;
       map.easeTo({
         center: [centerRef.current[1], centerRef.current[0]],
-        zoom: 17,
+        zoom: 18,
         pitch: 50,
         bearing: followBearingRef.current ? bearingRef.current : map.getBearing(),
         duration: 1500,
         essential: true,
       });
     } else {
-      map.easeTo({ pitch: 0, duration: 600 });
+      isTrackingRef.current = false;
+      const routeCoords = routeCoordsRef.current;
+      if (routeCoords.length > 1 && mbRef.current) {
+        // Zoom out to show full route so driver can see and drag the destination pin
+        const bounds = new mbRef.current.LngLatBounds();
+        routeCoords.forEach(([lng, lat]: [number, number]) => bounds.extend([lng, lat]));
+        lastProgrammaticRef.current = Date.now() + 1500;
+        map.easeTo({ pitch: 0, duration: 400, essential: true });
+        setTimeout(() => {
+          map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 800, essential: true });
+        }, 420);
+      } else {
+        map.easeTo({ pitch: 0, duration: 600 });
+      }
     }
   }, [navMode, mapReady]);
 
@@ -544,7 +578,7 @@ export default function ClientMap({
 
     map.flyTo({
       center: [centerRef.current[1], centerRef.current[0]],
-      zoom: navModeRef.current ? 17 : zoomRef.current,
+      zoom: navModeRef.current ? 18 : zoomRef.current,
       bearing: followBearingRef.current ? map.getBearing() : 0,
       pitch: navModeRef.current ? 50 : 0,
       duration: 2000,
@@ -552,10 +586,30 @@ export default function ClientMap({
     });
   }, [forceResetToken, mapReady]);
 
+  // — fitRoute —
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map || !fitRouteToken) return;
+    const coords = routeCoordsRef.current;
+    if (coords.length < 2) return;
+    isTrackingRef.current = false;
+    lastProgrammaticRef.current = Date.now() + 2000;
+    const mb = mbRef.current;
+    if (!mb) return;
+    const bounds = new mb.LngLatBounds();
+    coords.forEach(([lng, lat]: [number, number]) => bounds.extend([lng, lat]));
+    map.easeTo({ pitch: 0, bearing: 0, duration: 300, essential: true });
+    setTimeout(() => {
+      map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 800, essential: true });
+    }, 320);
+  }, [fitRouteToken, mapReady]);
+
   // — zoomAdjust —
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
+    // navMode controls its own zoom — don't override with the base zoom
+    if (navModeRef.current) return;
     map.setZoom(baseZoomRef.current + zoomAdjust);
   }, [zoomAdjust, mapReady]);
 
@@ -600,9 +654,20 @@ export default function ClientMap({
     toMkRef.current?.remove();
     toMkRef.current = null;
     if (to) {
-      toMkRef.current = new mb.Marker({ element: dotEl("white", "#1e293b") })
+      const mk = new mb.Marker({
+        element: onToDragRef.current ? draggablePinEl() : dotEl("white", "#1e293b"),
+        draggable: !!onToDragRef.current,
+        anchor: onToDragRef.current ? "bottom" : "center",
+      })
         .setLngLat([to[1], to[0]])
         .addTo(map);
+      if (onToDragRef.current) {
+        mk.on("dragend", () => {
+          const ll = mk.getLngLat();
+          onToDragRef.current?.([ll.lat, ll.lng]);
+        });
+      }
+      toMkRef.current = mk;
     }
 
     // via marker
@@ -661,7 +726,8 @@ export default function ClientMap({
         lastProgrammaticRef.current = Date.now() + 500;
         if (same) {
           map.flyTo({ center: [from[1], from[0]], zoom, animate: false });
-        } else {
+        } else if (!navModeRef.current) {
+          // In nav mode the camera already follows the driver; don't zoom out to show full route
           const bounds = new mb.LngLatBounds();
           pts.forEach(([lng, lat]) => bounds.extend([lng, lat]));
           map.fitBounds(bounds, { padding: 48, maxZoom: 14, animate: false });
@@ -689,10 +755,12 @@ export default function ClientMap({
             setSource("route", route.geometry.coordinates);
             setSource("route-dash", []);
 
-            const bounds = new mb.LngLatBounds();
-            (route.geometry.coordinates as [number, number][]).forEach((c) => bounds.extend(c));
-            lastProgrammaticRef.current = Date.now() + 500;
-            mapRef.current.fitBounds(bounds, { padding: 48, maxZoom: 14, animate: false });
+            if (!navModeRef.current) {
+              const bounds = new mb.LngLatBounds();
+              (route.geometry.coordinates as [number, number][]).forEach((c) => bounds.extend(c));
+              lastProgrammaticRef.current = Date.now() + 500;
+              mapRef.current.fitBounds(bounds, { padding: 48, maxZoom: 14, animate: false });
+            }
 
             const steps: any[] = [];
             for (const leg of route.legs ?? []) steps.push(...(leg.steps ?? []));
@@ -703,6 +771,7 @@ export default function ClientMap({
             if (steps.length > 0) {
               stepIdxRef.current = 0;
               onStepRef.current?.(buildStep(steps[0], steps[1]));
+              onAllStepsRef.current?.(steps.map((s: any, i: number) => buildStep(s, steps[i + 1])));
             }
 
             // Cumulative remaining distance + duration from each step to end
@@ -922,12 +991,60 @@ export default function ClientMap({
         if (d < nearestRouteDist) { nearestRouteDist = d; best = i; }
       }
       nearestCoordIdxRef.current = best;
+      // Try route annotation first; fall through to tile query if null
+      let annotationSl: number | null = null;
       if (maxspeedsRef.current.length > 0) {
-        const sl = maxspeedsRef.current[Math.min(best, maxspeedsRef.current.length - 1)] ?? null;
-        if (sl !== lastSpeedLimitRef.current) {
-          lastSpeedLimitRef.current = sl;
-          onSpeedLimitRef.current?.(sl);
+        annotationSl = maxspeedsRef.current[Math.min(best, maxspeedsRef.current.length - 1)] ?? null;
+      }
+      if (annotationSl !== null) {
+        if (annotationSl !== lastSpeedLimitRef.current) {
+          lastSpeedLimitRef.current = annotationSl;
+          onSpeedLimitRef.current?.(annotationSl);
         }
+      } else {
+        // Annotation missing for this segment — query map tiles (throttled 5s)
+        const now = Date.now();
+        if (now - lastTileSpeedLimitQueryRef.current > 5000 && mapRef.current) {
+          lastTileSpeedLimitQueryRef.current = now;
+          try {
+            const pt = mapRef.current.project([driverPos[1], driverPos[0]]);
+            const features = mapRef.current.queryRenderedFeatures([pt.x, pt.y]) as any[];
+            let sl: number | null = null;
+            for (const f of features) {
+              const ms = f.properties?.maxspeed;
+              if (ms && typeof ms === "number" && ms > 0) {
+                sl = Math.round(ms * 0.621371);
+                break;
+              }
+            }
+            if (sl !== lastSpeedLimitRef.current) {
+              lastSpeedLimitRef.current = sl;
+              onSpeedLimitRef.current?.(sl);
+            }
+          } catch {}
+        }
+      }
+    } else {
+      // No active route — query map tiles for speed limit at current position (throttled to 5s)
+      const now = Date.now();
+      if (now - lastTileSpeedLimitQueryRef.current > 5000 && mapRef.current) {
+        lastTileSpeedLimitQueryRef.current = now;
+        try {
+          const pt = mapRef.current.project([driverPos[1], driverPos[0]]);
+          const features = mapRef.current.queryRenderedFeatures([pt.x, pt.y]) as any[];
+          let sl: number | null = null;
+          for (const f of features) {
+            const ms = f.properties?.maxspeed;
+            if (ms && typeof ms === "number" && ms > 0) {
+              sl = Math.round(ms * 0.621371);
+              break;
+            }
+          }
+          if (sl !== lastSpeedLimitRef.current) {
+            lastSpeedLimitRef.current = sl;
+            onSpeedLimitRef.current?.(sl);
+          }
+        } catch {}
       }
     }
 

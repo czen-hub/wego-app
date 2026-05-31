@@ -19,6 +19,8 @@ import { type Ride, type EarningsEntry, type Opportunity, type RoadIssueType, ty
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 
+const _drag = { on: false, x: 0, sl: 0 };
+
 function bearingBetween(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const r = (d: number) => (d * Math.PI) / 180;
   const dLng = r(lng2 - lng1);
@@ -52,7 +54,7 @@ export default function Command() {
   const { user, profile } = useAuth();
   const dispatch = useDispatchContext();
   const { isOnline, setOnline, incomingRides, activeRide, locationError, rideListenerError } = dispatch;
-  const { coords: currentCoords, accuracy, loading: locationLoading } = useCurrentLocation();
+  const { coords: currentCoords, accuracy, loading: locationLoading, error: locationDenied } = useCurrentLocation();
   const mapCenter: [number, number] = currentCoords ?? [37.3541, -121.9552];
 
   const [mapResetToken, setMapResetToken] = useState(0);
@@ -62,12 +64,14 @@ export default function Command() {
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const [onlineError, setOnlineError] = useState<string | null>(null);
   const [offlineBlockOpen, setOfflineBlockOpen] = useState(false);
+  const [locationPromptOpen, setLocationPromptOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [navQuery, setNavQuery] = useState("");
   const [navResults, setNavResults] = useState<{ name: string; sub: string; mapbox_id: string }[]>([]);
   const [navDest, setNavDest] = useState<{ coords: [number, number]; name: string } | null>(null);
   const [navStep, setNavStep] = useState<RouteStep | null>(null);
   const [navMode, setNavMode] = useState(false);
+  const [adjustingDest, setAdjustingDest] = useState(false);
   const [navSearching, setNavSearching] = useState(false);
   const navSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -114,16 +118,16 @@ export default function Command() {
   // Sync navDestRef so the interval below can read it without a stale closure
   useEffect(() => { navDestRef.current = navDest; }, [navDest]);
 
-  // 3-second overview then switch to street-level nav mode
+  // 3-second overview then switch to street-level nav mode (paused while adjusting destination)
   useEffect(() => {
     if (navModeTimerRef.current) clearTimeout(navModeTimerRef.current);
-    if (navDest) {
+    if (navDest && !adjustingDest) {
       navModeTimerRef.current = setTimeout(() => setNavMode(true), 3000);
     } else {
       setNavMode(false);
     }
     return () => { if (navModeTimerRef.current) clearTimeout(navModeTimerRef.current); };
-  }, [navDest]);
+  }, [navDest, adjustingDest]);
 
   // Speak each new turn instruction aloud when in destination mode
   useEffect(() => {
@@ -147,7 +151,6 @@ export default function Command() {
       spokenInstructionRef.current = null;
       setNavDistM(null);
       setSpeedMph(null);
-      setSpeedLimit(null);
       setRerouting(false);
       setRouteInfo(null);
     }
@@ -201,6 +204,13 @@ export default function Command() {
     if (!voiceEnabled || !("speechSynthesis" in window) || prev === null) return;
     window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance(`Speed limit ${speedLimit}`), { rate: 1.05 }));
   }, [speedLimit, navDest, voiceEnabled]);
+
+  // Show location prompt if GPS is denied and driver is not loading
+  useEffect(() => {
+    if (!locationLoading && locationDenied && !currentCoords) {
+      setLocationPromptOpen(true);
+    }
+  }, [locationLoading, locationDenied, currentCoords]);
 
   // After 10 seconds of map idle, fly back to GPS — skip when route navigation is active
   useEffect(() => {
@@ -339,6 +349,7 @@ export default function Command() {
 
   const handleToggleOnline = async () => {
     if (isOnline && activeRide) { setOfflineBlockOpen(true); return; }
+    if (!isOnline && !currentCoords) { setLocationPromptOpen(true); return; }
     try {
       await setOnline(!isOnline);
       if (isOnline) setDeclinedRideId(null);
@@ -561,23 +572,14 @@ export default function Command() {
             onClickLocation={() => setDrawerOpen(false)}
             onStepChange={handleNavStepChange}
             onDistanceChange={setNavDistM}
-            onSpeedLimitChange={navDest ? setSpeedLimit : undefined}
+            onSpeedLimitChange={setSpeedLimit}
             onCameraApproach={navDest ? handleCameraApproach : undefined}
             onSpeedChange={navDest ? setSpeedMph : undefined}
             onRerouting={navDest ? handleRerouting : undefined}
             onRouteInfoChange={navDest ? setRouteInfo : undefined}
+            onToDrag={navDest ? (coords) => { setNavDest((prev) => prev ? { ...prev, coords } : prev); setAdjustingDest(false); } : undefined}
             surgeZones={surgeZones}
           />
-        )}
-        {/* Speed limit badge */}
-        {speedLimit !== null && navDest && (
-          <div className="absolute bottom-[168px] left-4 z-10 pointer-events-none">
-            <div className="w-11 bg-white border-[2.5px] border-black rounded text-center shadow-xl leading-none">
-              <p className="text-[6px] font-black text-black tracking-tight pt-0.5">SPEED</p>
-              <p className="text-[6px] font-black text-black tracking-tight">LIMIT</p>
-              <p className="text-[20px] font-black text-black leading-snug pb-0.5">{speedLimit}</p>
-            </div>
-          </div>
         )}
 
         {/* Camera warning toast */}
@@ -600,7 +602,7 @@ export default function Command() {
 
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
 
-        {/* Left side map buttons: Audio · Destination · Preferences */}
+        {/* Left side map buttons: Audio · Destination · Adjust · Preferences */}
         <div className="absolute bottom-[160px] left-4 z-10 flex flex-col gap-2">
           <button
             type="button"
@@ -610,32 +612,49 @@ export default function Command() {
               setVoiceEnabled(next);
               localStorage.setItem("wego_voice", next ? "on" : "off");
             }}
-            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
             {voiceEnabled
-              ? <Volume2 size={18} className="text-primary" />
-              : <VolumeX size={18} className="text-muted-foreground" />}
+              ? <Volume2 size={22} className="text-black" />
+              : <VolumeX size={22} className="text-black/40" />}
           </button>
           <button
             type="button"
-            onClick={() => navDest ? (setNavDest(null), setNavStep(null)) : setNavOpen(true)}
+            onClick={() => navDest ? (setNavDest(null), setNavStep(null), setAdjustingDest(false)) : setNavOpen(true)}
             aria-label={navDest ? "Cancel navigation" : "Navigate to destination"}
-            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${navDest ? "bg-destructive" : "bg-primary"}`}
+            className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${navDest ? "bg-black" : "bg-white"}`}
           >
-            {navDest ? <X size={20} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={20} strokeWidth={2.5} className="text-background" />}
+            {navDest ? <X size={22} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={22} strokeWidth={2.5} className="text-black" />}
           </button>
+          {navDest && (
+            <button
+              type="button"
+              onClick={() => setAdjustingDest((a) => !a)}
+              aria-label={adjustingDest ? "Resume navigation" : "Adjust destination"}
+              className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${adjustingDest ? "bg-black" : "bg-white"}`}
+            >
+              <MapPin size={22} className={adjustingDest ? "text-white" : "text-black"} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setPrefsOpen(true)}
             aria-label="Open preferences"
-            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <SlidersHorizontal size={18} className="text-primary" />
+            <SlidersHorizontal size={22} className="text-black" />
           </button>
         </div>
 
-        {/* Right side map buttons: Recenter · Road Issue · Compass */}
-        <div className="absolute bottom-[160px] right-4 z-10 flex flex-col gap-2">
+        {/* Right side map buttons: Speed Limit · Recenter · Road Issue · Compass */}
+        <div className="absolute bottom-[160px] right-4 z-10 flex flex-col gap-2 items-center">
+          {speedLimit !== null && (
+            <div className="w-12 bg-white border-[3px] border-black rounded-lg text-center shadow-xl leading-none pointer-events-none py-0.5">
+              <p className="text-[7px] font-black text-black tracking-tight pt-0.5">SPEED</p>
+              <p className="text-[7px] font-black text-black tracking-tight">LIMIT</p>
+              <p className="text-[22px] font-black text-black leading-tight pb-0.5">{speedLimit}</p>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -643,17 +662,17 @@ export default function Command() {
               setMapResetToken((n) => n + 1);
             }}
             aria-label="Recenter map"
-            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <Navigation size={18} className="text-primary" />
+            <Navigation size={22} className="text-black" />
           </button>
           <button
             type="button"
             onClick={() => { setIssueDone(false); setIssueOpen(true); }}
             aria-label="Report road issue"
-            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <AlertTriangle size={18} className="text-amber-500" />
+            <AlertTriangle size={22} className="text-black" />
           </button>
           <button
             type="button"
@@ -663,103 +682,102 @@ export default function Command() {
               if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
             }}
             aria-label="Toggle heading-up mode"
-            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"}`}
+            className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-black" : "bg-white"}`}
           >
-            <Compass size={18} className={headingUp ? "text-background" : "text-primary"} />
+            <Compass size={22} className={headingUp ? "text-white" : "text-black"} />
           </button>
         </div>
       </div>
 
-      {/* ── ONLINE / OFFLINE BADGE — top center, always visible, tappable ── */}
-      <div className="absolute top-4 left-0 right-0 z-20 flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={handleToggleOnline}
-          className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg active:scale-95 transition-transform"
-        >
-          <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-primary animate-pulse" : "bg-slate-400"}`} />
-          <span className={`text-xs font-bold uppercase tracking-widest ${isOnline ? "text-primary" : "text-muted-foreground"}`}>
-            {isOnline ? "Online" : "Offline"}
-          </span>
-        </button>
-        {destMode && destModeTarget && (
-          <div className="flex items-center gap-2 bg-primary/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg">
-            <Home size={11} className="text-white flex-shrink-0" />
-            <span className="text-[11px] font-bold text-white truncate max-w-[130px]">{destModeTarget.address.split(",")[0]}</span>
-            <button type="button" aria-label="Clear destination mode" onClick={() => {
-              setDestMode(false);
-              setDestModeTarget(null);
-              if (user) setDriverDestModeTarget(user.uid, null).catch(() => {});
-            }}>
-              <X size={11} className="text-white/70" />
-            </button>
-          </div>
-        )}
-        {navDest && (
-          rerouting ? (
-            <div className="w-[calc(100%-32px)]">
-              <div className="flex items-center gap-3 bg-card/95 backdrop-blur-sm border border-primary/20 rounded-xl shadow-lg px-4 py-3">
-                <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
-                <p className="text-sm font-bold text-foreground flex-1 min-w-0">Recalculating route…</p>
-                <button type="button" aria-label="Cancel navigation"
-                  onClick={() => { setNavDest(null); setNavStep(null); setRerouting(false); }}
-                  className="flex-shrink-0">
-                  <X size={14} className="text-muted-foreground" />
-                </button>
-              </div>
+      {/* ── NAV DIRECTION BANNER — full width top, large for dashboard viewing ── */}
+      {navDest && (
+        <div className="absolute top-0 left-0 right-0 z-20 nav-banner-safe">
+          {rerouting ? (
+            <div className="flex items-center gap-3 bg-card shadow-xl px-4 py-4">
+              <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+              <p className="text-lg font-black text-foreground flex-1 min-w-0">Recalculating route…</p>
+              <button type="button" aria-label="Cancel navigation" onClick={() => { setNavDest(null); setNavStep(null); setRerouting(false); }}>
+                <X size={20} className="text-muted-foreground" />
+              </button>
             </div>
           ) : (
-            <div className="w-[calc(100%-32px)] space-y-1">
-              {/* Main turn card */}
-              <div className="flex items-stretch bg-card/95 backdrop-blur-sm border border-primary/20 rounded-xl shadow-lg overflow-hidden">
-                {/* Colored icon block */}
-                <div className="w-12 bg-primary flex-shrink-0 flex items-center justify-center">
+            <>
+              {/* Main turn — large dashboard card */}
+              <div className="flex items-stretch bg-card shadow-xl overflow-hidden">
+                <div className="w-20 bg-primary flex-shrink-0 flex items-center justify-center">
                   {navStep
-                    ? <TurnIcon type={navStep.type} modifier={navStep.modifier} size={20} />
-                    : <Navigation size={18} className="text-white" />}
+                    ? <TurnIcon type={navStep.type} modifier={navStep.modifier} size={36} />
+                    : <Navigation size={30} className="text-white" />}
                 </div>
-                {/* Text */}
-                <div className="flex-1 min-w-0 px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-foreground leading-snug flex-1 min-w-0 truncate">
-                      {navStep?.instruction ?? "Calculating route…"}
+                <div className="flex-1 min-w-0 px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-2xl font-black text-foreground leading-tight flex-1 min-w-0 break-words">
+                      {navStep?.instruction ?? "Calculating…"}
                     </p>
                     {navDistM != null && (
-                      <span className="text-sm font-bold text-primary flex-shrink-0 tabular-nums">
+                      <span className="text-2xl font-black text-primary flex-shrink-0 tabular-nums pl-1">
                         {formatDist(navDistM)}
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                  <p className="text-sm text-muted-foreground mt-0.5 truncate">
                     {routeInfo
-                      ? `${formatDist(routeInfo.remainingM)} remaining  ·  ${Math.ceil(routeInfo.remainingSecs / 60)} min`
+                      ? `${formatDist(routeInfo.remainingM)} remaining · ${Math.ceil(routeInfo.remainingSecs / 60)} min`
                       : navStep?.name || navDest.name.split(",")[0]}
                   </p>
                 </div>
-                {/* Cancel */}
                 <button type="button" aria-label="Cancel navigation"
                   onClick={() => { setNavDest(null); setNavStep(null); setRerouting(false); setRouteInfo(null); }}
-                  className="px-2.5 flex items-center border-l border-border/40">
-                  <X size={14} className="text-muted-foreground" />
+                  className="px-3 flex items-center border-l border-border/30">
+                  <X size={20} className="text-muted-foreground" />
                 </button>
               </div>
-              {/* Next step preview */}
+              {/* Next step */}
               {navStep?.nextStep && (
-                <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg shadow">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex-shrink-0">then</span>
-                  <TurnIcon type={navStep.nextStep.type} modifier={navStep.nextStep.modifier} size={13} className="text-muted-foreground flex-shrink-0" />
-                  <p className="text-xs text-foreground font-medium truncate">{navStep.nextStep.instruction}</p>
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-secondary border-b border-border shadow">
+                  <span className="text-xs font-black text-muted-foreground uppercase tracking-widest flex-shrink-0">THEN</span>
+                  <TurnIcon type={navStep.nextStep.type} modifier={navStep.nextStep.modifier} size={18} className="text-muted-foreground flex-shrink-0" />
+                  <p className="text-base font-bold text-foreground truncate">{navStep.nextStep.instruction}</p>
                 </div>
               )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── ONLINE / OFFLINE BADGE — hidden during navigation ── */}
+      {!navDest && (
+        <div className="absolute top-4 left-0 right-0 z-20 flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={handleToggleOnline}
+            className="flex items-center gap-2 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border rounded-full shadow-lg active:scale-95 transition-transform"
+          >
+            <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-primary animate-pulse" : "bg-slate-400"}`} />
+            <span className={`text-xs font-bold uppercase tracking-widest ${isOnline ? "text-primary" : "text-muted-foreground"}`}>
+              {isOnline ? "Online" : "Offline"}
+            </span>
+          </button>
+          {destMode && destModeTarget && (
+            <div className="flex items-center gap-2 bg-primary/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg">
+              <Home size={11} className="text-white flex-shrink-0" />
+              <span className="text-[11px] font-bold text-white truncate max-w-[130px]">{destModeTarget.address.split(",")[0]}</span>
+              <button type="button" aria-label="Clear destination mode" onClick={() => {
+                setDestMode(false);
+                setDestModeTarget(null);
+                if (user) setDriverDestModeTarget(user.uid, null).catch(() => {});
+              }}>
+                <X size={11} className="text-white/70" />
+              </button>
             </div>
-          )
-        )}
-        {onlineError && (
-          <div className="bg-destructive text-destructive-foreground text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
-            {onlineError}
-          </div>
-        )}
-      </div>
+          )}
+          {onlineError && (
+            <div className="bg-destructive text-destructive-foreground text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
+              {onlineError}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── INCOMING REQUEST CARD ── */}
       {isOnline && hasRequest && pendingRide && (
@@ -830,20 +848,30 @@ export default function Command() {
                 <p className="text-xs text-muted-foreground">No active bonus zones right now. Check back soon.</p>
               </div>
             ) : (
-              <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
+              <div
+                className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none cursor-grab active:cursor-grabbing select-none"
+                onMouseDown={(e) => { _drag.on = true; _drag.x = e.pageX; _drag.sl = e.currentTarget.scrollLeft; }}
+                onMouseLeave={() => { _drag.on = false; }}
+                onMouseUp={() => { _drag.on = false; }}
+                onMouseMove={(e) => { if (!_drag.on) return; e.preventDefault(); e.currentTarget.scrollLeft = _drag.sl - (e.pageX - _drag.x); }}
+              >
                 {liveOpps.map((opp) => {
                   const Icon = ICON_MAP[opp.iconName] ?? Target;
                   return (
-                    <button key={opp.id} type="button" className="flex-1 min-w-[140px] bg-background border border-border rounded-xl p-3 text-left space-y-2 hover:border-primary/40 active:scale-95 transition-all duration-150">
-                      <div className="flex items-start justify-between">
-                        <div className="p-1.5 rounded-lg bg-primary/10"><Icon size={16} className="text-primary" /></div>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">{opp.tag}</span>
+                    <button key={opp.id} type="button" className="flex-none w-[148px] bg-background border border-border rounded-xl p-3 text-left hover:border-primary/40 active:scale-95 transition-all duration-150 flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <Icon size={15} className="text-primary" />
+                        </div>
+                        {opp.tag ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary truncate">{opp.tag}</span>
+                        ) : null}
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-foreground">{opp.title}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{opp.detail}</p>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-foreground leading-tight">{opp.title}</p>
+                        {opp.detail ? <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight line-clamp-2">{opp.detail}</p> : null}
                       </div>
-                      <p className="text-base font-bold text-primary">{opp.bonus}</p>
+                      <p className="text-sm font-bold text-primary">{opp.bonus}</p>
                     </button>
                   );
                 })}
@@ -1093,6 +1121,46 @@ export default function Command() {
               <button type="button" onClick={() => { setOfflineBlockOpen(false); navigate("/trip", { replace: true, state: { riderName: activeRide?.passengerName, pickupLocation: activeRide?.pickupAddress, dropoffLocation: activeRide?.dropoffAddress, riderPayment: activeRide?.fare, coopFee: activeRide?.coopFee, driverTake: activeRide?.driverTake, estimatedTime: activeRide?.estimatedMinutes, isAdvanced: activeRide?.isAdvanced, type: activeRide?.type, rideId: activeRide?.id, pickupCoords: activeRide?.pickupLocation ? [activeRide.pickupLocation.latitude, activeRide.pickupLocation.longitude] as [number,number] : undefined, dropoffCoords: activeRide?.dropoffLocation ? [activeRide.dropoffLocation.latitude, activeRide.dropoffLocation.longitude] as [number,number] : undefined } }); }}
                 className="py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm active:scale-95 transition-transform btn-glow">
                 Back to Trip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LOCATION REQUIRED PROMPT ── */}
+      {locationPromptOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-card border-t border-border rounded-t-2xl p-6 pb-10 space-y-5">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <MapPin size={30} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Location Required</h2>
+                <p className="text-sm text-muted-foreground mt-1">WeGo needs your location to match you with nearby riders. Please enable location access to go online.</p>
+              </div>
+              {locationDenied && (
+                <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg w-full">{locationDenied}</p>
+              )}
+            </div>
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setLocationPromptOpen(false);
+                  // On iOS/Android Safari, re-requesting triggers the permission prompt if not yet permanently denied
+                  navigator.geolocation?.getCurrentPosition(() => {}, () => {});
+                }}
+                className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold text-sm active:scale-95 transition-transform btn-glow"
+              >
+                Enable Location
+              </button>
+              <button
+                type="button"
+                onClick={() => setLocationPromptOpen(false)}
+                className="w-full py-3 rounded-2xl bg-muted/30 border border-border text-muted-foreground font-semibold text-sm active:scale-95 transition-transform"
+              >
+                Not Now
               </button>
             </div>
           </div>

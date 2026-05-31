@@ -33,11 +33,11 @@ export function useCurrentLocation(): UseCurrentLocationResult {
     const onError = (geoError: GeolocationPositionError) => {
       const message =
         geoError.code === geoError.PERMISSION_DENIED
-          ? "Location access was denied. Using the default map center."
+          ? "Location access was denied."
           : geoError.code === geoError.POSITION_UNAVAILABLE
-            ? "Current location is unavailable right now. Using the default map center."
-            : "Location request timed out. Using the default map center.";
-      setCoords(DEFAULT_COORDS);
+            ? "Current location is unavailable right now."
+            : "Location request timed out.";
+      setCoords(null);
       setError(message);
       setLoading(false);
     };

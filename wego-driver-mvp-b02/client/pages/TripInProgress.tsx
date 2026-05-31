@@ -69,7 +69,7 @@ export default function TripInProgress() {
   const [passengerRating, setPassengerRating] = useState(0);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
-  const [autoCloseIn, setAutoCloseIn] = useState(10);
+  const [autoCloseIn, setAutoCloseIn] = useState(8);
   const autoCloseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [earlyEndData, setEarlyEndData] = useState<{ proratedFare: number } | null>(null);
   const [contactWindowSecs, setContactWindowSecs] = useState(300);
@@ -83,6 +83,7 @@ export default function TripInProgress() {
   const [passengerPhone, setPassengerPhone] = useState<string | null>(null);
   const [sosModalOpen, setSosModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const prevMsgCountRef = useRef(0);
   const [passengerCancelled, setPassengerCancelled] = useState(false);
@@ -112,6 +113,7 @@ export default function TripInProgress() {
   const approachNotifFiredRef = useRef(false);
   const [mapResetToken, setMapResetToken] = useState(0);
   const [headingUp, setHeadingUp] = useState(true);
+  const [dropoffCoordsOverride, setDropoffCoordsOverride] = useState<[number, number] | null>(null);
   const tripNavMode = phase === "to-pickup" || phase === "in-progress";
   const [scheduledSecsRemaining, setScheduledSecsRemaining] = useState<number | null>(null);
   const lastMapMoveRef = useRef<number>(0);
@@ -123,6 +125,8 @@ export default function TripInProgress() {
   const lastDriverMoveRef = useRef<{ coords: [number, number]; time: number } | null>(null);
   useEffect(() => {
     const id = setInterval(() => {
+      // Only useful during waiting phase — driver may drag the map and want auto-recenter
+      if (phaseRef.current !== "waiting") return;
       const t = lastMapMoveRef.current;
       if (t > 0 && Date.now() - t >= 8000) {
         lastMapMoveRef.current = 0;
@@ -354,7 +358,12 @@ export default function TripInProgress() {
   const canLeave = waitElapsed >= freeWaitSecs;
 
   const [currentStep, setCurrentStep] = useState<RouteStep | null>(null);
+  const [allRouteSteps, setAllRouteSteps] = useState<RouteStep[]>([]);
+  const [turnListOpen, setTurnListOpen] = useState(false);
+  const [fitRouteToken, setFitRouteToken] = useState(0);
+  const fitRouteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [navDistM, setNavDistM] = useState<number | null>(null);
+  const preAnnouncedRef = useRef<string>("");
   const [speedLimit, setSpeedLimit] = useState<number | null>(null);
   const [speedMph, setSpeedMph] = useState<number | null>(null);
   const [rerouting, setRerouting] = useState(false);
@@ -375,6 +384,7 @@ export default function TripInProgress() {
   };
 
   const handleRerouting = () => {
+    preAnnouncedRef.current = "";
     setRerouting(true);
     setCurrentStep(null);
     setNavDistM(null);
@@ -466,19 +476,37 @@ export default function TripInProgress() {
     return () => clearInterval(id);
   }, [phase, safetyAlertOpen]);
 
-  // Speak turn instruction whenever the active step changes, using live distance for accuracy
+  // Voice guidance: announce each turn once at the right approach distance, never repeat
   useEffect(() => {
-    if (!currentStep) return;
-    const dist = currentStep.distance;
-    let text = currentStep.instruction;
-    if (dist > 1500) {
-      text = `In ${(dist / 1609.34).toFixed(1)} miles, ${currentStep.instruction}`;
-    } else if (dist > 400) {
-      text = `In ${Math.round((dist * 3.28084) / 100) * 100} feet, ${currentStep.instruction}`;
+    if (!currentStep || navDistM === null) return;
+
+    // First step after route load or reroute — announce immediately so driver knows where to go
+    if (preAnnouncedRef.current === "") {
+      preAnnouncedRef.current = currentStep.instruction;
+      const d = currentStep.distance;
+      let text = currentStep.instruction;
+      if (d > 1609) text = `In ${(d / 1609.34).toFixed(1)} miles, ${currentStep.instruction}`;
+      else if (d > 400) text = `In ${Math.round((d * 3.28084) / 100) * 100} feet, ${currentStep.instruction}`;
+      speak(text);
+      return;
     }
+
+    // Subsequent turns: announce nextStep once when navDistM drops to threshold
+    const upcoming = currentStep.nextStep;
+    if (!upcoming || upcoming.instruction === preAnnouncedRef.current) return;
+
+    // Longer segments (highway) get more lead time than short city blocks
+    const threshold = currentStep.distance > 3000 ? 1200 : 600;
+    if (navDistM > threshold) return;
+
+    preAnnouncedRef.current = upcoming.instruction;
+    let text = upcoming.instruction;
+    if (navDistM > 1609) text = `In ${(navDistM / 1609.34).toFixed(1)} miles, ${upcoming.instruction}`;
+    else if (navDistM > 150) text = `In ${Math.round((navDistM * 3.28084) / 100) * 100} feet, ${upcoming.instruction}`;
     speak(text);
+  // navDistM changes every GPS tick — intentional, ref prevents re-announcing
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep?.instruction]);
+  }, [currentStep, navDistM]);
 
   // Zoom in to driver's position ~4s after GPS first arrives (overrides initial fitBounds)
   // MUST be before any early returns to satisfy hooks rules
@@ -810,10 +838,15 @@ export default function TripInProgress() {
 
   const mapFrom = phase === "to-pickup"
     ? (driverCoords ?? undefined)
+    : phase === "waiting"
+    ? undefined
     : (driverCoords ?? trip.pickupCoords);
+  const effectiveDropoffCoords = dropoffCoordsOverride ?? trip.dropoffCoords;
   const mapTo = phase === "to-pickup"
     ? trip.pickupCoords
-    : trip.dropoffCoords;
+    : phase === "waiting"
+    ? undefined
+    : effectiveDropoffCoords;
   const mapCenter: [number, number] = driverCoords ?? trip.pickupCoords ?? [37.3541, -121.9552];
 
   const pickupEtaMinutes = (() => {
@@ -845,77 +878,74 @@ export default function TripInProgress() {
           navMode={tripNavMode}
           onCenterChange={() => { lastMapMoveRef.current = Date.now(); }}
           onStepChange={phase === "waiting" ? undefined : handleStepChange}
+          onAllStepsChange={phase === "waiting" ? undefined : setAllRouteSteps}
+          fitRouteToken={fitRouteToken}
           onDistanceChange={phase === "waiting" ? undefined : setNavDistM}
           onSpeedLimitChange={phase === "waiting" ? undefined : setSpeedLimit}
           onCameraApproach={phase === "waiting" ? undefined : handleCameraApproach}
           onSpeedChange={phase === "waiting" ? undefined : setSpeedMph}
           onRerouting={phase === "waiting" ? undefined : handleRerouting}
           onRouteInfoChange={phase === "waiting" ? undefined : setRouteInfo}
+          onToDrag={phase === "in-progress" ? setDropoffCoordsOverride : undefined}
         />
 
-        {/* Back / Cancel button */}
-        <button
-          type="button"
-          aria-label="Cancel Trip"
-          onClick={() => setCancelModalOpen(true)}
-          className="absolute top-4 left-4 z-[1000] w-10 h-10 rounded-xl bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center shadow-lg active:scale-95 transition-transform"
-        >
-          <ChevronLeft size={20} className="text-foreground" />
-        </button>
+        {phase === "in-progress" && (
+          <div className="absolute bottom-9 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none whitespace-nowrap">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm">
+              <MapPin size={11} className="text-white" />
+              <span className="text-xs font-medium text-white">Drag pin to adjust entrance</span>
+            </div>
+          </div>
+        )}
 
-        {/* SOS button */}
-        <button
-          type="button"
-          onClick={() => setSosModalOpen(true)}
-          aria-label="Emergency SOS"
-          title="Emergency SOS"
-          className="absolute top-4 right-4 z-[1000] flex items-center gap-1.5 px-3 py-2 bg-destructive/90 backdrop-blur-sm border border-destructive rounded-full shadow-lg active:scale-95 transition-transform"
-        >
-          <AlertTriangle size={14} className="text-white" />
-          <span className="text-xs font-bold text-white">SOS</span>
-        </button>
-
-        {/* Turn-by-turn nav banner */}
+        {/* Turn-by-turn nav banner — full-width, top-anchored, dashboard-readable */}
         {rerouting ? (
-          <div className="absolute top-16 left-4 right-4 z-[1000]">
-            <div className="flex items-center gap-3 bg-card/95 backdrop-blur-sm border border-primary/20 rounded-xl shadow-xl px-4 py-3">
-              <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
-              <p className="text-sm font-bold text-foreground">Recalculating route…</p>
+          <div className="absolute top-0 left-0 right-0 z-[1000] nav-banner-safe">
+            <div className="flex items-center gap-3 bg-card shadow-xl px-4 py-4">
+              <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+              <p className="text-2xl font-black text-foreground flex-1 min-w-0">Recalculating route…</p>
             </div>
           </div>
         ) : currentStep && phase !== "waiting" ? (
-          <div className="absolute top-16 left-4 right-4 z-[1000] space-y-1">
-            {/* Main step card */}
-            <div className="flex items-stretch bg-card/95 backdrop-blur-sm border border-primary/20 rounded-xl shadow-xl overflow-hidden">
-              <div className="w-12 bg-primary flex-shrink-0 flex items-center justify-center">
-                <ManeuverIcon type={currentStep.type} modifier={currentStep.modifier} />
+          <button type="button" onClick={() => setTurnListOpen(true)}
+            className="absolute top-0 left-0 right-0 z-[1000] text-left w-full nav-banner-safe">
+            {/* Main step — full-width dashboard card */}
+            <div className="flex items-stretch bg-card shadow-xl overflow-hidden">
+              <div className="w-16 bg-primary flex-shrink-0 flex items-center justify-center">
+                <ManeuverIcon type={currentStep.type} modifier={currentStep.modifier} size={30} />
               </div>
               <div className="flex-1 min-w-0 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold text-foreground leading-snug flex-1 min-w-0 truncate">{currentStep.instruction}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-2xl font-black text-foreground leading-tight flex-1 min-w-0 break-words">{currentStep.instruction}</p>
                   {navDistM != null && (
-                    <span className="text-sm font-bold text-primary flex-shrink-0 tabular-nums">{fmtDist(navDistM)}</span>
+                    <span className="text-2xl font-black text-primary flex-shrink-0 tabular-nums pl-1">{fmtDist(navDistM)}</span>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
                   {routeInfo
-                    ? `${fmtDist(routeInfo.remainingM)} remaining  ·  ${Math.ceil(routeInfo.remainingSecs / 60)} min`
+                    ? `${fmtDist(routeInfo.remainingM)} remaining · ${Math.ceil(routeInfo.remainingSecs / 60)} min`
                     : currentStep.name || ""}
                 </p>
               </div>
             </div>
             {/* Next step preview */}
             {currentStep.nextStep && (
-              <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg shadow">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex-shrink-0">then</span>
-                <ManeuverIcon type={currentStep.nextStep.type} modifier={currentStep.nextStep.modifier} className="text-muted-foreground flex-shrink-0" size={13} />
-                <p className="text-xs text-foreground font-medium truncate">{currentStep.nextStep.instruction}</p>
+              <div className="flex items-center gap-3 px-3 py-2 bg-secondary border-b border-border shadow">
+                <span className="text-xs font-black text-muted-foreground uppercase tracking-widest flex-shrink-0">THEN</span>
+                <ManeuverIcon type={currentStep.nextStep.type} modifier={currentStep.nextStep.modifier} className="text-muted-foreground flex-shrink-0" size={16} />
+                <p className="text-sm font-bold text-foreground line-clamp-1">{currentStep.nextStep.instruction}</p>
               </div>
             )}
-          </div>
+          </button>
         ) : (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
-            <div className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border backdrop-blur-sm bg-primary/20 border-primary/40 text-primary">
+            <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border backdrop-blur-sm ${
+              phase === "to-pickup"
+                ? "bg-amber-500/20 border-amber-500/40 text-amber-400"
+                : phase === "waiting"
+                ? "bg-sky-500/20 border-sky-400/40 text-sky-300"
+                : "bg-emerald-500/20 border-emerald-400/40 text-emerald-300"
+            }`}>
               {phase === "to-pickup" ? `Heading to ${pickupLabel}` : phase === "waiting" ? (trip.type === "food" ? "At Restaurant" : "Waiting at Pickup") : `${typeLabel} in Progress`}
             </div>
           </div>
@@ -939,51 +969,58 @@ export default function TripInProgress() {
           </div>
         )}
 
-        {/* Left buttons: Audio · Message · Call */}
+        {/* Left buttons: Audio · Hazard · SOS */}
         <div className="absolute bottom-[72px] left-4 z-[1000] flex flex-col gap-2">
           <button
             type="button"
             aria-label={voiceEnabled ? "Mute voice guidance" : "Unmute voice guidance"}
             onClick={() => setVoiceEnabled((v) => { const next = !v; localStorage.setItem("wego_voice", next ? "on" : "off"); return next; })}
-            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${voiceEnabled ? "bg-white" : "bg-black"}`}
           >
-            {voiceEnabled ? <Volume2 size={18} className="text-primary" /> : <VolumeX size={18} className="text-muted-foreground" />}
-          </button>
-          <button
-            type="button"
-            aria-label="Message passenger"
-            onClick={() => setChatOpen(true)}
-            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${chatMessages.length > 0 && !chatOpen ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"}`}
-          >
-            <MessageSquare size={18} className={chatMessages.length > 0 && !chatOpen ? "text-white" : "text-primary"} />
-          </button>
-          <button
-            type="button"
-            aria-label="Call passenger"
-            onClick={handleCall}
-            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${calling ? "bg-green-500" : "bg-card/90 backdrop-blur-sm border border-border"}`}
-          >
-            <Phone size={18} className={calling ? "text-white" : "text-primary"} />
-          </button>
-        </div>
-
-        {/* Right buttons: Recenter · Road Issue · Compass */}
-        <div className="absolute bottom-[72px] right-4 z-[1000] flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => { lastMapMoveRef.current = 0; setMapResetToken((v) => v + 1); }}
-            aria-label="Recenter map"
-            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
-          >
-            <Navigation size={18} className="text-primary" />
+            {voiceEnabled ? <Volume2 size={18} className="text-black" /> : <VolumeX size={18} className="text-white" />}
           </button>
           <button
             type="button"
             onClick={() => { setIssueDone(false); setIssueOpen(true); }}
             aria-label="Report road issue"
-            className="w-[42px] h-[42px] bg-card/90 backdrop-blur-sm border border-border rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-[42px] h-[42px] bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <AlertTriangle size={18} className="text-amber-500" />
+            <AlertTriangle size={18} className="text-black" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSosModalOpen(true)}
+            aria-label="Emergency SOS"
+            className="w-[42px] h-[42px] bg-destructive rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <span className="text-xs font-black text-white">SOS</span>
+          </button>
+        </div>
+
+        {/* Right buttons: Recenter · Fit Route · Compass */}
+        <div className="absolute bottom-[72px] right-4 z-[1000] flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => { lastMapMoveRef.current = 0; setMapResetToken((v) => v + 1); }}
+            aria-label="Recenter map"
+            className="w-[42px] h-[42px] bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <Navigation size={18} className="text-black" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (fitRouteTimerRef.current) clearTimeout(fitRouteTimerRef.current);
+              setFitRouteToken((v) => v + 1);
+              fitRouteTimerRef.current = setTimeout(() => {
+                lastMapMoveRef.current = 0;
+                setMapResetToken((v) => v + 1);
+              }, 5000);
+            }}
+            aria-label="Show full route"
+            className="w-[42px] h-[42px] bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <MapPin size={18} className="text-black" />
           </button>
           <button
             type="button"
@@ -993,15 +1030,15 @@ export default function TripInProgress() {
               if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
             }}
             aria-label="Toggle heading-up mode"
-            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-primary" : "bg-card/90 backdrop-blur-sm border border-border"}`}
+            className={`w-[42px] h-[42px] rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-black" : "bg-white"}`}
           >
-            <Compass size={18} className={headingUp ? "text-background" : "text-primary"} />
+            <Compass size={18} className={headingUp ? "text-white" : "text-black"} />
           </button>
         </div>
 
-        {/* Speed limit badge */}
+        {/* Speed limit badge — top-right, updates with location */}
         {speedLimit !== null && phase !== "waiting" && (
-          <div className="absolute bottom-4 left-4 z-[999] pointer-events-none">
+          <div className="absolute top-4 right-4 z-[1001] pointer-events-none">
             <div className="w-11 bg-white border-[2.5px] border-black rounded text-center shadow-xl leading-none">
               <p className="text-[6px] font-black text-black tracking-tight pt-0.5">SPEED</p>
               <p className="text-[6px] font-black text-black tracking-tight">LIMIT</p>
@@ -1036,25 +1073,31 @@ export default function TripInProgress() {
         {/* Rider / Delivery Info — collapsed strip by default */}
         <div className="glass-card border border-border rounded-xl overflow-hidden">
           {/* Always-visible strip */}
-          <button
-            type="button"
-            onClick={() => setPassengerCardExpanded((v) => !v)}
-            className="w-full flex items-center gap-3 px-4 py-2.5 active:bg-muted/30 transition-colors"
-          >
-            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-              {trip.riderName.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0 text-left">
-              <p className="text-sm font-semibold text-foreground truncate">{trip.riderName}</p>
-              {phase === "in-progress" && (
-                <p className="text-[11px] text-muted-foreground truncate">{stripCoords(trip.dropoffLocation)}</p>
-              )}
-            </div>
-            {chatMessages.length > 0 && !chatOpen && (
-              <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-            )}
-            <ChevronRight size={14} className={`text-muted-foreground flex-shrink-0 transition-transform ${passengerCardExpanded ? "rotate-90" : ""}`} />
-          </button>
+          {/* Always-visible strip */}
+          <div className="flex items-center gap-2 px-3 py-2">
+            <button type="button" onClick={() => setPassengerCardExpanded((v) => !v)}
+              className="flex-1 flex items-center gap-3 min-w-0 active:opacity-70 transition-opacity">
+              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                {trip.riderName.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-semibold text-foreground truncate">{trip.riderName}</p>
+                {phase === "in-progress" && (
+                  <p className="text-[11px] text-muted-foreground truncate">{stripCoords(trip.dropoffLocation)}</p>
+                )}
+              </div>
+              <ChevronRight size={14} className={`text-muted-foreground flex-shrink-0 transition-transform ${passengerCardExpanded ? "rotate-90" : ""}`} />
+            </button>
+            <button type="button" aria-label="Message rider"
+              onClick={() => setChatOpen(true)}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-95 transition-all relative ${chatMessages.length > 0 && !chatOpen ? "bg-primary" : "bg-secondary"}`}>
+              <MessageSquare size={15} className={chatMessages.length > 0 && !chatOpen ? "text-white" : "text-foreground"} />
+            </button>
+            <button type="button" aria-label="Call rider" onClick={handleCall}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-95 transition-all ${calling ? "bg-green-500" : "bg-secondary"}`}>
+              <Phone size={15} className={calling ? "text-white" : "text-foreground"} />
+            </button>
+          </div>
 
           {/* Expanded detail */}
           {passengerCardExpanded && (
@@ -1074,6 +1117,10 @@ export default function TripInProgress() {
                   Call
                 </button>
               </div>
+              <button type="button" onClick={() => { setPassengerCardExpanded(false); setCancelModalOpen(true); }}
+                className="w-full py-2 rounded-xl border border-destructive/40 text-destructive text-sm font-medium active:scale-95 transition-all">
+                Cancel / End Early
+              </button>
             </div>
           )}
         </div>
@@ -1286,17 +1333,6 @@ export default function TripInProgress() {
                 <span className="text-xs text-muted-foreground">Stop fees earned</span>
                 <span className="text-sm font-bold text-primary">+${stopEarnings.toFixed(2)}</span>
               </div>
-            )}
-            {trip.dropoffCoords && (
-              <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${trip.dropoffCoords[0]},${trip.dropoffCoords[1]}&travelmode=driving`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 rounded-xl bg-card border border-border text-foreground font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
-              >
-                <Navigation size={16} className="text-primary" />
-                Navigate with Google Maps
-              </a>
             )}
 
             <button type="button" onClick={() => setCompleteConfirmOpen(true)}
@@ -1739,7 +1775,65 @@ export default function TripInProgress() {
         </div>
       )}
 
-      {/* Cancel Trip Modal */}
+      {/* ── TURN LIST OVERLAY ── */}
+      {turnListOpen && (
+        <div className="absolute inset-0 z-[9999] bg-background flex flex-col">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-border bg-card flex-shrink-0">
+            <button type="button" aria-label="Close turn list" onClick={() => setTurnListOpen(false)}
+              className="w-9 h-9 rounded-xl bg-black flex items-center justify-center active:scale-95 transition-transform flex-shrink-0">
+              <X size={18} className="text-white" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-black text-foreground truncate">
+                {phase === "to-pickup" ? "Route to pickup" : `Route to ${trip.dropoffLocation.split(",")[0]}`}
+              </p>
+              {routeInfo && (
+                <p className="text-xs text-muted-foreground">{fmtDist(routeInfo.remainingM)} · {Math.ceil(routeInfo.remainingSecs / 60)} min remaining</p>
+              )}
+            </div>
+          </div>
+
+          {/* Steps list */}
+          <div className="flex-1 overflow-y-auto">
+            {allRouteSteps.length === 0 ? (
+              <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading route…</div>
+            ) : (
+              allRouteSteps.map((step, i) => (
+                <div key={i} className={`flex items-center gap-4 px-4 py-3 border-b border-border/40 ${i === 0 ? "bg-primary/5" : ""}`}>
+                  <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${i === 0 ? "bg-primary" : "bg-secondary"}`}>
+                    <ManeuverIcon type={step.type} modifier={step.modifier} className={i === 0 ? "text-white" : "text-foreground"} size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-bold truncate ${i === 0 ? "text-primary" : "text-foreground"}`}>{step.instruction}</p>
+                    {step.name && <p className="text-xs text-muted-foreground truncate">{step.name}</p>}
+                  </div>
+                  {step.distance > 0 && (
+                    <span className="text-sm font-black text-muted-foreground flex-shrink-0 tabular-nums">{fmtDist(step.distance)}</span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Open Google Maps */}
+          {trip.dropoffCoords && (
+            <div className="flex-shrink-0 p-4 border-t border-border bg-card">
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${trip.dropoffCoords[0]},${trip.dropoffCoords[1]}&travelmode=driving`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 rounded-xl bg-white border border-border text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
+              >
+                <Navigation size={16} className="text-black" />
+                Open in Google Maps
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cancel / End Early Modal */}
       {cancelModalOpen && (() => {
         const estimatedSecs = (trip.estimatedTime || 10) * 60;
         const timeRatio = Math.min(elapsed / estimatedSecs, 1);
@@ -1753,81 +1847,102 @@ export default function TripInProgress() {
         const proratedBase = parseFloat(Math.max(5, combinedRatio * trip.riderPayment).toFixed(2));
         const proratedCoopFee = parseFloat((proratedBase * 0.12).toFixed(2));
         const proratedDriverTake = parseFloat((proratedBase - proratedCoopFee + stopEarnings).toFixed(2));
+
+        const cancelReasons = phase === "in-progress"
+          ? ["Passenger asked to stop", "Wrong destination", "Safety concern", "Vehicle issue", "Passenger unresponsive", "Other"]
+          : ["Passenger no-show", "Passenger asked to cancel", "Wrong pickup location", "Safety concern", "Vehicle issue", "Other"];
+
         return (
           <div className="absolute inset-0 z-[9999] flex items-center justify-center px-4 bg-black/60">
             <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-6 space-y-4">
-              {phase === "in-progress" ? (
-                <>
-                  <h2 className="text-lg font-bold text-foreground">End Ride Early?</h2>
-                  <p className="text-sm text-muted-foreground">Passenger will be charged for distance covered. This may affect your rating.</p>
-                  <div className="bg-background border border-border rounded-xl p-4 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-foreground">
+                  {phase === "in-progress" ? "End Ride Early?" : "Cancel Trip?"}
+                </h2>
+                <button type="button" aria-label="Close" onClick={() => { setCancelModalOpen(false); setCancelReason(null); }}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Reason picker */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Select a reason</p>
+                {cancelReasons.map((r) => (
+                  <button key={r} type="button" onClick={() => setCancelReason(r)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-all active:scale-[0.98] ${
+                      cancelReason === r
+                        ? "bg-destructive/10 border-destructive/50 text-destructive"
+                        : "bg-background border-border text-foreground"
+                    }`}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+
+              {/* Prorated fare info (end-early only) */}
+              {phase === "in-progress" && (
+                <div className="bg-background border border-border rounded-xl p-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Passenger charged</span>
+                    <span className="text-foreground font-semibold">${proratedBase.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">WeGo fee (12%)</span>
+                    <span className="text-destructive font-medium">-${proratedCoopFee.toFixed(2)}</span>
+                  </div>
+                  {stopEarnings > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Passenger charged</span>
-                      <span className="text-foreground font-semibold">${proratedBase.toFixed(2)}</span>
+                      <span className="text-muted-foreground">Stop fees</span>
+                      <span className="text-primary font-medium">+${stopEarnings.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">WeGo fee (12%)</span>
-                      <span className="text-destructive font-medium">-${proratedCoopFee.toFixed(2)}</span>
-                    </div>
-                    {stopEarnings > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Stop fees</span>
-                        <span className="text-primary font-medium">+${stopEarnings.toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div className="h-px bg-border/50" />
-                    <div className="flex justify-between font-semibold">
-                      <span className="text-primary">Your take</span>
-                      <span className="text-primary">${proratedDriverTake.toFixed(2)}</span>
-                    </div>
+                  )}
+                  <div className="h-px bg-border/50" />
+                  <div className="flex justify-between font-semibold">
+                    <span className="text-primary">Your take</span>
+                    <span className="text-primary">${proratedDriverTake.toFixed(2)}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => setCancelModalOpen(false)}
-                      className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
-                      Keep Trip
-                    </button>
-                    <button type="button" onClick={async () => {
-                        setCancelModalOpen(false);
-                        if (trip.rideId) {
-                          endRideEarly(trip.rideId, proratedBase).catch(() => {});
-                          if (user) {
-                            const earlyGross = proratedBase + stopEarnings;
-                            logEarningsEntry({ driverId: user.uid, rideId: trip.rideId, gross: earlyGross, coopFee: proratedCoopFee, type: trip.type ?? "ride" }).catch(() => {});
-                            incrementDriverRideCount(user.uid).catch(() => {});
-                          }
-                        }
-                        setEarlyEndData({ proratedFare: proratedBase });
-                        setPhase("complete");
-                      }}
-                      className="py-3 rounded-xl bg-destructive/10 border border-destructive/40 text-destructive font-semibold text-sm active:scale-95 transition-transform">
-                      End Early — ${proratedBase.toFixed(2)}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <h2 className="text-lg font-bold text-foreground">Cancel Trip?</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {phase === "to-pickup"
-                      ? "Cancelling before pickup may affect your acceptance rate."
-                      : "Cancelling mid-trip may affect your standing."}
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => setCancelModalOpen(false)}
-                      className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
-                      Keep Trip
-                    </button>
-                    <button type="button" onClick={async () => {
-                        setCancelModalOpen(false);
-                        if (trip.rideId) await updateRideStatus(trip.rideId, "cancelled");
-                        navigate("/");
-                      }}
-                      className="py-3 rounded-xl bg-destructive/10 border border-destructive/40 text-destructive font-semibold text-sm active:scale-95 transition-transform">
-                      Cancel Trip
-                    </button>
-                  </div>
-                </>
+                </div>
               )}
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button type="button" onClick={() => { setCancelModalOpen(false); setCancelReason(null); }}
+                  className="py-3 rounded-xl bg-muted/30 border border-border text-foreground font-semibold text-sm active:scale-95 transition-transform">
+                  Keep Trip
+                </button>
+                {phase === "in-progress" ? (
+                  <button type="button" disabled={!cancelReason}
+                    onClick={async () => {
+                      setCancelModalOpen(false);
+                      if (trip.rideId) {
+                        endRideEarly(trip.rideId, proratedBase, cancelReason ?? undefined).catch(() => {});
+                        if (user) {
+                          const earlyGross = proratedBase + stopEarnings;
+                          logEarningsEntry({ driverId: user.uid, rideId: trip.rideId, gross: earlyGross, coopFee: proratedCoopFee, type: trip.type ?? "ride" }).catch(() => {});
+                          incrementDriverRideCount(user.uid).catch(() => {});
+                        }
+                      }
+                      setCancelReason(null);
+                      setEarlyEndData({ proratedFare: proratedBase });
+                      setPhase("complete");
+                    }}
+                    className="py-3 rounded-xl bg-destructive/10 border border-destructive/40 text-destructive font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed">
+                    End Early — ${proratedBase.toFixed(2)}
+                  </button>
+                ) : (
+                  <button type="button" disabled={!cancelReason}
+                    onClick={async () => {
+                      setCancelModalOpen(false);
+                      if (trip.rideId) await updateRideStatus(trip.rideId, "cancelled", cancelReason ?? undefined);
+                      setCancelReason(null);
+                      navigate("/");
+                    }}
+                    className="py-3 rounded-xl bg-destructive/10 border border-destructive/40 text-destructive font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed">
+                    Cancel Trip
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         );

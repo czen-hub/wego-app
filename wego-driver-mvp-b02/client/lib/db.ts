@@ -283,11 +283,14 @@ export async function acceptRide(rideId: string, driverId: string, driverMetadat
   });
 }
 
-export async function updateRideStatus(rideId: string, status: RideStatus) {
+export async function updateRideStatus(rideId: string, status: RideStatus, cancelReason?: string) {
   const updates: Record<string, any> = { status };
   if (status === "inProgress") updates.startedAt = serverTimestamp();
   if (status === "completed") updates.completedAt = serverTimestamp();
-  if (status === "cancelled") updates.cancelledAt = serverTimestamp();
+  if (status === "cancelled") {
+    updates.cancelledAt = serverTimestamp();
+    if (cancelReason) updates.cancelReason = cancelReason;
+  }
   await updateDoc(doc(db, "rides", rideId), updates);
 }
 
@@ -305,10 +308,10 @@ export async function completeRide(rideId: string) {
   await updateRideStatus(rideId, "completed");
 }
 
-export async function endRideEarly(rideId: string, proratedFare: number) {
+export async function endRideEarly(rideId: string, proratedFare: number, earlyEndReason?: string) {
   const coopFee = parseFloat((proratedFare * 0.12).toFixed(2));
   const driverTake = parseFloat((proratedFare - coopFee).toFixed(2));
-  await updateDoc(doc(db, "rides", rideId), {
+  const updates: Record<string, any> = {
     status: "completed",
     earlyEnd: true,
     proratedFare,
@@ -316,7 +319,9 @@ export async function endRideEarly(rideId: string, proratedFare: number) {
     driverTake,
     coopFee,
     completedAt: serverTimestamp(),
-  });
+  };
+  if (earlyEndReason) updates.earlyEndReason = earlyEndReason;
+  await updateDoc(doc(db, "rides", rideId), updates);
 }
 
 export async function submitRating(rideId: string, rating: number, raterType: "passenger" | "driver"): Promise<void> {

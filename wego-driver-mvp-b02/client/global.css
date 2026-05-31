@@ -87,13 +87,19 @@
 
   html {
     @apply scroll-smooth;
-    font-size: 16px;
+    font-size: 18px;
   }
 
   body {
     @apply text-foreground;
     background-color: #09090b;
     font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 500;
+  }
+
+  /* Lucide icons: force thicker stroke */
+  .lucide {
+    stroke-width: 2.5 !important;
   }
 
   #root {
@@ -189,5 +195,16 @@
     flex-shrink: 0;
   }
 
+  .nav-banner-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
 
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
