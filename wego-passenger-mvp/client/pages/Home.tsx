@@ -22,6 +22,18 @@ function formatRelativeDate(d: Date): string {
 
 const DEFAULT_COORDS: [number, number] = [37.3541, -121.9552];
 
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=address,poi&language=en&access_token=${MAPBOX_TOKEN}`
+    );
+    const data = await res.json();
+    const feat = data.features?.[0];
+    if (feat) return (feat.place_name ?? feat.text) as string;
+  } catch {}
+  return null;
+}
+
 function useSavedPlace(key: "home" | "work", userId: string | null) {
   const firestoreField = key === "home" ? "savedHome" : "savedWork";
   const [value, setValue] = useState<string>(() => localStorage.getItem(`wego_${key}`) ?? "");
@@ -75,6 +87,12 @@ export default function Home() {
   const [mapResetToken, setMapResetToken] = useState(0);
   const [headingUp, setHeadingUp] = useState(false);
   const lastMapMoveRef = useRef<number>(0);
+  const [pinDropMode, setPinDropMode] = useState(false);
+  const [pinDropCenter, setPinDropCenter] = useState<[number, number]>(DEFAULT_COORDS);
+  const [pinDropAddress, setPinDropAddress] = useState("");
+  const [pinDropGeocoding, setPinDropGeocoding] = useState(false);
+  const pinDropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pinDropModeRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -91,8 +109,11 @@ export default function Home() {
     return unsub;
   }, [user]);
 
+  useEffect(() => { pinDropModeRef.current = pinDropMode; }, [pinDropMode]);
+
   useEffect(() => {
     const interval = setInterval(() => {
+      if (pinDropModeRef.current) return;
       const t = lastMapMoveRef.current;
       if (t > 0 && Date.now() - t >= 10000) {
         lastMapMoveRef.current = 0;
@@ -145,8 +166,10 @@ export default function Home() {
     const timer = setTimeout(async () => {
       setGeocoding(true);
       try {
-        const prox = currentCoords ? `&proximity=${currentCoords[1]},${currentCoords[0]}` : "";
-        const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(query.trim())}&session_token=${searchSessionRef.current}&language=en&country=us&limit=6${prox}&access_token=${MAPBOX_TOKEN}`;
+        const proxCoords = currentCoords ?? DEFAULT_COORDS;
+        const prox = `&proximity=${proxCoords[1]},${proxCoords[0]}`;
+        const bbox = "&bbox=-124.5,32.5,-114.1,42.0";
+        const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(query.trim())}&session_token=${searchSessionRef.current}&language=en&country=us&limit=6${prox}${bbox}&access_token=${MAPBOX_TOKEN}`;
         const res = await fetch(url);
         const data = await res.json();
         if (!cancelled) {
@@ -168,8 +191,10 @@ export default function Home() {
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        const prox = currentCoords ? `&proximity=${currentCoords[1]},${currentCoords[0]}` : "";
-        const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(editDraft.trim())}&session_token=${searchSessionRef.current}&language=en&country=us&limit=5${prox}&access_token=${MAPBOX_TOKEN}`;
+        const proxCoords2 = currentCoords ?? DEFAULT_COORDS;
+        const prox2 = `&proximity=${proxCoords2[1]},${proxCoords2[0]}`;
+        const bbox2 = "&bbox=-124.5,32.5,-114.1,42.0";
+        const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(editDraft.trim())}&session_token=${searchSessionRef.current}&language=en&country=us&limit=5${prox2}${bbox2}&access_token=${MAPBOX_TOKEN}`;
         const res = await fetch(url);
         const data = await res.json();
         if (!cancelled) setPlaceResults((data.suggestions ?? []).map((s: { name: string; place_formatted: string; full_address: string }) => ({ label: s.name, sublabel: s.place_formatted, fullAddress: s.full_address })));
@@ -181,9 +206,27 @@ export default function Home() {
   const selectedPickupCoords = currentCoords ?? DEFAULT_COORDS;
   const pickupState = { pickup: "Current Location", pickupCoords: selectedPickupCoords };
 
-  const handleSelectDestination = async (destination: string, mapboxId?: string) => {
-    let coords: [number, number] | undefined;
-    if (mapboxId) {
+  const enterPinDrop = async () => {
+    const center = currentCoords ?? DEFAULT_COORDS;
+    setPinDropCenter(center);
+    setPinDropAddress("");
+    setPinDropGeocoding(true);
+    setSearchOpen(false);
+    setPinDropMode(true);
+    const label = await reverseGeocode(center[0], center[1]);
+    setPinDropAddress(label ?? "");
+    setPinDropGeocoding(false);
+  };
+
+  const handleConfirmPin = () => {
+    setPinDropMode(false);
+    const label = pinDropAddress || `${pinDropCenter[0].toFixed(5)}, ${pinDropCenter[1].toFixed(5)}`;
+    navigate("/request", { state: { destination: label, destinationCoords: pinDropCenter, ...pickupState } });
+  };
+
+  const handleSelectDestination = async (destination: string, mapboxId?: string, presetCoords?: [number, number]) => {
+    let coords: [number, number] | undefined = presetCoords;
+    if (!coords && mapboxId) {
       try {
         const res = await fetch(`https://api.mapbox.com/search/searchbox/v1/retrieve/${mapboxId}?session_token=${searchSessionRef.current}&access_token=${MAPBOX_TOKEN}`);
         const data = await res.json();
@@ -207,20 +250,89 @@ export default function Home() {
           </div>
         ) : (
           <ClientMap
-            center={selectedPickupCoords}
+            center={pinDropMode ? pinDropCenter : selectedPickupCoords}
             zoom={14}
             interactive
             driverPos={currentCoords ?? undefined}
             accuracy={accuracy ?? undefined}
-            forceResetToken={mapResetToken}
-            followBearing={headingUp}
-            onCenterChange={() => { lastMapMoveRef.current = Date.now(); }}
+            forceResetToken={pinDropMode ? undefined : mapResetToken}
+            followBearing={pinDropMode ? false : headingUp}
+            onCenterChange={(coords) => {
+              lastMapMoveRef.current = Date.now();
+              if (!pinDropModeRef.current) return;
+              setPinDropCenter(coords);
+              if (pinDropTimerRef.current) clearTimeout(pinDropTimerRef.current);
+              setPinDropGeocoding(true);
+              pinDropTimerRef.current = setTimeout(async () => {
+                const label = await reverseGeocode(coords[0], coords[1]);
+                setPinDropAddress(label ?? "");
+                setPinDropGeocoding(false);
+              }, 500);
+            }}
             className="absolute inset-0"
           />
         )}
         {/* Bottom fade */}
         <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-b from-transparent to-background/85 pointer-events-none z-10" />
       </div>
+
+      {/* ── PIN DROP OVERLAY ── */}
+      {pinDropMode && (
+        <>
+          {/* Back */}
+          <button
+            type="button"
+            onClick={() => setPinDropMode(false)}
+            aria-label="Cancel pin drop"
+            className="absolute top-4 left-4 z-30 w-9 h-9 rounded-xl bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          >
+            <ArrowLeft size={17} className="text-foreground" />
+          </button>
+
+          {/* Instruction pill */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap pointer-events-none">
+            <div className="flex items-center gap-2 bg-card/90 backdrop-blur-sm border border-border rounded-full px-3 py-1.5 shadow-lg">
+              <MapPin size={11} className="text-primary flex-shrink-0" />
+              <span className="text-xs font-semibold text-foreground">Move map to position pin</span>
+            </div>
+          </div>
+
+          {/* Crosshair pin — tip at exact map center */}
+          <div className="absolute top-1/2 left-1/2 z-20 pointer-events-none -translate-x-1/2 -translate-y-full">
+            <svg width="38" height="48" viewBox="0 0 38 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19 0C8.51 0 0 8.51 0 19c0 12.67 19 29 19 29S38 31.67 38 19C38 8.51 29.49 0 19 0z" fill="#F59E0B" stroke="white" strokeWidth="1.5"/>
+              <circle cx="19" cy="19" r="7" fill="white"/>
+            </svg>
+          </div>
+          {/* Shadow dot at exact center */}
+          <div className="absolute top-1/2 left-1/2 z-20 pointer-events-none -translate-x-1/2 -translate-y-1/2">
+            <div className="w-2 h-2 rounded-full bg-black/20" />
+          </div>
+
+          {/* Bottom confirm panel */}
+          <div className="absolute bottom-0 inset-x-0 z-30 px-4 pb-8 pt-4 bg-background/97 backdrop-blur-sm border-t border-border">
+            <div className="flex items-start gap-2.5 mb-3 min-h-[38px]">
+              <MapPin size={15} className="text-primary flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                {pinDropGeocoding ? (
+                  <p className="text-sm text-muted-foreground">Finding address…</p>
+                ) : pinDropAddress ? (
+                  <p className="text-sm font-semibold text-foreground leading-snug">{pinDropAddress}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Move the map to position the pin</p>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleConfirmPin}
+              className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold text-base active:scale-95 transition-transform btn-glow"
+            >
+              Confirm Location
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ── TOP SEARCH BAR ── */}
       <div className="absolute top-0 inset-x-0 z-20 px-4 pt-3">
@@ -534,26 +646,49 @@ export default function Home() {
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent</p>
                 <div className="space-y-1.5">
-                  {recentRides.map((ride) => (
-                    <button
-                      key={ride.id}
-                      type="button"
-                      onClick={() => handleSelectDestination(ride.dropoffAddress)}
-                      className="w-full flex items-center gap-3 p-3 bg-card border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
-                        <Clock size={15} className="text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{ride.dropoffAddress}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {ride.completedAt ? formatRelativeDate(ride.completedAt) : "Recently"} · ${ride.fare.toFixed(2)}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                  {recentRides.map((ride) => {
+                    const label = ride.dropoffAddress.replace(/\s*\(\d+\.\d+,\s*-?\d+\.\d+\)$/, "").trim();
+                    const coords: [number, number] | undefined = ride.dropoffLocation
+                      ? [ride.dropoffLocation.latitude, ride.dropoffLocation.longitude]
+                      : undefined;
+                    return (
+                      <button
+                        key={ride.id}
+                        type="button"
+                        onClick={() => handleSelectDestination(label, undefined, coords)}
+                        className="w-full flex items-center gap-3 p-3 bg-card border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                          <Clock size={15} className="text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{label}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {ride.completedAt ? formatRelativeDate(ride.completedAt) : "Recently"} · ${ride.fare.toFixed(2)}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+            )}
+
+            {/* ── Drop a Pin ── */}
+            {!query && (
+              <button
+                type="button"
+                onClick={enterPinDrop}
+                className="w-full flex items-center gap-3 p-3 bg-card border border-border rounded-xl hover:border-primary/40 active:scale-[0.99] transition-all text-left"
+              >
+                <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+                  <MapPin size={15} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Drop a Pin</p>
+                  <p className="text-xs text-muted-foreground">Pan the map to any location</p>
+                </div>
+              </button>
             )}
 
             {/* ── Idle state hint ── */}

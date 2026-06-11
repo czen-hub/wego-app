@@ -99,6 +99,11 @@ export default function Command() {
   const [weeklyEntries, setWeeklyEntries] = useState<EarningsEntry[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [fitRouteToken, setFitRouteToken] = useState(0);
+  const [turnListOpen, setTurnListOpen] = useState(false);
+  const [allRouteSteps, setAllRouteSteps] = useState<RouteStep[]>([]);
+  const [navMinimized, setNavMinimized] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem("wego_voice") !== "off");
   const [navDistM, setNavDistM] = useState<number | null>(null);
   const [speedLimit, setSpeedLimit] = useState<number | null>(null);
@@ -109,6 +114,7 @@ export default function Command() {
   const cameraWarnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartY = useRef(0);
+  const drawerScrollRef = useRef<HTMLDivElement>(null);
   const spokenInstructionRef = useRef<string | null>(null);
   const distAnnouncedRef = useRef<{ instruction: string; initialDist: number; mileFired: boolean; halfFired: boolean; nearFired: boolean }>({ instruction: "", initialDist: 0, mileFired: false, halfFired: false, nearFired: false });
   const arrivedRef = useRef(false);
@@ -194,6 +200,14 @@ export default function Command() {
     const t = setTimeout(() => { setNavDest(null); setNavStep(null); arrivedRef.current = false; }, 4000);
     return () => clearTimeout(t);
   }, [navStep?.type, voiceEnabled]);
+
+  // Broadcast nav active state so BottomNav can hide itself
+  useEffect(() => {
+    const active = !!navDest;
+    if (!active) setNavMinimized(false);
+    sessionStorage.setItem("wego-nav-active", active ? "true" : "false");
+    window.dispatchEvent(new CustomEvent("wego-nav-mode", { detail: active }));
+  }, [navDest]);
 
   // Announce speed limit changes while on a route (queued, never interrupts turn instructions)
   useEffect(() => {
@@ -347,6 +361,32 @@ export default function Command() {
     if (hasRequest) setDrawerOpen(false);
   }, [hasRequest]);
 
+  // Auto-open sheet when offline (debounced to avoid flicker)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!isOnline) {
+        setDrawerOpen(true);
+        setNavDest(null);
+        setNavStep(null);
+        setRerouting(false);
+        setRouteInfo(null);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [isOnline]);
+
+  // Clear all timers and nav state on unmount
+  useEffect(() => {
+    return () => {
+      sessionStorage.removeItem("wego-nav-active");
+      window.dispatchEvent(new CustomEvent("wego-nav-mode", { detail: false }));
+      if (navSearchTimerRef.current) clearTimeout(navSearchTimerRef.current);
+      if (navModeTimerRef.current) clearTimeout(navModeTimerRef.current);
+      if (cameraWarnTimerRef.current) clearTimeout(cameraWarnTimerRef.current);
+      if (declineTimerRef.current) clearTimeout(declineTimerRef.current);
+    };
+  }, []);
+
   const handleToggleOnline = async () => {
     if (isOnline && activeRide) { setOfflineBlockOpen(true); return; }
     if (!isOnline && !currentCoords) { setLocationPromptOpen(true); return; }
@@ -420,6 +460,18 @@ export default function Command() {
     if (delta > 40) setDrawerOpen(true);
     if (delta < -40) setDrawerOpen(false);
   };
+
+  useEffect(() => {
+    if (!drawerOpen && drawerScrollRef.current) {
+      drawerScrollRef.current.scrollTop = 0;
+    }
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    const handler = () => { if (!hasRequest) setDrawerOpen((o) => !o); };
+    window.addEventListener("wego-toggle-drawer", handler);
+    return () => window.removeEventListener("wego-toggle-drawer", handler);
+  }, [hasRequest]);
 
   const searchPlaces = (q: string) => {
     setNavQuery(q);
@@ -547,7 +599,7 @@ export default function Command() {
     .map(o => ({ lat: o.lat!, lng: o.lng!, radiusM: o.radiusM!, label: o.title }));
 
   return (
-    <div className="relative h-full overflow-hidden">
+    <div className="relative flex-1 min-h-0 overflow-hidden page-fill">
 
       {/* ── MAP BACKGROUND ── */}
       <div className="absolute inset-0 z-0">
@@ -579,6 +631,8 @@ export default function Command() {
             onRouteInfoChange={navDest ? setRouteInfo : undefined}
             onToDrag={navDest ? (coords) => { setNavDest((prev) => prev ? { ...prev, coords } : prev); setAdjustingDest(false); } : undefined}
             surgeZones={surgeZones}
+            fitRouteToken={fitRouteToken}
+            onAllStepsChange={setAllRouteSteps}
           />
         )}
 
@@ -600,52 +654,40 @@ export default function Command() {
           </div>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-background/40 to-background/95 pointer-events-none" />
+        {(!navDest || navMinimized) && (
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-background/60 pointer-events-none" />
+        )}
 
         {/* Left side map buttons: Audio · Destination · Adjust · Preferences */}
-        <div className="absolute bottom-[80px] left-4 z-10 flex flex-col gap-2">
-          <button
-            type="button"
-            aria-label={voiceEnabled ? "Mute voice guidance" : "Unmute voice guidance"}
-            onClick={() => {
-              const next = !voiceEnabled;
-              setVoiceEnabled(next);
-              localStorage.setItem("wego_voice", next ? "on" : "off");
-            }}
-            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
-          >
-            {voiceEnabled
-              ? <Volume2 size={26} className="text-black" />
-              : <VolumeX size={26} className="text-black/40" />}
-          </button>
+        <div className={`absolute bottom-[80px] left-4 z-10 flex flex-col gap-2 transition-opacity duration-300 ${!isOnline ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
           <button
             type="button"
             onClick={() => navDest ? (setNavDest(null), setNavStep(null), setAdjustingDest(false)) : setNavOpen(true)}
             aria-label={navDest ? "Cancel navigation" : "Navigate to destination"}
-            className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${navDest ? "bg-black" : "bg-white"}`}
+            className={`w-10 h-10 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${navDest ? "bg-black" : "bg-white"}`}
           >
-            {navDest ? <X size={26} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={26} strokeWidth={2.5} className="text-black" />}
+            {navDest ? <X size={20} strokeWidth={2.5} className="text-white" /> : <CornerUpRight size={20} strokeWidth={2.5} className="text-black" />}
           </button>
           <button
             type="button"
             onClick={() => { setIssueDone(false); setIssueOpen(true); }}
             aria-label="Report road issue"
-            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-10 h-10 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <AlertTriangle size={26} className="text-black" />
+            <AlertTriangle size={20} className="text-black" />
           </button>
           <button
             type="button"
             onClick={() => setPrefsOpen(true)}
             aria-label="Open preferences"
-            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-10 h-10 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <SlidersHorizontal size={26} className="text-black" />
+            <SlidersHorizontal size={20} className="text-black" />
           </button>
         </div>
 
         {/* Right side map buttons: Speed Limit · Recenter · Wide View · Compass */}
-        <div className="absolute bottom-[80px] right-4 z-10 flex flex-col gap-2 items-center">
+        <div className={`absolute bottom-[80px] right-4 z-10 flex flex-col gap-2 items-center transition-opacity duration-300 ${!isOnline ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
           {speedLimit !== null && (
             <div className="w-12 bg-white border-[3px] border-black rounded-lg text-center shadow-xl leading-none pointer-events-none py-0.5">
               <p className="text-[7px] font-black text-black tracking-tight pt-0.5">SPEED</p>
@@ -660,17 +702,17 @@ export default function Command() {
               setMapResetToken((n) => n + 1);
             }}
             aria-label="Recenter map"
-            className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-10 h-10 bg-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           >
-            <Navigation size={26} className="text-black" />
+            <Navigation size={20} className="text-black" />
           </button>
           <button
             type="button"
             onClick={() => setAdjustingDest((a) => !a)}
             aria-label={adjustingDest ? "Resume navigation" : "Wide view"}
-            className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${adjustingDest ? "bg-black" : "bg-white"}`}
+            className={`w-10 h-10 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${adjustingDest ? "bg-black" : "bg-white"}`}
           >
-            <MapPin size={26} className={adjustingDest ? "text-white" : "text-black"} />
+            <MapPin size={20} className={adjustingDest ? "text-white" : "text-black"} />
           </button>
           <button
             type="button"
@@ -680,9 +722,9 @@ export default function Command() {
               if (typeof oe?.requestPermission === "function") oe.requestPermission().catch(() => {});
             }}
             aria-label="Toggle heading-up mode"
-            className={`w-12 h-12 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-black" : "bg-white"}`}
+            className={`w-10 h-10 rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all ${headingUp ? "bg-black" : "bg-white"}`}
           >
-            <Compass size={26} className={headingUp ? "text-white" : "text-black"} />
+            <Compass size={20} className={headingUp ? "text-white" : "text-black"} />
           </button>
         </div>
       </div>
@@ -700,42 +742,57 @@ export default function Command() {
             </div>
           ) : (
             <>
-              {/* Main turn — large dashboard card */}
+              {/* Main turn — clickable → turn list */}
               <div className="flex items-stretch bg-card shadow-xl overflow-hidden">
-                <div className="w-20 bg-primary flex-shrink-0 flex items-center justify-center">
-                  {navStep
-                    ? <TurnIcon type={navStep.type} modifier={navStep.modifier} size={36} />
-                    : <Navigation size={30} className="text-white" />}
-                </div>
-                <div className="flex-1 min-w-0 px-4 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-2xl font-black text-foreground leading-tight flex-1 min-w-0 break-words">
-                      {navStep?.instruction ?? "Calculating…"}
-                    </p>
-                    {navDistM != null && (
-                      <span className="text-2xl font-black text-primary flex-shrink-0 tabular-nums pl-1">
-                        {formatDist(navDistM)}
-                      </span>
-                    )}
+                <button type="button" onClick={() => setTurnListOpen(true)} aria-label="View all turns"
+                  className="flex items-stretch flex-1 min-w-0 text-left active:bg-muted/20">
+                  <div className="w-[60px] bg-primary flex-shrink-0 flex items-center justify-center">
+                    {navStep
+                      ? <TurnIcon type={navStep.type} modifier={navStep.modifier} size={28} />
+                      : <Navigation size={24} className="text-white" />}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5 truncate">
-                    {routeInfo
-                      ? `${formatDist(routeInfo.remainingM)} remaining · ${Math.ceil(routeInfo.remainingSecs / 60)} min`
-                      : navStep?.name || navDest.name.split(",")[0]}
-                  </p>
-                </div>
-                <button type="button" aria-label="Cancel navigation"
-                  onClick={() => { setNavDest(null); setNavStep(null); setRerouting(false); setRouteInfo(null); }}
-                  className="px-3 flex items-center border-l border-border/30">
-                  <X size={20} className="text-muted-foreground" />
+                  <div className="flex-1 min-w-0 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-lg font-black text-foreground leading-snug flex-1 min-w-0 break-words">
+                        {navStep?.instruction ?? "Calculating…"}
+                      </p>
+                      {navDistM != null && (
+                        <span className="text-lg font-black text-primary flex-shrink-0 tabular-nums pl-1 pt-0.5">
+                          {formatDist(navDistM)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate font-medium">
+                      {routeInfo
+                        ? `${formatDist(routeInfo.remainingM)} remaining · ${Math.ceil(routeInfo.remainingSecs / 60)} min`
+                        : navStep?.name || navDest.name.split(",")[0]}
+                    </p>
+                  </div>
                 </button>
+                <div className="flex flex-col border-l border-border/30">
+                  <button type="button" aria-label={voiceEnabled ? "Mute" : "Unmute"}
+                    onClick={() => { const n = !voiceEnabled; setVoiceEnabled(n); localStorage.setItem("wego_voice", n ? "on" : "off"); }}
+                    className="flex-1 px-3 flex items-center justify-center border-b border-border/20 active:bg-muted/30">
+                    {voiceEnabled ? <Volume2 size={16} className="text-primary" /> : <VolumeX size={16} className="text-muted-foreground" />}
+                  </button>
+                  <button type="button" aria-label="Toggle navigation view"
+                    onClick={() => {
+                      const next = !navMinimized;
+                      setNavMinimized(next);
+                      sessionStorage.setItem("wego-nav-active", next ? "false" : "true");
+                      window.dispatchEvent(new CustomEvent("wego-nav-mode", { detail: !next }));
+                    }}
+                    className={`flex-1 px-3 flex items-center justify-center active:bg-muted/30 ${navMinimized ? "bg-primary/10" : ""}`}>
+                    <Home size={16} className={navMinimized ? "text-primary" : "text-muted-foreground"} />
+                  </button>
+                </div>
               </div>
               {/* Next step */}
               {navStep?.nextStep && (
-                <div className="flex items-center gap-3 px-4 py-2.5 bg-secondary border-b border-border shadow">
-                  <span className="text-xs font-black text-muted-foreground uppercase tracking-widest flex-shrink-0">THEN</span>
-                  <TurnIcon type={navStep.nextStep.type} modifier={navStep.nextStep.modifier} size={18} className="text-muted-foreground flex-shrink-0" />
-                  <p className="text-base font-bold text-foreground truncate">{navStep.nextStep.instruction}</p>
+                <div className="flex items-center gap-3 px-4 py-2 bg-secondary border-b border-border shadow">
+                  <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest flex-shrink-0">THEN</span>
+                  <TurnIcon type={navStep.nextStep.type} modifier={navStep.nextStep.modifier} size={15} className="text-muted-foreground flex-shrink-0" />
+                  <p className="text-sm font-semibold text-foreground truncate">{navStep.nextStep.instruction}</p>
                 </div>
               )}
             </>
@@ -743,7 +800,7 @@ export default function Command() {
         </div>
       )}
 
-      {/* ── ONLINE / OFFLINE BADGE — hidden during navigation ── */}
+      {/* ── ONLINE / OFFLINE BADGE ── */}
       {!navDest && (
         <div className="absolute top-4 left-0 right-0 z-20 flex flex-col items-center gap-2">
           <button
@@ -816,31 +873,110 @@ export default function Command() {
         </div>
       )}
 
+      {/* ── TURN LIST OVERLAY ── */}
+      {turnListOpen && (
+        <div className="absolute inset-0 z-[1100] bg-background flex flex-col">
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-border flex-shrink-0">
+            <button type="button" aria-label="Close turn list" onClick={() => setTurnListOpen(false)} className="active:scale-95 transition-transform">
+              <X size={22} className="text-foreground" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-black text-foreground truncate">{navDest?.name.split(",")[0]}</p>
+              {routeInfo && <p className="text-xs text-muted-foreground">{formatDist(routeInfo.remainingM)} · {Math.ceil(routeInfo.remainingSecs / 60)} min</p>}
+            </div>
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {allRouteSteps.filter(s => s.type !== "arrive").map((step, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-border/50">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <TurnIcon type={step.type} modifier={step.modifier} size={16} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground leading-snug">{step.instruction}</p>
+                  {step.name ? <p className="text-xs text-muted-foreground truncate">{step.name}</p> : null}
+                </div>
+                {step.distance != null && (
+                  <span className="text-xs font-bold text-muted-foreground flex-shrink-0 tabular-nums">{formatDist(step.distance)}</span>
+                )}
+              </div>
+            ))}
+            {navDest && (
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50">
+                <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                  <MapPin size={16} className="text-destructive" />
+                </div>
+                <p className="text-sm font-semibold text-foreground flex-1">{navDest.name.split(",")[0]}</p>
+              </div>
+            )}
+          </div>
+          {navDest && (
+            <div className="flex-shrink-0 px-4 py-4 border-t border-border">
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${navDest.coords[0]},${navDest.coords[1]}&travelmode=driving`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-secondary border border-border font-semibold text-sm text-foreground active:scale-95 transition-transform"
+              >
+                <Navigation size={16} className="text-primary" />
+                Open in Google Maps
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── BOTTOM SHEET ── */}
       <div
-        className={`absolute bottom-0 left-0 right-0 z-20 bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ease-out max-h-[72%] ${
-          drawerOpen ? "translate-y-0" : "translate-y-[calc(100%-28px)]"
+        className={`absolute bottom-0 left-0 right-0 z-20 bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+          drawerOpen ? "translate-y-0 max-h-[68%]" : "translate-y-[calc(100%-28px)] max-h-[68%]"
         }`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Handle area — tap to toggle */}
-        <div
-          className="flex-shrink-0 pt-2 pb-2 px-4 cursor-pointer"
-          onClick={() => { if (!hasRequest) setDrawerOpen((o) => !o); }}
-        >
-          <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto" />
-          {drawerOpen && (
-            <div className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-3 mt-3">
-              <span className="flex-1 text-base font-medium text-muted-foreground select-none">Daily Opportunities</span>
-            </div>
-          )}
+        {/* Handle */}
+        <div className="flex-shrink-0 h-7 flex items-center justify-center px-4 cursor-pointer" onClick={() => { if (!hasRequest) setDrawerOpen((o) => !o); }}>
+          <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
         </div>
 
+        {/* Offline home panel */}
+        {!isOnline && (
+          <div className="flex-shrink-0 px-4 pt-2.5 pb-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-base font-black text-foreground">Ready to drive?</p>
+              <div className="flex gap-3 text-center">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Today</p>
+                  <p className="text-sm font-black text-foreground">${todayEntries.reduce((s, e) => s + e.amount, 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Rides</p>
+                  <p className="text-sm font-black text-foreground">{todayEntries.length}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Goal</p>
+                  <p className="text-sm font-black text-foreground">{weeklyDone}/{weeklyGoal}</p>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleOnline}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-black text-base active:scale-95 transition-transform btn-glow"
+            >
+              Go Online
+            </button>
+            <div className="h-px bg-border" />
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Opportunities</p>
+          </div>
+        )}
+
         {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 px-4 pb-6 space-y-4">
+        <div ref={drawerScrollRef} className="overflow-y-auto flex-1 px-4 pt-3 pb-6 space-y-4" onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
 
           {/* Daily Opportunities */}
+          {isOnline && (
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Opportunities</p>
+          )}
           <div className="space-y-3">
             {liveOpps.length === 0 ? (
               <div className="py-5 text-center">

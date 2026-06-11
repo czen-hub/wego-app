@@ -860,7 +860,7 @@ export default function TripInProgress() {
   if (!trip) return null;
 
   return (
-    <div className="relative max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden" onPointerDown={unlockSpeech}>
+    <div className="relative w-full bg-background flex flex-col h-[100dvh] overflow-hidden" onPointerDown={unlockSpeech}>
       {/* Live Map */}
       <div className={`relative ${mapPanelClassName}`}>
         <ClientMap
@@ -911,17 +911,17 @@ export default function TripInProgress() {
             className="absolute top-0 left-0 right-0 z-[1000] text-left w-full nav-banner-safe">
             {/* Main step — full-width dashboard card */}
             <div className="flex items-stretch bg-card shadow-xl overflow-hidden">
-              <div className="w-16 bg-primary flex-shrink-0 flex items-center justify-center">
-                <ManeuverIcon type={currentStep.type} modifier={currentStep.modifier} size={30} />
+              <div className="w-[72px] bg-primary flex-shrink-0 flex items-center justify-center">
+                <ManeuverIcon type={currentStep.type} modifier={currentStep.modifier} size={32} />
               </div>
-              <div className="flex-1 min-w-0 px-3 py-2">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-2xl font-black text-foreground leading-tight flex-1 min-w-0 break-words">{currentStep.instruction}</p>
+              <div className="flex-1 min-w-0 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[22px] font-black text-foreground leading-snug flex-1 min-w-0 break-words">{currentStep.instruction}</p>
                   {navDistM != null && (
-                    <span className="text-2xl font-black text-primary flex-shrink-0 tabular-nums pl-1">{fmtDist(navDistM)}</span>
+                    <span className="text-[22px] font-black text-primary flex-shrink-0 tabular-nums">{fmtDist(navDistM)}</span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                <p className="text-sm text-muted-foreground mt-1 truncate font-medium">
                   {routeInfo
                     ? `${fmtDist(routeInfo.remainingM)} remaining · ${Math.ceil(routeInfo.remainingSecs / 60)} min`
                     : currentStep.name || ""}
@@ -930,10 +930,10 @@ export default function TripInProgress() {
             </div>
             {/* Next step preview */}
             {currentStep.nextStep && (
-              <div className="flex items-center gap-3 px-3 py-2 bg-secondary border-b border-border shadow">
-                <span className="text-xs font-black text-muted-foreground uppercase tracking-widest flex-shrink-0">THEN</span>
-                <ManeuverIcon type={currentStep.nextStep.type} modifier={currentStep.nextStep.modifier} className="text-muted-foreground flex-shrink-0" size={16} />
-                <p className="text-sm font-bold text-foreground line-clamp-1">{currentStep.nextStep.instruction}</p>
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-secondary border-b border-border shadow">
+                <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest flex-shrink-0">THEN</span>
+                <ManeuverIcon type={currentStep.nextStep.type} modifier={currentStep.nextStep.modifier} className="text-muted-foreground flex-shrink-0" size={15} />
+                <p className="text-sm font-semibold text-foreground line-clamp-1">{currentStep.nextStep.instruction}</p>
               </div>
             )}
           </button>
@@ -1065,11 +1065,10 @@ export default function TripInProgress() {
           </div>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-transparent to-background pointer-events-none" />
       </div>
 
       {/* Bottom Panel */}
-      <div className="px-4 pt-2 space-y-4">
+      <div className="px-4 pt-2 space-y-3">
         {/* Rider / Delivery Info — collapsed strip by default */}
         <div className="glass-card border border-border rounded-xl overflow-hidden">
           {/* Always-visible strip */}
@@ -1730,6 +1729,10 @@ export default function TripInProgress() {
                     if (actualFare < trip.riderPayment) {
                       setEarlyEndData({ proratedFare: actualFare });
                     }
+                                    // Reset stale trip refs
+                    enRouteElapsed.current = 0;
+                    enRouteFeeRef.current = 5.00;
+                    if (fitRouteTimerRef.current) clearTimeout(fitRouteTimerRef.current);
                     setPhase("complete");
                   } catch {
                     setIsCompleting(false);
@@ -1786,7 +1789,7 @@ export default function TripInProgress() {
             </button>
             <div className="flex-1 min-w-0">
               <p className="text-base font-black text-foreground truncate">
-                {phase === "to-pickup" ? "Route to pickup" : `Route to ${trip.dropoffLocation.split(",")[0]}`}
+                {phase === "to-pickup" ? "Route to pickup" : `Route to ${trip.dropoffLocation?.split(",")[0] ?? "destination"}`}
               </p>
               {routeInfo && (
                 <p className="text-xs text-muted-foreground">{fmtDist(routeInfo.remainingM)} · {Math.ceil(routeInfo.remainingSecs / 60)} min remaining</p>
@@ -1797,7 +1800,7 @@ export default function TripInProgress() {
           {/* Steps list */}
           <div className="flex-1 overflow-y-auto">
             {allRouteSteps.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading route…</div>
+              <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">{rerouting ? "Loading route…" : "No steps available"}</div>
             ) : (
               allRouteSteps.map((step, i) => (
                 <div key={i} className={`flex items-center gap-4 px-4 py-3 border-b border-border/40 ${i === 0 ? "bg-primary/5" : ""}`}>
@@ -1925,6 +1928,9 @@ export default function TripInProgress() {
                       }
                       setCancelReason(null);
                       setEarlyEndData({ proratedFare: proratedBase });
+                      enRouteElapsed.current = 0;
+                      enRouteFeeRef.current = 5.00;
+                      if (fitRouteTimerRef.current) clearTimeout(fitRouteTimerRef.current);
                       setPhase("complete");
                     }}
                     className="py-3 rounded-xl bg-destructive/10 border border-destructive/40 text-destructive font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed">

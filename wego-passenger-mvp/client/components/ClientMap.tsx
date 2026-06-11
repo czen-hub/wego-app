@@ -43,6 +43,13 @@ function dotEl(color: string, border = "white", glow = "rgba(0,0,0,0.4)") {
   return el;
 }
 
+function draggablePinEl(): HTMLElement {
+  const el = document.createElement("div");
+  el.style.cssText = "width:26px;height:34px;cursor:grab;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.45));";
+  el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="34" viewBox="0 0 26 34"><path d="M13 0C5.82 0 0 5.82 0 13c0 8.67 13 21 13 21s13-12.33 13-21C26 5.82 20.18 0 13 0z" fill="white" stroke="#1e293b" stroke-width="1.5"/><circle cx="13" cy="13" r="5" fill="#1e293b"/></svg>`;
+  return el;
+}
+
 function navArrowEl(bearing: number): { wrapper: HTMLDivElement; inner: HTMLDivElement } {
   const wrapper = document.createElement("div");
   wrapper.style.cssText = `width:22px;height:22px;`;
@@ -69,6 +76,7 @@ interface ClientMapProps {
   followBearing?: boolean;
   onCenterChange?: (coords: [number, number]) => void;
   onClickLocation?: (coords: [number, number]) => void;
+  onToDrag?: (coords: [number, number]) => void;
 }
 
 export default function ClientMap({
@@ -87,6 +95,7 @@ export default function ClientMap({
   followBearing = false,
   onCenterChange,
   onClickLocation,
+  onToDrag,
 }: ClientMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -115,6 +124,7 @@ export default function ClientMap({
   const zoomRef = useRef<number>(zoom);
   const onCenterChangeRef = useRef(onCenterChange);
   const onClickRef = useRef(onClickLocation);
+  const onToDragRef = useRef(onToDrag);
   const accuracyRef = useRef<number | null>(accuracy ?? null);
   const posBufferRef = useRef<[number, number][]>([]);
   const snapAbortRef = useRef<AbortController | null>(null);
@@ -127,6 +137,7 @@ export default function ClientMap({
 
   useEffect(() => { onCenterChangeRef.current = onCenterChange; }, [onCenterChange]);
   useEffect(() => { onClickRef.current = onClickLocation; }, [onClickLocation]);
+  useEffect(() => { onToDragRef.current = onToDrag; }, [onToDrag]);
   useEffect(() => { accuracyRef.current = accuracy ?? null; }, [accuracy]);
   useEffect(() => { centerRef.current = center; }, [center]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
@@ -454,9 +465,20 @@ export default function ClientMap({
     toMkRef.current?.remove();
     toMkRef.current = null;
     if (to) {
-      toMkRef.current = new mb.Marker({ element: dotEl("white", "#1e293b") })
+      const mk = new mb.Marker({
+        element: onToDragRef.current ? draggablePinEl() : dotEl("white", "#1e293b"),
+        draggable: !!onToDragRef.current,
+        anchor: onToDragRef.current ? "bottom" : "center",
+      })
         .setLngLat([to[1], to[0]])
         .addTo(map);
+      if (onToDragRef.current) {
+        mk.on("dragend", () => {
+          const ll = mk.getLngLat();
+          onToDragRef.current?.([ll.lat, ll.lng]);
+        });
+      }
+      toMkRef.current = mk;
     }
 
     // via markers (supports multiple)

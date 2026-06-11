@@ -69,13 +69,27 @@ function formatPinnedAddress(label: string, coords: [number, number] | null) {
   return `${label} (${coords[0].toFixed(5)}, ${coords[1].toFixed(5)})`;
 }
 
-async function geocode(address: string): Promise<[number, number] | null> {
+async function geocode(address: string, proximity?: [number, number]): Promise<[number, number] | null> {
   try {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?types=address,place,poi&language=en&country=us&limit=1&access_token=${TOKEN}`;
+    const prox = proximity ? `&proximity=${proximity[1]},${proximity[0]}` : "&proximity=-121.9552,37.3541";
+    const bbox = "&bbox=-124.5,32.5,-114.1,42.0";
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?types=address,place,poi&language=en&country=us&limit=1${prox}${bbox}&access_token=${TOKEN}`;
     const res = await fetch(url);
     const data = await res.json();
     const feat = data.features?.[0];
     if (feat) return [feat.center[1] as number, feat.center[0] as number];
+  } catch {}
+  return null;
+}
+
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=address,poi&language=en&access_token=${TOKEN}`
+    );
+    const data = await res.json();
+    const feat = data.features?.[0];
+    if (feat) return (feat.place_name ?? feat.text) as string;
   } catch {}
   return null;
 }
@@ -267,15 +281,20 @@ export default function RideRequest() {
 
   const FALLBACK: [number, number] = currentCoords ?? [37.3541, -121.9552];
 
+  // Skip geocoding on the first render when coords already came from nav state
+  const skipDestGeoRef = useRef(!!routeState.destinationCoords);
+  const skipPickupGeoRef = useRef(!!routeState.pickupCoords);
+
   // Geocode destination on type
   useEffect(() => {
+    if (skipDestGeoRef.current) { skipDestGeoRef.current = false; return; }
     if (!destination.trim() || LOCATION_COORDS[destination]) {
       if (!LOCATION_COORDS[destination]) setPinnedDestinationCoords(null);
       return;
     }
     let cancelled = false;
     const timer = setTimeout(() => {
-      geocode(destination).then((coords) => {
+      geocode(destination, currentCoords ?? undefined).then((coords) => {
         if (!cancelled && coords) setPinnedDestinationCoords(coords);
       });
     }, 600);
@@ -284,10 +303,11 @@ export default function RideRequest() {
 
   // Geocode pickup on type
   useEffect(() => {
+    if (skipPickupGeoRef.current) { skipPickupGeoRef.current = false; return; }
     if (!pickup.trim() || pickup === "Current Location" || LOCATION_COORDS[pickup]) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      geocode(pickup).then((coords) => {
+      geocode(pickup, currentCoords ?? undefined).then((coords) => {
         if (!cancelled && coords) setPinnedPickupCoords(coords);
       });
     }, 600);
@@ -354,7 +374,7 @@ export default function RideRequest() {
       const existing = stopGeocodeTimers.current.get(id);
       if (existing) clearTimeout(existing);
       const timer = setTimeout(async () => {
-        const coords = await geocode(address);
+        const coords = await geocode(address, currentCoords ?? undefined);
         if (coords) setStops(prev => prev.map(s => s.id === id ? { ...s, coords } : s));
         stopGeocodeTimers.current.delete(id);
       }, 600);
@@ -435,6 +455,16 @@ export default function RideRequest() {
   useEffect(() => { if (!routeState.destination) setDestSearchOpen(true); }, []);
 
   // ── Dropdowns ────────────────────────────────────────────────────────────
+
+  const handleDestPinDrag = async (coords: [number, number]) => {
+    setPinnedDestinationCoords(coords);
+    skipDestGeoRef.current = true;
+    const label = await reverseGeocode(coords[0], coords[1]);
+    if (label) {
+      skipDestGeoRef.current = true;
+      setDestination(label);
+    }
+  };
 
   const selectDestination = (label: string, coords?: [number, number]) => {
     setDestination(label);
@@ -522,7 +552,14 @@ export default function RideRequest() {
 
       {/* MAP */}
       <div className="request-map-panel relative">
-        <ClientMap from={fromCoords} to={toCoords} viaPoints={viaPoints.length > 0 ? viaPoints : undefined} className="absolute inset-0" />
+        <ClientMap
+          from={fromCoords}
+          to={toCoords}
+          viaPoints={viaPoints.length > 0 ? viaPoints : undefined}
+          className="absolute inset-0"
+          interactive={!!destination.trim()}
+          onToDrag={destination.trim() ? handleDestPinDrag : undefined}
+        />
 
         <button
           type="button"
@@ -543,6 +580,15 @@ export default function RideRequest() {
             <ExternalLink size={12} />
             Google Maps
           </a>
+        )}
+
+        {destination.trim() && (
+          <div className="absolute bottom-9 left-1/2 -translate-x-1/2 z-20 pointer-events-none whitespace-nowrap">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm">
+              <MapPin size={11} className="text-white" />
+              <span className="text-xs font-medium text-white">Drag pin to adjust entrance</span>
+            </div>
+          </div>
         )}
 
         <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-b from-transparent to-background pointer-events-none z-10" />

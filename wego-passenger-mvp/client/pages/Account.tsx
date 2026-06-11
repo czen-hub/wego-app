@@ -86,7 +86,6 @@ const INITIAL_MESSAGES: InboxMessage[] = [
 ];
 
 const REWARDS_HISTORY: { id: string; label: string; pts: number; date: string }[] = [];
-const REWARDS_TOTAL = 0;
 
 const REDEEM_OPTIONS = [
   { id: "rd1", label: "$5 off next ride", cost: 500 },
@@ -126,7 +125,7 @@ const HELP_FAQS = [
   { q: "What if my driver doesn't show?", a: "If your driver hasn't arrived within 10 minutes of the expected time, use the chat or call button on the ride screen to reach them. If the driver is significantly late, the app automatically waives the cancellation fee — you can cancel penalty-free." },
   { q: "How are fares calculated?", a: "Fares are based on distance, estimated trip time, a base rate, and a booking fee. There is never surge pricing on WeGo — the fare shown at booking is the fare you pay, always.\n\nCompared to Corp X on-demand, WeGo fares are typically 10–20% lower. On advance bookings, the gap is larger — WeGo Reserve runs $15–25 cheaper than Corp Reserve on the same route, because Corp adds a hidden variable reservation fee that can reach $15–35+ depending on demand." },
   { q: "Can I schedule a ride in advance?", a: "Yes — tap 'Reserve' on the home screen to book up to 7 days ahead. A flat $8.00 advance booking fee applies — 100% of it goes directly to your driver as a scheduling commitment bonus, not to WeGo.\n\nFree cancellation up to 1 hour before your pickup. Even with the advance fee, WeGo Reserve is typically $15–25 cheaper than Corp Reserve on the same route." },
-  { q: "Can I ask my driver to make a stop?", a: "Yes — tap 'Request a Stop' during your ride. A flat $2.00 stop fee is added to your fare. 100% of it goes directly to your driver for the extra wait time. You can make multiple stops; each adds $2.00.\n\nBoth the stop fee and any wait meter charges appear as separate line items on your final receipt so everything is transparent." },
+  { q: "Can I ask my driver to make a stop?", a: "Yes — tap 'Request a Stop' during your ride. A $3.50 base stop fee applies, plus $1.00 per extra mile and $0.20 per extra minute the detour adds. 100% goes directly to your driver. You can make multiple stops; each is priced individually based on the detour length.\n\nStop fees appear as separate line items on your final receipt so everything is transparent." },
   { q: "Can I tip my driver?", a: "Yes — you can tip after your ride is complete. 100% of tips go directly to your driver. WeGo never takes a cut of tips. You'll be prompted to tip on the post-ride screen; you can also tip from your Ride History at any time within 24 hours." },
   { q: "How do I message or call my driver?", a: "Once a driver is matched, tap the phone or chat icon on the ride screen. You can send quick messages or type your own. All communication is in-app — your personal phone number is never shared with the driver." },
   { q: "I left something in the car — what do I do?", a: "Go to Ride History, find the trip, and tap 'Report Lost Item'. You can contact your driver directly through the app for up to 24 hours after the ride ends. If you can't reach the driver, contact WeGo support — we respond within 2 hours and will coordinate retrieval.\n\nWeGo does not charge a lost item retrieval fee — any arrangement is between you and your driver." },
@@ -289,7 +288,7 @@ export default function Account() {
   };
 
   const redeem = (label: string, cost: number) => {
-    if (REWARDS_TOTAL < cost) return;
+    if (rewardsPoints < cost) return;
     setRedeemFeedback(`"${label}" applied to your next ride!`);
     setTimeout(() => setRedeemFeedback(null), 3000);
   };
@@ -328,6 +327,7 @@ export default function Account() {
   const totalRides = profile?.totalRides ?? 0;
   const rating = (profile?.rating ?? 5.0).toFixed(2);
   const savedVsCorp = (totalRides * 4.5).toFixed(0);
+  const rewardsPoints = totalRides * 10;
 
   return (
     <>
@@ -383,7 +383,7 @@ export default function Account() {
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mt-0.5">Saved</p>
           </div>
           <div className="bg-card border border-border rounded-xl p-3 text-center">
-            <p className="text-xl font-bold text-foreground">{REWARDS_TOTAL}</p>
+            <p className="text-xl font-bold text-foreground">{rewardsPoints}</p>
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mt-0.5">Points</p>
           </div>
         </div>
@@ -422,7 +422,7 @@ export default function Account() {
             <Row
               icon={<Award size={18} />}
               label="My Rewards"
-              sublabel={`${REWARDS_TOTAL} pts · earn 10 pts per ride`}
+              sublabel={`${rewardsPoints} pts · earn 10 pts per ride`}
               onClick={() => setRewardsOpen(true)}
             />
             <Row
@@ -635,7 +635,7 @@ export default function Account() {
             {/* Balance */}
             <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-center">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Points Balance</p>
-              <p className="text-5xl font-bold text-primary">{REWARDS_TOTAL}</p>
+              <p className="text-5xl font-bold text-primary">{rewardsPoints}</p>
               <p className="text-xs text-muted-foreground mt-1">Earn 10 pts per ride · 5 pts per 5-star rating</p>
             </div>
 
@@ -651,7 +651,7 @@ export default function Account() {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Redeem</p>
               <div className="space-y-2">
                 {REDEEM_OPTIONS.map((opt) => {
-                  const canAfford = REWARDS_TOTAL >= opt.cost;
+                  const canAfford = rewardsPoints >= opt.cost;
                   return (
                     <div key={opt.id} className="flex items-center justify-between bg-background border border-border rounded-xl px-4 py-3">
                       <div>

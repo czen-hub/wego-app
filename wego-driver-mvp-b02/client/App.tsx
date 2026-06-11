@@ -168,7 +168,7 @@ const App = () => (
                   path="/trip"
                   element={
                     <ProtectedRoute>
-                      <div className="w-full max-w-[430px] mx-auto h-screen bg-background overflow-y-auto">
+                      <div className="w-full max-w-[430px] mx-auto h-[100dvh] bg-background overflow-y-auto">
                         <TripInProgress />
                       </div>
                     </ProtectedRoute>

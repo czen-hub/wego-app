@@ -112,7 +112,7 @@ export default function RideInProgress() {
   const [headingUp, setHeadingUp] = useState(false);
   const [driverCardExpanded, setDriverCardExpanded] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
-  const [autoCloseIn, setAutoCloseIn] = useState(10);
+  const [autoCloseIn, setAutoCloseIn] = useState(30);
   const autoCloseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMapMoveRef = useRef<number>(0);
   const [contactWindowSecs, setContactWindowSecs] = useState(300);
@@ -471,6 +471,13 @@ export default function RideInProgress() {
     return () => clearInterval(id);
   }, []);
 
+  // Clear suggestion timer on unmount
+  useEffect(() => {
+    return () => {
+      if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current);
+    };
+  }, []);
+
   // Timer during in_progress phase
   useEffect(() => {
     if (phase !== "in_progress") return;
@@ -642,6 +649,12 @@ export default function RideInProgress() {
         const extraMiles = Math.max(0, viaM - directM) / 1609.34;
         fareDelta = parseFloat(Math.max(BASE_STOP_FEE, BASE_STOP_FEE + extraMiles * RATE_PER_MILE).toFixed(2));
       }
+    }
+
+    if (!stopLatLng) {
+      showError("Couldn't find that address — try again");
+      setStopCalculating(false);
+      return;
     }
 
     if (stopIsEditing) {
@@ -1112,7 +1125,7 @@ export default function RideInProgress() {
   })();
 
   return (
-    <div className="relative max-w-[430px] mx-auto bg-background flex flex-col pb-6 page-dvh overflow-hidden">
+    <div className="relative max-w-[430px] mx-auto bg-background flex flex-col h-full overflow-hidden">
       {/* Map — fills remaining space above the cards */}
       <div className="relative z-0 flex-1 min-h-[240px]">
         {(() => {
@@ -1176,7 +1189,15 @@ export default function RideInProgress() {
 
         {/* Phase badge */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-          <div className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border backdrop-blur-sm bg-primary/20 border-primary/40 text-primary">
+          <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border backdrop-blur-sm ${
+            phase === "matching"
+              ? "bg-slate-500/20 border-slate-400/40 text-slate-300"
+              : phase === "en_route"
+              ? "bg-amber-500/20 border-amber-500/40 text-amber-400"
+              : phase === "arrived"
+              ? "bg-sky-500/20 border-sky-400/40 text-sky-300"
+              : "bg-emerald-500/20 border-emerald-400/40 text-emerald-300"
+          }`}>
             {phase === "matching" && (isFood ? "Placing Delivery" : isCourier ? "Sending Package" : "Finding Driver")}
             {phase === "en_route" && (isFood ? "Collecting Your Order" : isCourier ? "Collecting Package" : "Driver En Route")}
             {phase === "arrived" && (isFood ? "Driver at Restaurant" : isCourier ? "Driver at Sender" : "Driver Arrived")}

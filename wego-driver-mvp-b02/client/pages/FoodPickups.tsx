@@ -65,7 +65,7 @@ export default function FoodPickups() {
   };
 
   return (
-    <div className="bg-background pt-4 px-4 pb-6 min-h-screen">
+    <div className="bg-background pt-3 px-4 pb-4 min-h-screen">
       <div className="max-w-2xl mx-auto space-y-4">
 
         {/* Header */}

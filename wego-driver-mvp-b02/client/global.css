@@ -186,7 +186,7 @@
   }
 
   .page-dvh {
-    min-height: 100dvh;
+    height: 100dvh;
   }
 
   .ride-map-panel {
@@ -197,6 +197,10 @@
 
   .nav-banner-safe {
     padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .page-fill {
+    height: 100%;
   }
 }
 

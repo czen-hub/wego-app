@@ -11,6 +11,7 @@ import History from "@/pages/History";
 import Drivers from "@/pages/Drivers";
 import Disputes from "@/pages/Disputes";
 import Payouts from "@/pages/Payouts";
+import Promotions from "@/pages/Promotions";
 
 type AuthState = "loading" | "unauthenticated" | "authenticated";
 
@@ -64,6 +65,7 @@ export default function App() {
               <Route path="/drivers" element={<Drivers />} />
               <Route path="/disputes" element={<Disputes />} />
               <Route path="/payouts" element={<Payouts />} />
+              <Route path="/promotions" element={<Promotions />} />
             </Route>
             <Route path="/login" element={<Navigate to="/overview" replace />} />
             <Route path="*" element={<Navigate to="/overview" replace />} />

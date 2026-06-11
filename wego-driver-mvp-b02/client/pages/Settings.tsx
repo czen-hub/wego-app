@@ -498,8 +498,8 @@ export default function Settings() {
 
   return (
     <>
-      <div className="pt-4 px-4 pb-6">
-        <div className="max-w-2xl mx-auto space-y-5">
+      <div className="pt-3 px-4 pb-4">
+        <div className="max-w-2xl mx-auto space-y-4">
 
           {/* Header */}
           <div>

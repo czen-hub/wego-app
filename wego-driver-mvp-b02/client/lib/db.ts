@@ -16,7 +16,7 @@ import {
   increment,
   runTransaction,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { db, auth } from "./firebase";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -263,6 +263,9 @@ export function listenToDriverRide(
 }
 
 export async function acceptRide(rideId: string, driverId: string, driverMetadata: { name: string; rating: number; car: string; plate: string; }) {
+  if (!auth.currentUser || auth.currentUser.uid !== driverId) {
+    throw new Error("Unauthorized: cannot accept ride as another driver.");
+  }
   const rideRef = doc(db, "rides", rideId);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(rideRef);
