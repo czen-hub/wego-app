@@ -191,8 +191,6 @@ export default function ReserveRide() {
         scheduledDate: selectedDate,
         scheduledHour: selectedHour,
         scheduledMinute: selectedMinute,
-        pickupCoords: LOCATION_COORDS[pickup] ?? null,
-        dropoffCoords: destCoords,
       });
       setBookingRef(docRef.id.slice(0, 8).toUpperCase());
       setConfirmed(true);

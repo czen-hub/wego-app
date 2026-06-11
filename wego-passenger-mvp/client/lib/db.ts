@@ -157,12 +157,10 @@ export async function requestRide(opts: {
   dropoffAddress: string;
   fare: number;
   type?: RideType;
-  pickupCoords?: [number, number] | null;
-  dropoffCoords?: [number, number] | null;
   estimatedMinutes?: number;
   isAdvanced?: boolean;
   pinEnabled?: boolean;
-  plannedStops?: Array<{ address: string; lat: number; lng: number }>;
+  plannedStops?: Array<{ address: string }>;
   initialStopCount?: number;
   initialStopFeeTotal?: number;
 }) {
@@ -187,8 +185,8 @@ export async function requestRide(opts: {
     driverPlate: "",
     pickupAddress: opts.pickupAddress,
     dropoffAddress: opts.dropoffAddress,
-    pickupLocation: opts.pickupCoords ? new GeoPoint(opts.pickupCoords[0], opts.pickupCoords[1]) : null,
-    dropoffLocation: opts.dropoffCoords ? new GeoPoint(opts.dropoffCoords[0], opts.dropoffCoords[1]) : null,
+    pickupLocation: null,
+    dropoffLocation: null,
     fare: opts.fare,
     driverTake,
     coopFee,
@@ -196,7 +194,7 @@ export async function requestRide(opts: {
     isAdvanced: opts.isAdvanced ?? false,
     pin,
     pinRequired: opts.pinEnabled ?? false,
-    stops: (opts.plannedStops ?? []).map(s => ({ address: s.address, lat: s.lat, lng: s.lng, fareDelta: 0 })),
+    stops: (opts.plannedStops ?? []).map(s => ({ address: s.address, fareDelta: 0 })),
     stopCount: opts.initialStopCount ?? 0,
     stopFeeTotal: opts.initialStopFeeTotal ?? 0,
     riderRating,
@@ -249,8 +247,6 @@ export async function createReservedRide(opts: {
   scheduledDate: string;
   scheduledHour: number;
   scheduledMinute: number;
-  pickupCoords?: [number, number] | null;
-  dropoffCoords?: [number, number] | null;
 }) {
   const coopFee = Math.round(opts.fare * 0.12 * 100) / 100;
   const driverTake = Math.round((opts.fare - coopFee) * 100) / 100;
@@ -272,8 +268,8 @@ export async function createReservedRide(opts: {
     driverPlate: "",
     pickupAddress: opts.pickupAddress,
     dropoffAddress: opts.dropoffAddress,
-    pickupLocation: opts.pickupCoords ? new GeoPoint(opts.pickupCoords[0], opts.pickupCoords[1]) : null,
-    dropoffLocation: opts.dropoffCoords ? new GeoPoint(opts.dropoffCoords[0], opts.dropoffCoords[1]) : null,
+    pickupLocation: null,
+    dropoffLocation: null,
     fare: opts.fare,
     driverTake,
     coopFee,

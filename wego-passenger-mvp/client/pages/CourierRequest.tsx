@@ -309,8 +309,6 @@ export default function CourierRequest() {
           dropoffAddress: `${dropoffAddress} [${deliveryNotes}]`,
           fare: finalFare,
           type: "courier",
-          pickupCoords: pCoords,
-          dropoffCoords: dCoords,
           estimatedMinutes: finalRoute.mins,
         });
       }

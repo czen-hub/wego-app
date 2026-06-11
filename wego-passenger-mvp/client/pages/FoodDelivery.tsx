@@ -188,8 +188,6 @@ export default function FoodDelivery() {
           dropoffAddress: deliveryAddress,
           fare: finalFare,
           type: "food",
-          pickupCoords: rCoords,
-          dropoffCoords: dCoords,
           estimatedMinutes: finalRoute.mins,
         });
       }

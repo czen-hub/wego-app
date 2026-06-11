@@ -64,11 +64,6 @@ interface StopEntry {
   coords: [number, number] | null;
 }
 
-function formatPinnedAddress(label: string, coords: [number, number] | null) {
-  if (!coords) return label;
-  return `${label} (${coords[0].toFixed(5)}, ${coords[1].toFixed(5)})`;
-}
-
 async function geocode(address: string, proximity?: [number, number]): Promise<[number, number] | null> {
   try {
     const prox = proximity ? `&proximity=${proximity[1]},${proximity[0]}` : "&proximity=-121.9552,37.3541";
@@ -518,16 +513,14 @@ export default function RideRequest() {
     try {
       if (user) {
         const plannedStops = stops
-          .filter(s => s.coords !== null)
-          .map(s => ({ address: s.address, lat: s.coords![0], lng: s.coords![1] }));
+          .filter(s => s.address.trim())
+          .map(s => ({ address: s.address }));
         await requestRide({
           passengerId: user.uid,
           passengerName: profile?.name || "Passenger",
-          pickupAddress: formatPinnedAddress(pickup, pinnedPickupCoords),
-          dropoffAddress: formatPinnedAddress(destination, pinnedDestinationCoords),
+          pickupAddress: pickup,
+          dropoffAddress: destination,
           fare: fare + tollTotal,
-          pickupCoords: effectivePickupCoords ?? LOCATION_COORDS[pickup] ?? null,
-          dropoffCoords: effectiveDestinationCoords ?? LOCATION_COORDS[destination] ?? null,
           estimatedMinutes: mins,
           pinEnabled: localStorage.getItem("wego_pin_required") === "true",
           plannedStops,
