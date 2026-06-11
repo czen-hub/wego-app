@@ -6,6 +6,7 @@ import { auth, db } from "@/firebase";
 import Login from "@/pages/Login";
 import Layout from "@/components/Layout";
 import Overview from "@/pages/Overview";
+import LiveFleet from "@/pages/LiveFleet";
 import Rides from "@/pages/Rides";
 import History from "@/pages/History";
 import Drivers from "@/pages/Drivers";
@@ -60,6 +61,7 @@ export default function App() {
             <Route element={<Layout user={user!} />}>
               <Route path="/" element={<Navigate to="/overview" replace />} />
               <Route path="/overview" element={<Overview />} />
+              <Route path="/live-fleet" element={<LiveFleet />} />
               <Route path="/rides" element={<Rides />} />
               <Route path="/history" element={<History />} />
               <Route path="/drivers" element={<Drivers />} />

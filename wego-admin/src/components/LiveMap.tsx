@@ -51,7 +51,12 @@ function createDotEl(color: string) {
   return el;
 }
 
-export default function LiveMap() {
+interface LiveMapProps {
+  mapClassName?: string;
+  hideCard?: boolean;
+}
+
+export default function LiveMap({ mapClassName = "h-[420px]", hideCard = false }: LiveMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const driverMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -211,27 +216,40 @@ export default function LiveMap() {
     };
   }, [mapReady]);
 
-  return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden">
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Navigation size={15} className="text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">Live Fleet</h2>
+  const header = (
+    <div className="px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center gap-2">
+        <Navigation size={15} className="text-primary" />
+        <h2 className="text-sm font-semibold text-foreground">Live Fleet</h2>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+          <span className="text-xs text-muted-foreground">{onlineCount} online</span>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-            <span className="text-xs text-muted-foreground">{onlineCount} online</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-            <span className="text-xs text-muted-foreground">
-              {activeRideCount} active ride{activeRideCount !== 1 ? "s" : ""}
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+          <span className="text-xs text-muted-foreground">
+            {activeRideCount} active ride{activeRideCount !== 1 ? "s" : ""}
+          </span>
         </div>
       </div>
-      <div ref={containerRef} className="h-[420px]" />
+    </div>
+  );
+
+  if (hideCard) {
+    return (
+      <div className="flex flex-col h-full">
+        {header}
+        <div ref={containerRef} className={`flex-1 ${mapClassName}`} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      {header}
+      <div ref={containerRef} className={mapClassName} />
     </div>
   );
 }

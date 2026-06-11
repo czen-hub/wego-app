@@ -2,18 +2,19 @@ import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { signOut, type User } from "firebase/auth";
 import {
-  LayoutDashboard, Car, Clock, Users, AlertTriangle, Banknote, LogOut, Sun, Moon, Megaphone
+  LayoutDashboard, Car, Clock, Users, AlertTriangle, Banknote, LogOut, Sun, Moon, Megaphone, Navigation
 } from "lucide-react";
 import { auth } from "@/firebase";
 
 const NAV = [
-  { to: "/overview",  label: "Overview",      icon: LayoutDashboard },
-  { to: "/rides",     label: "Active Rides",  icon: Car },
-  { to: "/history",   label: "Ride History",  icon: Clock },
-  { to: "/drivers",   label: "Drivers",       icon: Users },
-  { to: "/disputes",   label: "Disputes",      icon: AlertTriangle },
-  { to: "/payouts",    label: "Payouts",       icon: Banknote },
-  { to: "/promotions", label: "Promotions",    icon: Megaphone },
+  { to: "/overview",    label: "Overview",      icon: LayoutDashboard },
+  { to: "/live-fleet",  label: "Live Fleet",    icon: Navigation },
+  { to: "/rides",       label: "Active Rides",  icon: Car },
+  { to: "/history",     label: "Ride History",  icon: Clock },
+  { to: "/drivers",     label: "Drivers",       icon: Users },
+  { to: "/disputes",    label: "Disputes",      icon: AlertTriangle },
+  { to: "/payouts",     label: "Payouts",       icon: Banknote },
+  { to: "/promotions",  label: "Promotions",    icon: Megaphone },
 ];
 
 export default function Layout({ user }: { user: User }) {
@@ -93,8 +94,10 @@ export default function Layout({ user }: { user: User }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        <Outlet />
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
