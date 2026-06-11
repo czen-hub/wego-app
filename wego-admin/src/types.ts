@@ -38,6 +38,8 @@ export interface Driver {
   rating: number;
   totalRides: number;
   verified?: boolean;
+  suspended?: boolean;
+  isOnline?: boolean;
   memberSince?: Timestamp;
 }
 

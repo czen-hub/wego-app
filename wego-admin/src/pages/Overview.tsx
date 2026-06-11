@@ -4,6 +4,7 @@ import { db } from "@/firebase";
 import type { Ride, WithdrawalRequest } from "@/types";
 import { Car, DollarSign, Users, AlertTriangle, Banknote, TrendingUp } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import LiveMap from "@/components/LiveMap";
 
 function StatCard({
   icon, label, value, sub, color = "primary",
@@ -132,6 +133,9 @@ export default function Overview() {
         <StatCard icon={<AlertTriangle size={20} />} label="Open Disputes" value={disputedRides.length}       color="red" />
         <StatCard icon={<Banknote size={20} />}    label="Payout Queue"    value={`$${pendingPayouts.toFixed(2)}`} color="amber" />
       </div>
+
+      {/* Live fleet map */}
+      <LiveMap />
 
       {/* Revenue chart */}
       <div className="bg-card border border-border rounded-2xl p-6">
